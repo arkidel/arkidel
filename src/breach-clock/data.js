@@ -1,0 +1,416 @@
+// =============================================================================
+// JURISDICTIONS — single source of truth for breach-notification rules.
+//
+// Each entry describes every rule the engine relies on for that jurisdiction.
+// To add a jurisdiction: append a new object below. No other code changes
+// should be required.
+//
+// This file is the legal-substance layer. Changes here should follow the
+// formal intake process documented in docs/intake-forms.md (or the equivalent
+// path in this project) — primary-source verification, IAPP chart cross-check
+// for U.S. states, and an updated Sign-off line in the relevant intake form.
+//
+// Cross-checked against the IAPP US State Breach Notification Chart (February
+// 2026 update, dated March 23, 2026) for all U.S. states modelled here on the
+// dates noted in the intake forms. EU and UK GDPR rules verified against
+// EUR-Lex consolidated text and ICO guidance respectively.
+// =============================================================================
+
+const JURISDICTIONS = [
+  {
+    id: "eu",
+    name: "European Union",
+    short: "EU GDPR",
+    statute: "Regulation (EU) 2016/679 (GDPR)",
+    obligations: [
+      {
+        kind: "authority",
+        authority: "Lead Supervisory Authority",
+        deadline_hours: 72,
+        deadline_trigger: "awareness",
+        citation: "Art. 33 GDPR",
+        source_url: "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e3185-1-1",
+        condition: "Unless the breach is unlikely to result in a risk to the rights and freedoms of natural persons.",
+      },
+      {
+        kind: "individual",
+        authority: "Affected Data Subjects",
+        deadline_hours: null, // "without undue delay"
+        deadline_trigger: "awareness",
+        gating: { highRiskRequired: true },
+        citation: "Art. 34 GDPR",
+        source_url: "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e3220-1-1",
+        condition: "Required where the breach is likely to result in a high risk. Sensitivity indicators suggest this threshold may be met.",
+        obligationExemptedByUnintelligibility: {
+          applies: true,
+          citation: "Art. 34(3)(a) GDPR",
+          description: "Individual notification is not required if the controller implemented appropriate technical and organisational protection measures, and those measures were applied to the personal data affected by the breach — in particular measures that render the data unintelligible to unauthorised persons. Encryption is the canonical example, but not the only such measure. The supervisory authority retains power under Art. 34(4) to require notification regardless. Art. 34(3) also provides two further exemptions not modelled here: (b) subsequent measures eliminating the high risk, and (c) disproportionate effort (with public communication required instead). This provision does NOT exempt the Art. 33 supervisory-authority notification.",
+        },
+      },
+    ],
+  },
+  {
+    id: "uk",
+    name: "United Kingdom",
+    short: "UK GDPR",
+    statute: "UK GDPR & Data Protection Act 2018",
+    obligations: [
+      {
+        kind: "authority",
+        authority: "Information Commissioner's Office (ICO)",
+        deadline_hours: 72,
+        deadline_trigger: "awareness",
+        citation: "Art. 33 UK GDPR",
+        source_url: "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/security-data-protection/personal-data-breaches/",
+        condition: "Unless unlikely to result in a risk to the rights and freedoms of natural persons.",
+      },
+      {
+        kind: "individual",
+        authority: "Affected Data Subjects",
+        deadline_hours: null,
+        deadline_trigger: "awareness",
+        gating: { highRiskRequired: true },
+        citation: "Art. 34 UK GDPR",
+        source_url: "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/security-data-protection/personal-data-breaches/",
+        condition: "Required where the breach is likely to result in a high risk to the rights and freedoms of data subjects.",
+        obligationExemptedByUnintelligibility: {
+          applies: true,
+          citation: "Art. 34(3)(a) UK GDPR",
+          description: "Individual notification is not required if the controller implemented appropriate technical and organisational protection measures rendering the data unintelligible to unauthorised persons. Encryption is the canonical example. The ICO retains power under Art. 34(4) to require notification regardless. Art. 34(3) also provides two further exemptions not modelled here: (b) subsequent measures eliminating the high risk, and (c) disproportionate effort. This provision does NOT exempt the Art. 33 ICO notification.",
+        },
+      },
+    ],
+  },
+  {
+    id: "ca",
+    name: "California",
+    short: "California",
+    statute: "Cal. Civ. Code § 1798.82 et seq.",
+    residentField: { stateLabel: "California residents affected", placeholder: "e.g. 750" },
+    obligations: [
+      {
+        kind: "individual",
+        authority: "Affected California Residents",
+        deadline_hours: 30 * 24, // SB-446, eff. Jan. 1, 2026
+        deadline_trigger: "discovery or notification of breach",
+        citation: "Cal. Civ. Code § 1798.82(a)",
+        source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1798.82.&lawCode=CIV",
+        condition: "Within 30 calendar days following discovery or notification of the breach (SB-446, effective January 1, 2026). Delay permitted only to accommodate the legitimate needs of law enforcement or as necessary to determine the scope of the breach and restore the reasonable integrity of the data system.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "Cal. Civ. Code § 1798.82(a)",
+          description: "Notification is required only where unencrypted personal information was acquired, OR where encrypted information was acquired AND the encryption key/security credential was also acquired and could render the information readable. If only encrypted data was acquired and the key was not compromised, no notification obligation arises.",
+        },
+      },
+      {
+        kind: "ag",
+        authority: "California Attorney General",
+        deadline_hours: 15 * 24, // 15 days from resident notification
+        deadline_relative_to: { parent_authority: "Affected California Residents" },
+        deadline_trigger: "resident notification",
+        gating: { residentThreshold: 500, comparator: "gt" }, // SB-446 changed this to "more than 500"
+        thresholdLabel: "AG notification",
+        citation: "Cal. Civ. Code § 1798.82(f)",
+        source_url: "https://oag.ca.gov/privacy/databreach/reporting",
+        condition: "Within 15 calendar days of notifying affected California residents (SB-446, effective January 1, 2026). Required where a single breach involves more than 500 California residents. Submit a sample copy of the consumer notice via the California AG's electronic breach reporting portal.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "Cal. Civ. Code § 1798.82(a)",
+          description: "AG notification is contingent on resident notification, which itself depends on the breach involving unencrypted data (or encrypted data with a compromised key). If encryption applies, no breach-notification obligation arises.",
+        },
+      },
+    ],
+    counselNotes: [
+      {
+        id: "ca-health-safety-code-1280-15",
+        title: "Healthcare facilities — separate state breach reporting under § 1280.15",
+        content: "If the affected entity is a clinic, health facility, home health agency, or hospice licensed under California law, breach notification to the California Department of Public Health is required no later than 15 business days after detection of unauthorized access to, or use or disclosure of, a patient's medical information under Cal. Health & Safety Code § 1280.15. This is a sectoral regime separate from the general breach-notification statute and is not modeled by the Breach Clock — if applicable, the 15-business-day clock runs in parallel with the general obligations above.",
+        citation: "Cal. Health & Safety Code § 1280.15",
+        source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1280.15.&lawCode=HSC",
+      },
+    ],
+  },
+  {
+    id: "tx",
+    name: "Texas",
+    short: "Texas",
+    statute: "Tex. Bus. & Com. Code § 521.053",
+    residentField: { stateLabel: "Texas residents affected", placeholder: "e.g. 300" },
+    obligations: [
+      {
+        kind: "individual",
+        authority: "Affected Texas Residents",
+        deadline_hours: 60 * 24, // 60 days — corrected from 30; § 521.053(b) sets 60-day ceiling for individual notice
+        deadline_trigger: "determination of breach",
+        citation: "Tex. Bus. & Com. Code § 521.053(b)",
+        source_url: "https://statutes.capitol.texas.gov/Docs/BC/htm/BC.521.htm",
+        condition: "Without unreasonable delay and no later than the 60th day after the date the entity determines that the breach occurred. Delay permitted only as necessary to determine scope/restore integrity of the data system or for legitimate law-enforcement needs.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "Tex. Bus. & Com. Code § 521.053(a)",
+          description: "The statutory definition of 'breach of system security' covers encrypted data only when the person accessing it has the key required to decrypt the data. If the data was encrypted and the key was not also acquired, no breach has occurred under the statute and no notification is required.",
+        },
+      },
+      {
+        kind: "ag",
+        authority: "Texas Attorney General",
+        deadline_hours: 30 * 24, // 30 days — confirmed (S.B. 768, eff. Sept. 1, 2023)
+        deadline_trigger: "determination of breach",
+        gating: { residentThreshold: 250, comparator: "gte" },
+        thresholdLabel: "AG notification",
+        citation: "Tex. Bus. & Com. Code § 521.053(i)",
+        source_url: "https://www.texasattorneygeneral.gov/consumer-protection/file-consumer-complaint/report-data-breach",
+        condition: "As soon as practicable and no later than the 30th day after determination of the breach where 250 or more Texas residents are affected. Electronic submission via the Texas AG's online breach reporting form.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "Tex. Bus. & Com. Code § 521.053(a)",
+          description: "AG notification is contingent on a 'breach of system security' having occurred. Encrypted data with an uncompromised key falls outside the statutory breach definition.",
+        },
+      },
+      {
+        kind: "cra",
+        authority: "Nationwide Consumer Reporting Agencies",
+        deadline_hours: null, // "without unreasonable delay" — no fixed clock
+        deadline_trigger: "determination of breach",
+        gating: { residentThreshold: 10000, comparator: "gt" }, // "more than 10,000 persons"
+        thresholdLabel: "CRA notification",
+        citation: "Tex. Bus. & Com. Code § 521.053(h)",
+        source_url: "https://statutes.capitol.texas.gov/Docs/BC/htm/BC.521.htm",
+        condition: "Where notification is required to more than 10,000 persons at one time, the entity must also notify each nationwide consumer reporting agency (as defined by 15 U.S.C. § 1681a) of the timing, distribution, and content of the notices, without unreasonable delay.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "Tex. Bus. & Com. Code § 521.053(a)",
+          description: "CRA notification is contingent on the entity being required to notify individuals, which depends on a 'breach of system security' having occurred. Encryption with uncompromised key removes the breach.",
+        },
+      },
+    ],
+  },
+  {
+    id: "co",
+    name: "Colorado",
+    short: "Colorado",
+    statute: "Colo. Rev. Stat. § 6-1-716",
+    residentField: { stateLabel: "Colorado residents affected", placeholder: "e.g. 600" },
+    obligations: [
+      {
+        kind: "individual",
+        authority: "Affected Colorado Residents",
+        deadline_hours: 30 * 24,
+        deadline_trigger: "determination of breach",
+        citation: "Colo. Rev. Stat. § 6-1-716(2)(a)",
+        source_url: "https://law.justia.com/codes/colorado/title-6/fair-trade-and-restraint-of-trade/article-1/part-7/section-6-1-716/",
+        condition: "In the most expedient time possible and without unreasonable delay, but not later than 30 days after determination that a security breach occurred. Notification not required if a prompt good-faith investigation determines misuse has not occurred and is not reasonably likely to occur.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "Colo. Rev. Stat. § 6-1-716(1)(h)",
+          description: "Colorado defines 'security breach' as the unauthorized acquisition of UNENCRYPTED computerized data. Encrypted data with an uncompromised key falls outside the breach definition. Note: § 6-1-716(2)(a.4) requires disclosure if the encryption key or other means to decipher the data was also acquired in the breach.",
+        },
+      },
+      {
+        kind: "ag",
+        authority: "Colorado Attorney General",
+        deadline_hours: 30 * 24,
+        deadline_trigger: "determination of breach",
+        gating: { residentThreshold: 500, comparator: "gte" },
+        thresholdLabel: "AG notification",
+        citation: "Colo. Rev. Stat. § 6-1-716(2)(f)",
+        source_url: "https://coag.gov/resources/data-protection-laws/",
+        condition: "Required where 500 or more Colorado residents are reasonably believed to have been affected. Same 30-day ceiling applies. Online Data Breach Reporting Form available via the Colorado AG.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "Colo. Rev. Stat. § 6-1-716(1)(h)",
+          description: "AG notification is contingent on a security breach having occurred. Encrypted data with an uncompromised key falls outside the statutory breach definition.",
+        },
+      },
+      {
+        kind: "cra",
+        authority: "Nationwide Consumer Reporting Agencies",
+        deadline_hours: null,
+        deadline_trigger: "determination of breach",
+        gating: { residentThreshold: 1000, comparator: "gt" },
+        thresholdLabel: "CRA notification",
+        citation: "Colo. Rev. Stat. § 6-1-716(2)(d)",
+        source_url: "https://law.justia.com/codes/colorado/title-6/fair-trade-and-restraint-of-trade/article-1/part-7/section-6-1-716/",
+        condition: "Where more than 1,000 Colorado residents must be notified, the covered entity must also notify all nationwide consumer reporting agencies of the anticipated date of notification and approximate number of residents to be notified, without unreasonable delay. Does not apply to entities subject to GLBA Title V.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "Colo. Rev. Stat. § 6-1-716(1)(h)",
+          description: "CRA notification is contingent on the entity being required to notify residents, which itself depends on a security breach having occurred. Encrypted data with uncompromised key removes the breach.",
+        },
+      },
+    ],
+  },
+  {
+    id: "ma",
+    name: "Massachusetts",
+    short: "Massachusetts",
+    statute: "M.G.L. c. 93H",
+    // No residentField — MA notification is required regardless of count.
+    obligations: [
+      {
+        kind: "individual",
+        authority: "Affected Massachusetts Residents",
+        deadline_hours: null, // "as soon as practicable and without unreasonable delay"
+        deadline_trigger: "awareness",
+        citation: "M.G.L. c. 93H § 3",
+        source_url: "https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93h/Section3",
+        condition: "Required regardless of resident count. Notice must include the resident's right to obtain a police report and security-freeze information; it must NOT include the nature of the breach or the number of residents affected (those go only to the AG and OCABR).",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "M.G.L. c. 93H § 1",
+          description: "If the data was encrypted with 128-bit-or-higher encryption and the encryption key was not also compromised, the incident does not meet the statutory definition of a 'breach of security' — no notification obligation arises.",
+        },
+      },
+      {
+        kind: "ag",
+        authority: "Massachusetts Attorney General",
+        deadline_hours: null,
+        deadline_trigger: "awareness",
+        citation: "M.G.L. c. 93H § 3",
+        source_url: "https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93h/Section3",
+        condition: "Required regardless of resident count. Notice must include nature of the breach, number of MA residents affected, entity details, type of personal information compromised, whether the entity maintains a Written Information Security Program, and steps taken or planned. Cannot be delayed because the affected resident count is not yet ascertained.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "M.G.L. c. 93H § 1",
+          description: "If the data was encrypted with 128-bit-or-higher encryption and the encryption key was not also compromised, the incident does not meet the statutory definition of a 'breach of security'.",
+        },
+      },
+      {
+        kind: "ag",
+        authority: "Massachusetts Office of Consumer Affairs and Business Regulation (OCABR)",
+        deadline_hours: null,
+        deadline_trigger: "awareness",
+        citation: "M.G.L. c. 93H § 3",
+        source_url: "https://www.mass.gov/info-details/requirements-for-data-breach-notifications",
+        condition: "Required in parallel with AG notification. OCABR identifies any consumer reporting agencies or state agencies that should also receive notification, and forwards those identifications to the entity for follow-up notification.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "M.G.L. c. 93H § 1",
+          description: "If the data was encrypted with 128-bit-or-higher encryption and the encryption key was not also compromised, the incident does not meet the statutory definition of a 'breach of security'.",
+        },
+      },
+    ],
+    counselNotes: [
+      {
+        id: "ma-dual-trigger-section-3b",
+        title: "Dual notification trigger under § 3(b) — assess both",
+        content: "Massachusetts c. 93H § 3(b) imposes the notification duty under TWO independent triggers, joined by 'or': (1) the entity knows or has reason to know of a 'breach of security' as defined in § 1, OR (2) the entity knows or has reason to know that personal information was acquired or used by an unauthorized person, or used for an unauthorized purpose. The two triggers do not have identical scope. The § 1 'breach of security' definition includes a substantial-risk-of-identity-theft-or-fraud requirement, a good-faith-acquisition carve-out for employees/agents acting for lawful purposes, and the encryption qualifier (encrypted data only counts if the key was also acquired). The second trigger contains none of these elements — it captures any unauthorized acquisition or use of personal information. As a result, the encryption-suppression analysis above (which derives from the § 1 definition) may be incomplete: even where encrypted data with an uncompromised key falls outside § 1, the second trigger of § 3(b) could independently require notification on facts where personal information was acquired or used by an unauthorized person. Likewise, a 'no substantial risk of identity theft or fraud' conclusion under § 1 does not by itself excuse notification if the second trigger fires. Confirm both triggers against the facts before concluding that notification is not required.",
+        citation: "M.G.L. c. 93H §§ 1, 3(b)",
+        source_url: "https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93h/Section3",
+      },
+    ],
+  },
+  {
+    id: "ny",
+    name: "New York",
+    short: "New York",
+    statute: "N.Y. Gen. Bus. Law § 899-aa",
+    residentField: { stateLabel: "New York residents affected", placeholder: "e.g. 800" },
+    obligations: [
+      {
+        kind: "individual",
+        authority: "Affected New York Residents",
+        deadline_hours: 30 * 24, // 30 days — added by S2659B/A8872A, eff. December 21, 2024
+        deadline_trigger: "discovery of breach",
+        citation: "N.Y. Gen. Bus. Law § 899-aa(2)",
+        source_url: "https://www.nysenate.gov/legislation/laws/GBS/899-AA",
+        condition: "In the most expedient time possible and without unreasonable delay, but within 30 days after discovery of the breach. Delay permitted only for the legitimate needs of law enforcement under § 899-aa(4). The 2024 amendments removed the prior allowance for delay to determine scope or restore system integrity.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "N.Y. Gen. Bus. Law § 899-aa(1)(b)",
+          description: "If the data was encrypted and the decryption key was not also compromised, the incident does not meet the statutory definition of 'private information' acquired in a breach.",
+        },
+      },
+      {
+        kind: "ag",
+        authority: "New York Attorney General",
+        deadline_hours: null, // no fixed clock — "without delaying notice to residents"
+        deadline_trigger: "discovery of breach",
+        citation: "N.Y. Gen. Bus. Law § 899-aa(8)(a)",
+        source_url: "https://formsnym.ag.ny.gov/OAGOnlineSubmissionForm/faces/OAGSBHome",
+        condition: "Required whenever any New York resident is notified. No threshold. Submission via the AG's online breach reporting portal serves as simultaneous notice to the AG, Department of State, and Division of State Police; entities regulated by NYDFS notify NYDFS separately (see counsel notes).",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "N.Y. Gen. Bus. Law § 899-aa(1)(b)",
+          description: "AG notification is contingent on notification to residents being required, which itself depends on a 'breach of the security of the system' having occurred. Encrypted data with uncompromised key falls outside the statutory definition of 'private information' acquired in such a breach.",
+        },
+      },
+      {
+        kind: "agency",
+        authority: "New York Department of State",
+        deadline_hours: null,
+        deadline_trigger: "discovery of breach",
+        citation: "N.Y. Gen. Bus. Law § 899-aa(8)(a)",
+        source_url: "https://dos.ny.gov/",
+        condition: "Required whenever any New York resident is notified, in parallel with AG and State Police notification. The AG's online breach reporting portal is the standard route for simultaneous submission to all three.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "N.Y. Gen. Bus. Law § 899-aa(1)(b)",
+          description: "Department of State notification is contingent on notification to residents being required. Encrypted data with uncompromised key removes the breach.",
+        },
+      },
+      {
+        kind: "agency",
+        authority: "New York Division of State Police",
+        deadline_hours: null,
+        deadline_trigger: "discovery of breach",
+        citation: "N.Y. Gen. Bus. Law § 899-aa(8)(a)",
+        source_url: "https://troopers.ny.gov/",
+        condition: "Required whenever any New York resident is notified, in parallel with AG and Department of State notification.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "N.Y. Gen. Bus. Law § 899-aa(1)(b)",
+          description: "State Police notification is contingent on notification to residents being required. Encrypted data with uncompromised key removes the breach.",
+        },
+      },
+      {
+        kind: "cra",
+        authority: "Nationwide Consumer Reporting Agencies",
+        deadline_hours: null,
+        deadline_trigger: "discovery of breach",
+        gating: { residentThreshold: 5000, comparator: "gt" },
+        thresholdLabel: "CRA notification",
+        citation: "N.Y. Gen. Bus. Law § 899-aa(8)(b)",
+        source_url: "https://www.nysenate.gov/legislation/laws/GBS/899-AA",
+        condition: "Where more than 5,000 New York residents are to be notified at one time, the entity must also notify all nationwide consumer reporting agencies of the timing, content, and distribution of the notices, and approximate number of affected residents, without delaying notice to residents.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "N.Y. Gen. Bus. Law § 899-aa(1)(b)",
+          description: "CRA notification is contingent on the entity being required to notify residents. Encrypted data with uncompromised key removes the breach.",
+        },
+      },
+    ],
+    counselNotes: [
+      {
+        id: "ny-dfs-sectoral-overlay",
+        title: "NYDFS sectoral overlay — covered entities have a separate 72-hour notification under 23 NYCRR Part 500",
+        content: "If the entity is a 'covered entity' under 23 NYCRR Part 500.1 (i.e., regulated by the New York Department of Financial Services), the entity must additionally notify NYDFS within 72 hours of determining that a cybersecurity event has occurred, in accordance with 23 NYCRR § 500.17(c). This is in addition to the AG / Department of State / State Police notification above and is governed by the DFS cybersecurity regulations rather than § 899-aa. The February 14, 2025 chapter amendment to § 899-aa (S804) clarified that the DFS-notification carve-out applies only to NYDFS-regulated entities; non-regulated entities do NOT owe DFS notification under § 899-aa(8). The Breach Clock does not model the 72-hour DFS clock because it depends on entity-type characteristics outside the breach facts. If you are a NYDFS covered entity, treat the DFS deadline as the binding clock for DFS, separate from this analysis.",
+        citation: "23 NYCRR § 500.17(c); N.Y. Gen. Bus. Law § 899-aa(8)(a)(ii)",
+        source_url: "https://www.dfs.ny.gov/industry_guidance/cyber_filings",
+      },
+      {
+        id: "ny-hipaa-cross-link",
+        title: "HIPAA / HITECH cross-link — 5 business days to AG after HHS notification",
+        content: "If the entity is a HIPAA covered entity or business associate that is also required to notify the U.S. Department of Health and Human Services Secretary under HIPAA or HITECH for the same incident, then notification to the New York Attorney General must be provided within 5 business days of notifying the HHS Secretary. This applies even where the breach involves information that is not 'private information' as defined in § 899-aa. The Breach Clock does not model HIPAA / HITECH notification thresholds, so this 5-business-day clock should be applied separately if HHS notification is required.",
+        citation: "N.Y. Gen. Bus. Law § 899-aa(9)",
+        source_url: "https://www.nysenate.gov/legislation/laws/GBS/899-AA",
+      },
+      {
+        id: "ny-no-harm-determination-report",
+        title: "No-harm determination at more than 500 residents — 10-day report to AG even when notification is excused",
+        content: "Section 899-aa(2)(a) excuses notification entirely if the exposure of private information was inadvertent and the entity reasonably determines that misuse, financial harm, or emotional harm is not reasonably likely. However, where this no-harm determination is invoked AND the inadvertent exposure affected more than 500 New York residents, the entity must still provide the written determination to the New York Attorney General within 10 days of the determination. This is an obligation that fires precisely when the standard notification obligations don't, and is not modelled as a discrete deadline in the engine because it requires the substantive judgment that no-harm-likely. If you are invoking the no-harm gate and the affected New York-resident count is more than 500, this 10-day AG report is mandatory. Document the determination contemporaneously and retain for at least five years per § 899-aa(2)(a).",
+        citation: "N.Y. Gen. Bus. Law § 899-aa(2)(a)",
+        source_url: "https://www.nysenate.gov/legislation/laws/GBS/899-AA",
+      },
+      {
+        id: "ny-misuse-investigation-gate",
+        title: "Misuse-investigation gate under § 899-aa(2)(a) — substantive judgment, not modelled",
+        content: "Notification is not required under § 899-aa(2)(a) if the entity determines, after reasonable investigation, that the exposure was inadvertent and is not reasonably likely to result in misuse of the information, or financial or emotional harm. This is a substantive judgment that turns on the specific facts of the incident, not a data-driven gate; the Breach Clock's deadlines reflect the default position that notification is required. If facts support invoking this gate, see the no-harm-determination counsel note for the parallel 10-day AG reporting obligation that applies above 500 affected residents.",
+        citation: "N.Y. Gen. Bus. Law § 899-aa(2)(a)",
+        source_url: "https://www.nysenate.gov/legislation/laws/GBS/899-AA",
+      },
+    ],
+  },
+];
+
+export { JURISDICTIONS };

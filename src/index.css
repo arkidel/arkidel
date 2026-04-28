@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --color-midnight: #1B2A3F;
+  --color-bone:     #FAF8F2;
+  --color-parchment: #E8DDC4;
+
+  --font-sans:  Inter, system-ui, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono:  "JetBrains Mono", monospace;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  color: var(--color-midnight);
+  background-color: var(--color-bone);
+}
