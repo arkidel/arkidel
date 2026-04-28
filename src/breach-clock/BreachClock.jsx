@@ -445,17 +445,7 @@ export default function BreachClock() {
         `}</style>
         <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "60px 40px" }}>
           <header style={{ marginBottom: "48px", borderBottom: "1px solid rgba(27,42,63,0.18)", paddingBottom: "32px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "#1B2A3F" }}>
-                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Arkidel" style={{ width: "28px", height: "28px" }}>
-                  <rect x="10" y="10" width="80" height="80" rx="8" fill="none" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>
-                  <line x1="50" y1="22" x2="50" y2="78" stroke="currentColor" strokeWidth="6" strokeLinecap="round"/>
-                  <line x1="50" y1="38" x2="72" y2="28" stroke="currentColor" strokeWidth="6" strokeLinecap="round"/>
-                  <line x1="50" y1="62" x2="72" y2="72" stroke="currentColor" strokeWidth="6" strokeLinecap="round"/>
-                  <path d="M 38 42 L 24 50 L 38 58 Z" fill="currentColor" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
-                </svg>
-                <span className="serif" style={{ fontSize: "20px", fontWeight: 400, color: "#1B2A3F" }}>Arkidel</span>
-              </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "32px" }}>
               <button
                 onClick={() => setShowTests(false)}
                 style={{
@@ -657,17 +647,7 @@ export default function BreachClock() {
       <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "60px 40px" }}>
         {/* Header */}
         <header style={{ marginBottom: "60px", borderBottom: "1px solid rgba(27,42,63,0.18)", paddingBottom: "32px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "#1B2A3F" }}>
-              <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Arkidel" style={{ width: "28px", height: "28px" }}>
-                <rect x="10" y="10" width="80" height="80" rx="8" fill="none" stroke="currentColor" strokeWidth="6" strokeLinejoin="round"/>
-                <line x1="50" y1="22" x2="50" y2="78" stroke="currentColor" strokeWidth="6" strokeLinecap="round"/>
-                <line x1="50" y1="38" x2="72" y2="28" stroke="currentColor" strokeWidth="6" strokeLinecap="round"/>
-                <line x1="50" y1="62" x2="72" y2="72" stroke="currentColor" strokeWidth="6" strokeLinecap="round"/>
-                <path d="M 38 42 L 24 50 L 38 58 Z" fill="currentColor" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
-              </svg>
-              <span className="serif" style={{ fontSize: "20px", fontWeight: 400, color: "#1B2A3F" }}>Arkidel</span>
-            </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "32px" }}>
             <div className="section-mark">
               Preliminary — Not Legal Advice
             </div>

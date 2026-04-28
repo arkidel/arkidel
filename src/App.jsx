@@ -10,12 +10,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Breach Clock renders without the site layout — preserves its own full-page design */}
-        <Route path="/breach-clock" element={<BreachClock />} />
-
-        {/* Marketing pages share the site-wide header/footer via Layout */}
         <Route element={<Layout />}>
           <Route path="/" element={<Landing />} />
+          <Route path="/breach-clock" element={<BreachClock />} />
           <Route path="/about" element={<About />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
