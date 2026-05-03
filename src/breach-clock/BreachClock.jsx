@@ -114,7 +114,10 @@ export default function BreachClock() {
       sensitivity,
       sensitivityLabels: sensitivity
         .map((s) => sensitivityOptions.find((o) => o.id === s)?.label)
-        .filter(Boolean),
+        .filter(Boolean)
+        // Strip trailing parentheticals for the printed memo:
+        // "Identifiers (name, email, address)" → "Identifiers"
+        .map((label) => label.replace(/\s*\([^)]*\)\s*$/, "")),
       encryptionApplied,
       riskLevel,
     };

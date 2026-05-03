@@ -22,8 +22,10 @@ import { inflate } from "pako";
 import { JURISDICTIONS } from "./data.js";
 
 // Font URL imports — Vite returns URLs; we fetch at runtime for ArrayBuffers.
-import serifRegularUrl from "@fontsource/source-serif-pro/files/source-serif-pro-latin-400-normal.woff?url";
-import serifBoldUrl from "@fontsource/source-serif-pro/files/source-serif-pro-latin-600-normal.woff?url";
+// Serif: Crimson Pro (Source Serif Pro had ligature/cmap issues through the
+// WOFF→SFNT round-trip; Crimson Pro uses simpler GSUB tables and renders cleanly).
+import serifRegularUrl from "@fontsource/crimson-pro/files/crimson-pro-latin-400-normal.woff?url";
+import serifBoldUrl from "@fontsource/crimson-pro/files/crimson-pro-latin-600-normal.woff?url";
 import sansRegularUrl from "@fontsource/inter/files/inter-latin-400-normal.woff?url";
 import sansBoldUrl from "@fontsource/inter/files/inter-latin-600-normal.woff?url";
 import monoRegularUrl from "@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff?url";
@@ -152,7 +154,7 @@ const SIZE = {
   citation: 9,
   url: 8,
   pageNum: 8,
-  wordmark: 11,
+  wordmark: 14,
   letterDate: 9,
   footerBlock: 9,
 };
@@ -231,14 +233,14 @@ function makeState(pdfDoc, fonts) {
         font: fonts.sansReg,
         color: MIST,
       });
-      const ruleY = CONTENT_TOP - SIZE.pageNum - 8;
+      const ruleY = CONTENT_TOP - SIZE.pageNum - 10;
       page.drawLine({
         start: { x: CONTENT_X, y: ruleY },
         end: { x: CONTENT_X + CONTENT_W, y: ruleY },
-        thickness: 0.5,
+        thickness: 0.75,
         color: MIST,
       });
-      state.cursorY = ruleY - 18;
+      state.cursorY = ruleY - 22;
     }
     return page;
   };
@@ -281,16 +283,17 @@ function measureWrapped(text, font, size, maxWidth, lineHeight = LINE) {
 // ─── Letterhead and incident summary ──────────────────────────────────────
 
 function drawLetterhead(page, fonts, generatedAt) {
-  // Top row: Arkidel wordmark left, generation date right
-  const rowY = CONTENT_TOP - SIZE.wordmark;
-  drawTextLine(page, "Arkidel", CONTENT_X, rowY, fonts.sansBold, SIZE.wordmark, MIDNIGHT);
+  // Wordmark on its own line, left-aligned, 14pt Inter Semibold MIDNIGHT
+  const wordmarkBaselineY = CONTENT_TOP - SIZE.wordmark;
+  drawTextLine(page, "Arkidel", CONTENT_X, wordmarkBaselineY, fonts.sansBold, SIZE.wordmark, MIDNIGHT);
 
+  // Generation date one line below, left-aligned, 9pt MIST
+  const dateBaselineY = wordmarkBaselineY - SIZE.letterDate * LINE - 2;
   const dateText = formatGeneratedAt(generatedAt);
-  const dateW = fonts.sansReg.widthOfTextAtSize(dateText, SIZE.letterDate);
-  drawTextLine(page, dateText, CONTENT_X + CONTENT_W - dateW, rowY + 1, fonts.sansReg, SIZE.letterDate, MIST);
+  drawTextLine(page, dateText, CONTENT_X, dateBaselineY, fonts.sansReg, SIZE.letterDate, MIST);
 
   // Centered title below
-  const titleY = rowY - 36 - SIZE.title;
+  const titleY = dateBaselineY - 36 - SIZE.title;
   const title = "Breach Notification Deadline Analysis";
   const titleW = fonts.serifBold.widthOfTextAtSize(title, SIZE.title);
   drawTextLine(page, title, CONTENT_X + (CONTENT_W - titleW) / 2, titleY, fonts.serifBold, SIZE.title, MIDNIGHT);
@@ -304,7 +307,8 @@ function drawLetterhead(page, fonts, generatedAt) {
     color: MIST,
   });
 
-  return ruleY - 24; // 12pt + a bit, top of next content
+  // Priority 3b: 18pt extra space below the rule before next section
+  return ruleY - 42;
 }
 
 function drawSectionHeading(page, fonts, text, topY) {
@@ -332,7 +336,9 @@ function drawIncidentSummary(state, facts) {
     ...(facts.sensitivityLabels && facts.sensitivityLabels.length
       ? [["Data categories", facts.sensitivityLabels.join(", ")]]
       : []),
-    ["Encryption", facts.encryptionApplied ? "Reported as applied" : "Not reported"],
+    ["Encryption", facts.encryptionApplied
+      ? "Reported as applied — see analysis below for which obligations are suppressed"
+      : "Not reported"],
   ];
 
   // Section heading
@@ -553,13 +559,18 @@ function noteBlocks(jurShort, note) {
 function drawCardSection(state, headingText, items, blocksFn, borderColor) {
   if (items.length === 0) return;
   const { fonts } = state;
-  // Heading (allow it to push to a new page if needed)
-  state.ensureRoom(SIZE.sectionHead + 30);
+
+  // Reserve room for heading PLUS first card so the heading is never orphaned
+  // at the bottom of a page.
+  const firstBlocks = blocksFn(items[0]);
+  const firstCardHeight = measureCard(firstBlocks, fonts);
+  const headingFootprint = SIZE.sectionHead + 30; // text + rule + gap below
+  state.ensureRoom(headingFootprint + firstCardHeight);
   state.cursorY = drawSectionHeading(state.currentPage(), fonts, headingText, state.cursorY);
 
   for (let i = 0; i < items.length; i++) {
-    const blocks = blocksFn(items[i]);
-    const h = measureCard(blocks, fonts);
+    const blocks = i === 0 ? firstBlocks : blocksFn(items[i]);
+    const h = i === 0 ? firstCardHeight : measureCard(blocks, fonts);
     state.ensureRoom(h);
     const page = state.currentPage();
     const cardBottom = drawCard(page, blocks, state.cursorY, borderColor, fonts);
