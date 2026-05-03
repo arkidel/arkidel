@@ -31,7 +31,6 @@ export default function BreachClock() {
   const [residentCounts, setResidentCounts] = useState(
     () => Object.fromEntries(JURISDICTIONS.filter((j) => j.residentField).map((j) => [j.id, ""]))
   );
-  const [volume, setVolume] = useState("");
   const [sensitivity, setSensitivity] = useState([]);
   const [encryptionApplied, setEncryptionApplied] = useState(false);
   const [riskLevel, setRiskLevel] = useState("");
@@ -102,21 +101,16 @@ export default function BreachClock() {
   const canAdvance = () => {
     if (step === 0) return !!awarenessDate && awarenessDate <= now;
     if (step === 1) return anyJurisdiction;
-    if (step === 2) return volume.length > 0 && sensitivity.length > 0;
+    if (step === 2) return sensitivity.length > 0;
     return true;
   };
 
   const generateMemo = () => {
     const generatedAt = new Date();
-    const volumeLabel = {
-      under_100: "Fewer than 100 data subjects",
-      "100_1k": "100 – 1,000 data subjects",
-      "1k_10k": "1,000 – 10,000 data subjects",
-      "10k_100k": "10,000 – 100,000 data subjects",
-      "100k_1m": "100,000 – 1,000,000 data subjects",
-      over_1m: "More than 1,000,000 data subjects",
-      unknown: "Unknown at time of preliminary assessment",
-    }[volume] || volume;
+    const totalResidents = Object.values(residentCounts)
+      .map((v) => parseInt(v, 10))
+      .filter((n) => Number.isFinite(n))
+      .reduce((a, b) => a + b, 0);
 
     const sensitivityLabels = sensitivity
       .map((s) => sensitivityOptions.find((o) => o.id === s)?.label)
@@ -339,7 +333,7 @@ export default function BreachClock() {
   <table>
     ${row("Time of awareness", awarenessDate?.toLocaleString() || "Not provided")}
     ${row("Jurisdictions implicated", jurisdictionList.join("; "))}
-    ${row("Approximate volume", volumeLabel)}
+    ${totalResidents > 0 ? row("Total residents affected", totalResidents.toLocaleString()) : ""}
     ${row("Categories of data", sensitivityLabels.join("; "))}
     ${row("Preliminary risk indicator", highRiskPresent ? "Elevated — sensitivity categories suggest high risk to data subjects" : "Standard — further assessment required")}
     ${row("Encryption", encryptionApplied ? "Reported as applied — suppression evaluated below" : "Not reported as applied — no suppression evaluated")}
@@ -415,7 +409,6 @@ export default function BreachClock() {
     setAwareness("");
     setJurisdictions(Object.fromEntries(JURISDICTIONS.map((j) => [j.id, false])));
     setResidentCounts(Object.fromEntries(JURISDICTIONS.filter((j) => j.residentField).map((j) => [j.id, ""])));
-    setVolume("");
     setSensitivity([]);
     setEncryptionApplied(false);
     setRiskLevel("");
@@ -803,30 +796,8 @@ export default function BreachClock() {
               Question 03
             </div>
             <h2 className="serif" style={{ fontSize: "32px", fontWeight: 400, lineHeight: 1.2, margin: "0 0 36px", letterSpacing: "-0.01em", maxWidth: "800px", color: "#1B2A3F" }}>
-              What was the volume and sensitivity of the data?
+              What kind of data was involved?
             </h2>
-
-            <div style={{ marginBottom: "48px" }}>
-              <div className="section-mark" style={{ marginBottom: "20px" }}>
-                Approximate volume — data subjects affected
-              </div>
-              <div>
-                {[
-                  { v: "under_100", label: "Fewer than 100" },
-                  { v: "100_1k", label: "100 – 1,000" },
-                  { v: "1k_10k", label: "1,000 – 10,000" },
-                  { v: "10k_100k", label: "10,000 – 100,000" },
-                  { v: "100k_1m", label: "100,000 – 1,000,000" },
-                  { v: "over_1m", label: "More than 1,000,000" },
-                  { v: "unknown", label: "Unknown at this time" },
-                ].map(({ v, label }) => (
-                  <div key={v} className="radio-row" onClick={() => setVolume(v)}>
-                    <div className={`radio-dot ${volume === v ? "active" : ""}`} />
-                    <div style={{ fontSize: "18px" }}>{label}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
 
             <div>
               <div className="section-mark" style={{ marginBottom: "20px" }}>
@@ -898,8 +869,6 @@ export default function BreachClock() {
                     })
                     .join(" · ")}
                 </div>
-                <div className="section-mark">Volume</div>
-                <div style={{ fontSize: "18px" }}>{volume.replace(/_/g, " ").replace("under", "<").replace("over", ">")}</div>
                 <div className="section-mark">Sensitivity</div>
                 <div style={{ fontSize: "15px", lineHeight: 1.5 }}>
                   {sensitivity.map((s) => sensitivityOptions.find((o) => o.id === s)?.label).join(" · ")}
