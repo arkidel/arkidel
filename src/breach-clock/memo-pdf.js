@@ -37,6 +37,10 @@ import sansRegularUrl from "../assets/fonts/Inter-Regular.ttf?url";
 import sansBoldUrl from "../assets/fonts/Inter-SemiBold.ttf?url";
 import monoRegularUrl from "../assets/fonts/JetBrainsMono-Regular.ttf?url";
 
+// Logo PNG (96×96 MIDNIGHT, transparent background; rendered at 24pt in the PDF).
+// Re-generate with `node scripts/build-logo.js` if the icon SVG changes.
+import logoPngUrl from "../assets/logo-arkidel.png?url";
+
 // ─── Brand colors as pdf-lib RGB ──────────────────────────────────────────
 const MIDNIGHT = rgb(0.106, 0.165, 0.247);
 const INK = rgb(0.173, 0.141, 0.094);
@@ -207,13 +211,37 @@ function measureWrapped(text, font, size, maxWidth, lineHeight = LINE) {
 
 // ─── Letterhead and incident summary ──────────────────────────────────────
 
-function drawLetterhead(page, fonts, generatedAt) {
-  // Wordmark on its own line, left-aligned, 14pt Inter Semibold MIDNIGHT
-  const wordmarkBaselineY = CONTENT_TOP - SIZE.wordmark;
-  drawTextLine(page, "Arkidel", CONTENT_X, wordmarkBaselineY, fonts.sansBold, SIZE.wordmark, MIDNIGHT);
+function drawLetterhead(page, fonts, logoImage, generatedAt) {
+  // Top row: 24×24pt logo on the left, "Arkidel" wordmark to its right (8pt gap),
+  // wordmark vertically centered with the icon.
+  const ICON_SIZE = 24;
+  const ICON_GAP = 8;
+  const iconTop = CONTENT_TOP;          // y of icon's top edge
+  const iconBottom = iconTop - ICON_SIZE;
+  const iconCenterY = (iconTop + iconBottom) / 2;
 
-  // Generation date one line below, left-aligned, 9pt MIST
-  const dateBaselineY = wordmarkBaselineY - SIZE.letterDate * LINE - 2;
+  page.drawImage(logoImage, {
+    x: CONTENT_X,
+    y: iconBottom,
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+  });
+
+  // Wordmark baseline so its visual center aligns with the icon center.
+  // For Inter at 14pt, cap-height is roughly 0.72em; visual center ≈ baseline + capHeight/2.
+  const wordmarkBaselineY = iconCenterY - SIZE.wordmark * 0.36;
+  drawTextLine(
+    page,
+    "Arkidel",
+    CONTENT_X + ICON_SIZE + ICON_GAP,
+    wordmarkBaselineY,
+    fonts.sansBold,
+    SIZE.wordmark,
+    MIDNIGHT
+  );
+
+  // Generation date one line below the icon row, left-aligned beneath the icon.
+  const dateBaselineY = iconBottom - SIZE.letterDate - 6;
   const dateText = formatGeneratedAt(generatedAt);
   drawTextLine(page, dateText, CONTENT_X, dateBaselineY, fonts.sansReg, SIZE.letterDate, MIST);
 
@@ -268,7 +296,7 @@ function drawIncidentSummary(state, facts) {
 
   // Section heading
   state.ensureRoom(SIZE.sectionHead + 30);
-  state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Incident summary", state.cursorY);
+  state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Incident Summary", state.cursorY);
 
   for (const [label, value] of rows) {
     const valueLines = wrapText(value, fonts.serifReg, SIZE.body, valueMaxW);
@@ -518,7 +546,7 @@ const FURTHER_CONSIDERATIONS = [
 function drawFurtherConsiderations(state) {
   const { fonts } = state;
   state.ensureRoom(SIZE.sectionHead + 30);
-  state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Further considerations", state.cursorY);
+  state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Further Considerations", state.cursorY);
 
   const bulletX = CONTENT_X;
   const bulletGap = 14;
@@ -676,11 +704,15 @@ export async function generateMemoPdf(facts, deadlines, suppressed) {
     monoReg: await pdfDoc.embedFont(fontBytes.monoReg),
   };
 
+  // Logo (rune-glyph PNG, MIDNIGHT, transparent background)
+  const logoBytes = await fetch(logoPngUrl).then((r) => r.arrayBuffer());
+  const logoImage = await pdfDoc.embedPng(logoBytes);
+
   const state = makeState(pdfDoc, fonts);
   state.addPage();
 
   // Letterhead (page 1 only)
-  state.cursorY = drawLetterhead(state.currentPage(), fonts, generatedAt);
+  state.cursorY = drawLetterhead(state.currentPage(), fonts, logoImage, generatedAt);
 
   // Section: Incident summary
   drawIncidentSummary(state, {
@@ -692,18 +724,18 @@ export async function generateMemoPdf(facts, deadlines, suppressed) {
 
   // Section: Deadline obligations (always render heading even if empty array? — spec says "one card per firing obligation")
   if (deadlines && deadlines.length > 0) {
-    drawCardSection(state, "Deadline obligations", deadlines, deadlineBlocks, MIDNIGHT);
+    drawCardSection(state, "Deadline Obligations", deadlines, deadlineBlocks, MIDNIGHT);
   }
 
   // Section: Suppressed obligations (conditional)
   if (suppressed && suppressed.length > 0) {
-    drawCardSection(state, "Notification suppressed by encryption", suppressed, suppressedBlocks, MOSS);
+    drawCardSection(state, "Notification Suppressed by Encryption", suppressed, suppressedBlocks, MOSS);
   }
 
   // Section: Jurisdictional notes (conditional)
   const jurNotes = collectJurisdictionalNotes(facts);
   if (jurNotes.length > 0) {
-    drawCardSection(state, "Jurisdictional notes", jurNotes, ({ jurShort, note }) => noteBlocks(jurShort, note), PARCHMENT);
+    drawCardSection(state, "Jurisdictional Notes", jurNotes, ({ jurShort, note }) => noteBlocks(jurShort, note), PARCHMENT);
   }
 
   // Section: Further considerations
