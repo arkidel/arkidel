@@ -20,6 +20,7 @@ import React, { useState, useEffect } from "react";
 import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download } from "lucide-react";
 import { JURISDICTIONS } from "./data.js";
 import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine.js";
+import { generateMemoPdf } from "./memo-pdf.js";
 
 export default function BreachClock() {
   const [step, setStep] = useState(0);
@@ -105,298 +106,22 @@ export default function BreachClock() {
     return true;
   };
 
-  const generateMemo = () => {
-    const generatedAt = new Date();
-    const totalResidents = Object.values(residentCounts)
-      .map((v) => parseInt(v, 10))
-      .filter((n) => Number.isFinite(n))
-      .reduce((a, b) => a + b, 0);
-
-    const sensitivityLabels = sensitivity
-      .map((s) => sensitivityOptions.find((o) => o.id === s)?.label)
-      .filter(Boolean);
-
-    const jurisdictionList = JURISDICTIONS
-      .filter((j) => jurisdictions[j.id])
-      .map((j) => {
-        const count = residentCounts[j.id];
-        const suffix = j.residentField && count ? ` — ${parseInt(count).toLocaleString()} residents` : "";
-        const display = j.short === j.name ? j.name : `${j.name} (${j.short})`;
-        return `${display}${suffix}`;
-      });
-
-    const escapeHtml = (s) =>
-      String(s ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-
-    const row = (label, value) => `
-      <tr>
-        <td class="lbl">${escapeHtml(label)}</td>
-        <td class="val">${escapeHtml(value)}</td>
-      </tr>`;
-
-    const deadlineBlocks = deadlines.map((d, i) => {
-      let statusLine;
-      if (d.deadline) {
-        const tr = d.deadline.getTime() - generatedAt.getTime();
-        statusLine = tr < 0
-          ? `<strong>OVERDUE</strong> by ${escapeHtml(formatDuration(tr))} (deadline ${escapeHtml(d.deadline.toLocaleString())})`
-          : `${escapeHtml(formatDuration(tr))} remaining (deadline ${escapeHtml(d.deadline.toLocaleString())})`;
-      } else {
-        statusLine = "No fixed hour deadline — act without unreasonable delay";
-      }
-      const sourceLine = d.source_url
-        ? `<p class="src">Primary source: <a href="${escapeHtml(d.source_url)}">${escapeHtml(d.source_url)}</a></p>`
-        : "";
-      return `
-        <div class="deadline">
-          <h3>${i + 1}. ${escapeHtml(d.jurisdiction)} — ${escapeHtml(d.authority)}</h3>
-          <table>
-            ${row("Legal basis", d.basis)}
-            ${row("Status (at generation)", "")}
-          </table>
-          <p class="status">${statusLine}</p>
-          <p class="cond">${escapeHtml(d.conditional)}</p>
-          ${sourceLine}
-        </div>`;
-    }).join("");
-
-    const suppressedBlocks = suppressed.map((s, i) => {
-      const sourceLine = s.source_url
-        ? `<p class="src">Primary source: <a href="${escapeHtml(s.source_url)}">${escapeHtml(s.source_url)}</a></p>`
-        : "";
-      const mechanismLabel = s.suppression_type === "breach_definition"
-        ? "breach definition excludes encrypted data"
-        : "notification exempted by unintelligibility-of-data provision";
-      return `
-        <div class="suppressed">
-          <h3>${i + 1}. ${escapeHtml(s.jurisdiction)} — ${escapeHtml(s.authority)}</h3>
-          <table>
-            ${row("Originally would arise under", s.original_citation)}
-            ${row("Suppressed by", `${s.suppression_citation} (${mechanismLabel})`)}
-          </table>
-          <p class="cond">${escapeHtml(s.suppression_description)}</p>
-          ${sourceLine}
-        </div>`;
-    }).join("");
-
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Breach Clock — Preliminary Notification Analysis</title>
-<style>
-  @page { margin: 1in; }
-  body {
-    font-family: Calibri, "Segoe UI", Arial, sans-serif;
-    color: #2C2418;
-    max-width: 7in;
-    margin: 0.75in auto;
-    padding: 0 0.5in;
-    font-size: 11pt;
-    line-height: 1.5;
-  }
-  .eyebrow {
-    text-align: center;
-    font-size: 9pt;
-    letter-spacing: 0.2em;
-    color: #1B2A3F;
-    opacity: 0.65;
-    margin-bottom: 6pt;
-  }
-  h1 {
-    text-align: center;
-    font-family: Georgia, "Tiempos Headline", serif;
-    font-size: 22pt;
-    font-weight: 400;
-    color: #1B2A3F;
-    margin: 0 0 24pt 0;
-    border-bottom: 1px solid #1B2A3F;
-    padding-bottom: 12pt;
-  }
-  h2 {
-    font-family: Calibri, sans-serif;
-    font-size: 11pt;
-    font-weight: 600;
-    color: #1B2A3F;
-    margin: 24pt 0 8pt 0;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    border-bottom: 1px solid rgba(27,42,63,0.25);
-    padding-bottom: 4pt;
-  }
-  h3 {
-    font-family: Georgia, serif;
-    font-size: 13pt;
-    font-weight: 400;
-    color: #1B2A3F;
-    margin: 16pt 0 6pt 0;
-  }
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    margin-bottom: 8pt;
-  }
-  td.lbl {
-    width: 30%;
-    font-weight: 600;
-    color: #1B2A3F;
-    padding: 4pt 12pt 4pt 0;
-    vertical-align: top;
-  }
-  td.val {
-    padding: 4pt 0;
-    vertical-align: top;
-  }
-  .deadline {
-    margin-bottom: 16pt;
-    padding: 10pt 14pt;
-    border-left: 3px solid #C76E3A;
-    background: #FBF5EE;
-    page-break-inside: avoid;
-  }
-  .suppressed {
-    margin-bottom: 16pt;
-    padding: 10pt 14pt;
-    border-left: 3px solid #5A6E4A;
-    background: #F4F6F0;
-    page-break-inside: avoid;
-  }
-  .note {
-    margin-bottom: 16pt;
-    padding: 10pt 14pt;
-    border-left: 3px solid #1B2A3F;
-    background: #F8F4E8;
-    page-break-inside: avoid;
-  }
-  .note h3 {
-    margin: 0 0 6pt 0;
-    font-size: 11pt;
-    font-weight: 600;
-  }
-  .status {
-    font-weight: 600;
-    margin: 4pt 0;
-  }
-  .cond {
-    font-style: italic;
-    color: #555;
-    margin: 4pt 0 0 0;
-    font-size: 10pt;
-  }
-  .src {
-    font-size: 9pt;
-    color: #555;
-    margin: 6pt 0 0 0;
-    word-break: break-all;
-  }
-  .src a { color: #C76E3A; text-decoration: none; }
-  .src a:hover { text-decoration: underline; }
-  ul { margin: 6pt 0 6pt 18pt; padding: 0; }
-  li { margin-bottom: 6pt; }
-  .disclaimer {
-    margin-top: 32pt;
-    padding: 14pt;
-    background: #E8DDC4;
-    border: 1px solid rgba(27,42,63,0.18);
-    font-size: 10pt;
-    color: #2C2418;
-  }
-  .footer {
-    margin-top: 32pt;
-    text-align: center;
-    font-size: 9pt;
-    color: #888;
-    font-style: italic;
-  }
-  @media print {
-    body { margin: 0; padding: 0; }
-  }
-</style>
-</head>
-<body>
-  <div class="eyebrow">ARKIDEL · BREACH CLOCK</div>
-  <h1>Preliminary Breach Notification Analysis</h1>
-
-  <h2>Memorandum</h2>
-  <table>
-    ${row("Prepared", generatedAt.toLocaleString())}
-    ${row("Subject", "Preliminary breach notification deadline analysis")}
-    ${row("Privilege", "Prepared at the direction of counsel — attorney work product")}
-  </table>
-
-  <h2>Incident Facts as Provided</h2>
-  <table>
-    ${row("Time of awareness", awarenessDate?.toLocaleString() || "Not provided")}
-    ${row("Jurisdictions implicated", jurisdictionList.join("; "))}
-    ${totalResidents > 0 ? row("Total residents affected", totalResidents.toLocaleString()) : ""}
-    ${row("Categories of data", sensitivityLabels.join("; "))}
-    ${row("Preliminary risk indicator", highRiskPresent ? "Elevated — sensitivity categories suggest high risk to data subjects" : "Standard — further assessment required")}
-    ${row("Encryption", encryptionApplied ? "Reported as applied — suppression evaluated below" : "Not reported as applied — no suppression evaluated")}
-  </table>
-
-  ${deadlines.length > 0 ? `
-  <h2>Notification Obligations and Deadlines</h2>
-  <p>Based on the facts provided, the following statutory notification obligations have been preliminarily identified. Deadlines and statuses are calculated from the time of awareness reported above.</p>
-  ${deadlineBlocks}
-  ` : `
-  <h2>Notification Obligations and Deadlines</h2>
-  <p>Based on the facts provided, no statutory notification obligations fire. ${suppressed.length > 0 ? "Each obligation that would otherwise apply has been suppressed — either because the breach falls outside the statutory definition or because notification is exempted by an unintelligibility-of-data provision; see below." : "Verify jurisdiction selections and resident counts."}</p>
-  `}
-
-  ${suppressed.length > 0 ? `
-  <h2>Notification Likely Not Required — Encryption Suppression</h2>
-  <p>The encryption fact reported by the user, if confirmed, suppresses the following obligations that would otherwise have applied. Each entry identifies the original source of the obligation and the statutory provision under which it is suppressed — either because the breach falls outside the jurisdiction's statutory definition (per-se rule) or because notification is conditionally exempted by an unintelligibility-of-data provision (judgment-based, with regulator override available). Confirm that the encryption used in fact met each jurisdiction's specific standard before relying on this analysis.</p>
-  ${suppressedBlocks}
-  ` : ""}
-
-  ${(() => {
-    const selectedWithNotes = JURISDICTIONS.filter((j) => jurisdictions[j.id] && j.counselNotes && j.counselNotes.length > 0);
-    if (selectedWithNotes.length === 0) return "";
-    const noteBlocks = selectedWithNotes.flatMap((jur) =>
-      jur.counselNotes.map((note) => `
-        <div class="note">
-          <h3>${escapeHtml(jur.short)} — ${escapeHtml(note.title)}</h3>
-          <p>${escapeHtml(note.content)}</p>
-          ${note.citation ? `<p class="src">${escapeHtml(note.citation)}${note.source_url ? ` — <a href="${escapeHtml(note.source_url)}">primary source</a>` : ""}</p>` : ""}
-        </div>
-      `)
-    ).join("");
-    return `
-  <h2>Jurisdictional Notes</h2>
-  <p>The following considerations apply to one or more selected jurisdictions but were not encoded as discrete obligations in the analysis above. Each may impose separate or supplemental duties depending on the specific facts.</p>
-  ${noteBlocks}
-    `;
-  })()}
-
-  <h2>Further Considerations</h2>
-  <ul>
-    <li>Sectoral regimes (HIPAA, GLBA, NYDFS Part 500, FTC Safeguards Rule, financial services regulators) may impose separate notification obligations not modelled in this preliminary analysis.</li>
-    <li>Contractual notification duties owed to controllers, customers, business partners, insurers, or joint controllers may run on shorter timelines than statutory obligations and should be reviewed.</li>
-    <li>Law enforcement holds may permit delay of individual notification in some US jurisdictions; any such request should be documented in writing from the requesting agency.</li>
-    <li>Residents of US states beyond those modelled here may also be affected. A 50-state analysis is recommended for any multi-state incident.</li>
-    <li>The trigger for the GDPR / UK GDPR 72-hour clock is awareness — interpreted as a reasonable degree of certainty that a security incident has compromised personal data — not initial discovery or suspicion.</li>
-    <li>Where the assessment that a breach is unlikely to result in a risk to data subjects is relied upon to avoid notification, that assessment should be documented contemporaneously under Art. 33(5) GDPR.</li>
-  </ul>
-
-  <div class="disclaimer">
-    <strong>Disclaimer.</strong> This document was generated by Arkidel Breach Clock based solely on inputs provided by the user. It constitutes a preliminary timeline triage and does not constitute legal advice. All conclusions must be confirmed with qualified counsel before any notification decision is made or omitted. Privilege and work product designations are suggested but depend on the circumstances of the engagement.
-  </div>
-
-  <div class="footer">— end of memorandum —</div>
-</body>
-</html>`;
-
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const handleDownloadMemo = async () => {
+    const facts = {
+      awarenessDate,
+      jurisdictions,
+      residentCounts,
+      sensitivity,
+      encryptionApplied,
+      riskLevel,
+    };
+    const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed);
+    const blob = new Blob([pdfBytes], { type: "application/pdf" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const ts = generatedAt.toISOString().replace(/[:T]/g, "-").slice(0, 16);
+    const dateForFilename = (awarenessDate || new Date()).toISOString().slice(0, 10);
     a.href = url;
-    a.download = `Breach-Clock-Memo_${ts}.html`;
+    a.download = `breach-notification-analysis-${dateForFilename}.pdf`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -895,7 +620,7 @@ export default function BreachClock() {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
                 <button
-                  onClick={generateMemo}
+                  onClick={handleDownloadMemo}
                   style={{
                     background: "transparent",
                     border: "1px solid #1B2A3F",
