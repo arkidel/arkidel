@@ -550,13 +550,93 @@ const TEST_CASES = [
     ),
   },
 
+  // === Virginia ===
+  {
+    name: "Virginia: any resident triggers individual + AG (no AG threshold)",
+    category: "Virginia",
+    facts: { jurisdictions: { va: true }, residentCounts: { va: 1 }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectFires("Virginia", "Virginia Residents"),
+      expectFires("Virginia", "Attorney General"),
+      expectDoesNotFire("Virginia", "Consumer Reporting"),
+      expectCount(2)
+    ),
+  },
+  {
+    name: "Virginia individual notification has no fixed hour deadline",
+    category: "Virginia",
+    facts: { jurisdictions: { va: true }, residentCounts: { va: 100 }, sensitivity: ["identifiers"] },
+    expect: (deadlines) => {
+      const d = findDeadline(deadlines, "Virginia", "Virginia Residents");
+      if (!d) return { pass: false, message: "individual notification not found" };
+      return d.deadline === null
+        ? { pass: true }
+        : { pass: false, message: `expected null deadline; got ${d.deadline}` };
+    },
+  },
+  {
+    name: "Virginia AG notification has no fixed hour deadline",
+    category: "Virginia",
+    facts: { jurisdictions: { va: true }, residentCounts: { va: 100 }, sensitivity: ["identifiers"] },
+    expect: (deadlines) => {
+      const d = findDeadline(deadlines, "Virginia", "Attorney General");
+      if (!d) return { pass: false, message: "AG notification not found" };
+      return d.deadline === null
+        ? { pass: true }
+        : { pass: false, message: `expected null deadline; got ${d.deadline}` };
+    },
+  },
+  {
+    name: "Virginia: 1,000 residents does NOT trigger CRA notification (statute says 'more than 1,000')",
+    category: "Virginia — CRA boundary",
+    facts: { jurisdictions: { va: true }, residentCounts: { va: 1000 }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectFires("Virginia", "Virginia Residents"),
+      expectFires("Virginia", "Attorney General"),
+      expectDoesNotFire("Virginia", "Consumer Reporting")
+    ),
+  },
+  {
+    name: "Virginia: 1,001 residents triggers CRA notification (gt comparator)",
+    category: "Virginia — CRA boundary",
+    facts: { jurisdictions: { va: true }, residentCounts: { va: 1001 }, sensitivity: ["identifiers"] },
+    expect: expectFires("Virginia", "Consumer Reporting"),
+  },
+  {
+    name: "Virginia + encryption: all three obligations suppressed (definitional)",
+    category: "Encryption suppression",
+    facts: {
+      jurisdictions: { va: true },
+      residentCounts: { va: 5000 },
+      sensitivity: ["financial"],
+      encryptionApplied: true,
+    },
+    expect: expectAll(
+      expectCount(0),
+      expectSuppressed("Virginia", "Virginia Residents"),
+      expectSuppressed("Virginia", "Attorney General"),
+      expectSuppressed("Virginia", "Consumer Reporting"),
+      expectSuppressedCount(3)
+    ),
+  },
+  {
+    name: "Virginia: missing resident count fires individual + AG but not CRA",
+    category: "Virginia",
+    facts: { jurisdictions: { va: true }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectFires("Virginia", "Virginia Residents"),
+      expectFires("Virginia", "Attorney General"),
+      expectDoesNotFire("Virginia", "Consumer Reporting")
+    ),
+  },
+
   // === Multi-jurisdiction stacking ===
   {
-    name: "All seven jurisdictions, high-risk, large incident: stacks correctly",
+    name: "All eight jurisdictions, high-risk, large incident: stacks correctly",
     category: "Multi-jurisdiction",
     facts: {
-      jurisdictions: { eu: true, uk: true, ca: true, tx: true, co: true, ma: true, ny: true },
-      residentCounts: { ca: 5000, tx: 5000, co: 5000, ny: 5000 },
+      jurisdictions: { eu: true, uk: true, ca: true, tx: true, co: true, ma: true, ny: true, va: true },
+      residentCounts: { ca: 5000, tx: 5000, co: 5000, ny: 5000, va: 5000 },
       sensitivity: ["health", "financial", "gov_id"],
     },
     expect: expectAll(
@@ -579,7 +659,10 @@ const TEST_CASES = [
       expectFires("New York", "Attorney General"),
       expectFires("New York", "Department of State"),
       expectFires("New York", "State Police"),
-      expectDoesNotFire("New York", "Consumer Reporting") // 5,000 not > 5,000
+      expectDoesNotFire("New York", "Consumer Reporting"), // 5,000 not > 5,000
+      expectFires("Virginia", "Virginia Residents"),
+      expectFires("Virginia", "Attorney General"),
+      expectFires("Virginia", "Consumer Reporting") // 5,000 > 1,000
     ),
   },
 

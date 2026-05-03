@@ -411,6 +411,89 @@ const JURISDICTIONS = [
       },
     ],
   },
+  {
+    id: "va",
+    name: "Virginia",
+    short: "Virginia",
+    statute: "Va. Code § 18.2-186.6",
+    residentField: { stateLabel: "Virginia residents affected", placeholder: "e.g. 800" },
+    obligations: [
+      {
+        kind: "individual",
+        authority: "Affected Virginia Residents",
+        deadline_hours: null, // "without unreasonable delay" — no fixed clock
+        deadline_trigger: "discovery of breach",
+        citation: "Va. Code § 18.2-186.6(B)",
+        source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
+        condition: "Notice required without unreasonable delay following discovery or notification of the breach. Notice may be reasonably delayed to allow the entity to determine the scope of the breach and restore the reasonable integrity of the system, or if a law-enforcement agency advises that notice will impede a criminal or civil investigation or homeland or national security. The breach must have caused, or the entity must reasonably believe has caused or will cause, identity theft or other fraud to a Virginia resident — see counsel note on the harm threshold.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "Va. Code § 18.2-186.6(A)",
+          description: "The statute applies only to unencrypted or unredacted personal information. If the data was encrypted or redacted and the encryption key was not accessed or acquired, the incident does not meet the statutory definition of a breach.",
+        },
+      },
+      {
+        kind: "ag",
+        authority: "Virginia Attorney General",
+        deadline_hours: null,
+        deadline_trigger: "discovery of breach",
+        citation: "Va. Code § 18.2-186.6(B)",
+        source_url: "https://www.oag.state.va.us/programs-initiatives/computer-crime",
+        condition: "Required whenever any Virginia resident is notified. No threshold. Notice without unreasonable delay; the same law-enforcement-delay provisions that apply to resident notification also apply to AG notification. Notification is sent to the Computer Crime Section of the Office of the Attorney General by mail (or follow current AG guidance on submission method).",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "Va. Code § 18.2-186.6(A)",
+          description: "AG notification is contingent on resident notification being required. Encrypted or redacted data with uncompromised key falls outside the statutory breach definition.",
+        },
+      },
+      {
+        kind: "cra",
+        authority: "Nationwide Consumer Reporting Agencies",
+        deadline_hours: null,
+        deadline_trigger: "discovery of breach",
+        gating: { residentThreshold: 1000, comparator: "gt" }, // "more than 1,000 persons at one time"
+        thresholdLabel: "CRA notification",
+        citation: "Va. Code § 18.2-186.6(E)",
+        source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
+        condition: "Where notification is provided to more than 1,000 persons at one time, the entity must also notify all nationwide consumer reporting agencies of the timing, distribution, and content of the notice, without unreasonable delay.",
+        breachDefinitionExcludesEncrypted: {
+          applies: true,
+          citation: "Va. Code § 18.2-186.6(A)",
+          description: "CRA notification is contingent on the entity being required to notify residents. Encrypted or redacted data with uncompromised key removes the breach.",
+        },
+      },
+    ],
+    counselNotes: [
+      {
+        id: "va-harm-threshold-186-6",
+        title: "Substantive harm threshold under § 18.2-186.6 — substantive judgment, not modelled",
+        content: "Virginia's breach definition incorporates a substantive harm element: notification under § 18.2-186.6(B) is required only where the breach has caused, or the entity reasonably believes has caused or will cause, identity theft or other fraud to a Virginia resident. The same harm-threshold language appears in subsection (M) for the employer / payroll-service-provider tax-data regime. This is a fact-specific judgment that may excuse notification entirely in cases where the breach mechanics would otherwise trigger the obligations above. The Breach Clock's deadlines reflect the default position that notification is required; if the entity concludes after reasonable investigation that no identity theft or fraud is reasonably likely, the obligations may not arise. Document that determination contemporaneously and consult counsel before relying on it.",
+        citation: "Va. Code § 18.2-186.6(A), (B), (M)",
+        source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
+      },
+      {
+        id: "va-medical-information-32-1-127-1-05",
+        title: "Medical information — separate breach notification regime under § 32.1-127.1:05",
+        content: "Virginia has a separate breach notification statute for medical information, Va. Code § 32.1-127.1:05, applicable to certain entities holding medical information. Where the breach involves medical or health information, the requirements of § 32.1-127.1:05 may apply in addition to or instead of § 18.2-186.6, with different scope, timing, and content requirements. HIPAA covered entities and business associates may also have federal notification obligations under HIPAA/HITECH that interact with the Virginia regime. The Breach Clock does not model § 32.1-127.1:05 because it is a sectoral regime with applicability that depends on entity type rather than breach facts.",
+        citation: "Va. Code § 32.1-127.1:05",
+        source_url: "https://law.lis.virginia.gov/vacode/title32.1/chapter5/section32.1-127.1:05/",
+      },
+      {
+        id: "va-employer-payroll-tax-data-186-6-m",
+        title: "Employer / payroll-service-provider tax-data breaches — separate AG notification obligation under § 18.2-186.6(M)",
+        content: "If the entity is an employer or payroll service provider, and the breach involves a Virginia employee's taxpayer identification number in combination with the income tax withheld for that employee, a separate notification obligation applies under § 18.2-186.6(M). This obligation runs in parallel to (not in place of) the main § 18.2-186.6 analysis above and requires notification to the Virginia Attorney General without unreasonable delay following discovery, with no resident-notification component and no CRA component. The harm threshold from the main statute applies — notification is required only where the breach has caused, or the entity reasonably believes has caused or will cause, identity theft or other fraud. The Breach Clock does not model this as a discrete obligation because applicability depends on entity type (employer or payroll service provider) and data type (TIN combined with income tax withheld) rather than on the breach facts themselves. If the entity is in scope, treat the subsection (M) AG notification as a separate parallel obligation. Note: subsection (M) applies only to information regarding the employer's own employees, not customers or other non-employees.",
+        citation: "Va. Code § 18.2-186.6(M)",
+        source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
+      },
+      {
+        id: "va-good-faith-employee-agent-carve-out",
+        title: "Good-faith acquisition by employees or agents — not a breach under the statute",
+        content: "Section 18.2-186.6(A) excludes from the breach definition the good-faith acquisition of personal information by an employee or agent of the entity for purposes of the entity, provided that the personal information is not used for a purpose other than a lawful purpose of the entity and is not subject to further unauthorized disclosure. This is a fact-specific carve-out; if the relevant unauthorized acquisition was by an employee or agent acting in good faith for the entity's purposes, no breach has occurred under the statute and notification is not required. The Breach Clock does not gate on this because it requires substantive judgment about employee intent and use of the data.",
+        citation: "Va. Code § 18.2-186.6(A)",
+        source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
+      },
+    ],
+  },
 ];
 
 export { JURISDICTIONS };
