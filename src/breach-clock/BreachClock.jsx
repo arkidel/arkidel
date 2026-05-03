@@ -112,6 +112,9 @@ export default function BreachClock() {
       jurisdictions,
       residentCounts,
       sensitivity,
+      sensitivityLabels: sensitivity
+        .map((s) => sensitivityOptions.find((o) => o.id === s)?.label)
+        .filter(Boolean),
       encryptionApplied,
       riskLevel,
     };
