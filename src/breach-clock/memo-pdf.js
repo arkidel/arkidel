@@ -18,17 +18,24 @@
 
 import { PDFDocument, PDFString, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import { inflate } from "pako";
 import { JURISDICTIONS } from "./data.js";
 
-// Font URL imports — Vite returns URLs; we fetch at runtime for ArrayBuffers.
-// Serif: Crimson Pro (Source Serif Pro had ligature/cmap issues through the
-// WOFF→SFNT round-trip; Crimson Pro uses simpler GSUB tables and renders cleanly).
-import serifRegularUrl from "@fontsource/crimson-pro/files/crimson-pro-latin-400-normal.woff?url";
-import serifBoldUrl from "@fontsource/crimson-pro/files/crimson-pro-latin-600-normal.woff?url";
-import sansRegularUrl from "@fontsource/inter/files/inter-latin-400-normal.woff?url";
-import sansBoldUrl from "@fontsource/inter/files/inter-latin-600-normal.woff?url";
-import monoRegularUrl from "@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff?url";
+// Font URL imports — direct TTF files bundled in src/assets/fonts/.
+//
+// We bundle TTF directly (rather than @fontsource WOFF) because pdf-lib's
+// font subsetter mishandles tables decoded out of WOFF1 containers — colons,
+// slashes, hyphens, and fi/ff/fl ligatures all came out wrong. TTF files
+// from the original font releases (Inter from rsms/inter, JetBrains Mono
+// from JetBrains/JetBrainsMono, Crimson Text from google/fonts upstream)
+// embed cleanly with no transformation.
+//
+// Serif: Crimson Text (the static-TTF predecessor of Crimson Pro). Same
+// family aesthetic; google/fonts ships static Regular and SemiBold weights.
+import serifRegularUrl from "../assets/fonts/CrimsonText-Regular.ttf?url";
+import serifBoldUrl from "../assets/fonts/CrimsonText-SemiBold.ttf?url";
+import sansRegularUrl from "../assets/fonts/Inter-Regular.ttf?url";
+import sansBoldUrl from "../assets/fonts/Inter-SemiBold.ttf?url";
+import monoRegularUrl from "../assets/fonts/JetBrainsMono-Regular.ttf?url";
 
 // ─── Brand colors as pdf-lib RGB ──────────────────────────────────────────
 const MIDNIGHT = rgb(0.106, 0.165, 0.247);
@@ -46,99 +53,17 @@ const CONTENT_W = PAGE_W - 2 * MARGIN; // 468
 const CONTENT_TOP = PAGE_H - MARGIN;   // 720
 const CONTENT_BOTTOM = MARGIN;         // 72
 
-// ─── WOFF1 → SFNT (TTF) decoder ───────────────────────────────────────────
-//
-// WOFF1 is a thin container around an SFNT/TTF font: a header, a table
-// directory, and zlib-compressed table data. Repack as plain SFNT so that
-// @pdf-lib/fontkit (which doesn't decompress WOFF) can parse it.
-//
-// Format reference: https://www.w3.org/TR/WOFF/
-//
-function woffToSfnt(woffBuffer) {
-  const view = new DataView(woffBuffer);
-  const sig = view.getUint32(0);
-  if (sig !== 0x774f4646) throw new Error("Not a WOFF1 font (signature mismatch)");
-  const flavor = view.getUint32(4);   // SFNT version (0x00010000 for TTF, 0x4F54544F for OTF)
-  const numTables = view.getUint16(12);
-
-  // Compute output size: SFNT header (12) + table directory (16 * numTables) + uncompressed table data (4-byte aligned)
-  const dirEntries = [];
-  let tableDataSize = 0;
-  let dirOffset = 44; // start of WOFF table directory
-  for (let i = 0; i < numTables; i++) {
-    const tag = view.getUint32(dirOffset);
-    const offset = view.getUint32(dirOffset + 4);
-    const compLen = view.getUint32(dirOffset + 8);
-    const origLen = view.getUint32(dirOffset + 12);
-    const checksum = view.getUint32(dirOffset + 16);
-    dirEntries.push({ tag, offset, compLen, origLen, checksum });
-    tableDataSize += (origLen + 3) & ~3; // 4-byte aligned
-    dirOffset += 20;
-  }
-
-  const sfntHeaderSize = 12;
-  const sfntDirSize = 16 * numTables;
-  const out = new Uint8Array(sfntHeaderSize + sfntDirSize + tableDataSize);
-  const outView = new DataView(out.buffer);
-
-  // SFNT header
-  outView.setUint32(0, flavor);
-  outView.setUint16(4, numTables);
-  // searchRange / entrySelector / rangeShift — pdf-lib/fontkit tolerates exact values
-  let entrySelector = 0;
-  let searchRange = 1;
-  while (searchRange * 2 <= numTables) {
-    searchRange *= 2;
-    entrySelector += 1;
-  }
-  searchRange *= 16;
-  outView.setUint16(6, searchRange);
-  outView.setUint16(8, entrySelector);
-  outView.setUint16(10, numTables * 16 - searchRange);
-
-  // Table directory + table data
-  let dataCursor = sfntHeaderSize + sfntDirSize;
-  for (let i = 0; i < numTables; i++) {
-    const e = dirEntries[i];
-    // Table directory entry
-    const dirEntryOffset = sfntHeaderSize + i * 16;
-    outView.setUint32(dirEntryOffset, e.tag);
-    outView.setUint32(dirEntryOffset + 4, e.checksum);
-    outView.setUint32(dirEntryOffset + 8, dataCursor);
-    outView.setUint32(dirEntryOffset + 12, e.origLen);
-
-    // Table data — decompress if compLen != origLen
-    const sourceBytes = new Uint8Array(woffBuffer, e.offset, e.compLen);
-    let tableBytes;
-    if (e.compLen === e.origLen) {
-      tableBytes = sourceBytes;
-    } else {
-      tableBytes = inflate(sourceBytes);
-      if (tableBytes.length !== e.origLen) {
-        throw new Error(`Table size mismatch: tag=${e.tag.toString(16)} expected=${e.origLen} got=${tableBytes.length}`);
-      }
-    }
-    out.set(tableBytes, dataCursor);
-    dataCursor += (e.origLen + 3) & ~3; // pad to 4-byte boundary (zeros)
-  }
-
-  return out.buffer;
-}
-
 // ─── Font cache (one fetch per page-load lifetime) ────────────────────────
 let _fontBytesCache = null;
 async function loadFontBytes() {
   if (_fontBytesCache) return _fontBytesCache;
-  const fetchAndDecode = async (url) => {
-    const ab = await fetch(url).then((r) => r.arrayBuffer());
-    return woffToSfnt(ab);
-  };
+  const fetchAB = (url) => fetch(url).then((r) => r.arrayBuffer());
   const [serifReg, serifBold, sansReg, sansBold, monoReg] = await Promise.all([
-    fetchAndDecode(serifRegularUrl),
-    fetchAndDecode(serifBoldUrl),
-    fetchAndDecode(sansRegularUrl),
-    fetchAndDecode(sansBoldUrl),
-    fetchAndDecode(monoRegularUrl),
+    fetchAB(serifRegularUrl),
+    fetchAB(serifBoldUrl),
+    fetchAB(sansRegularUrl),
+    fetchAB(sansBoldUrl),
+    fetchAB(monoRegularUrl),
   ]);
   _fontBytesCache = { serifReg, serifBold, sansReg, sansBold, monoReg };
   return _fontBytesCache;
