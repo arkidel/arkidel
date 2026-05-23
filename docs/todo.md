@@ -43,24 +43,8 @@ Pre-launch readiness.
 
 ### Phase 4 audit — clear inconsistencies (mechanical fixes)
 
-Findings from the 2026-05-23 visual audit that are not judgment calls.
-Each references CLAUDE.md as source of truth.
-
-- Stale counts in `src/pages/About.jsx`: "seven jurisdictions" should be
-  "eight" (Virginia was added — see commit `1d7e611`), and "fifty cases"
-  should be "fifty-one" (`engine.js` `TEST_CASES` contains 51; the Landing
-  copy is already correct). Audit finding B5/X3.
-- Header and footer logo color in `src/components/Layout.jsx` is Bone
-  (inherited from `text-bone`); CLAUDE.md specifies Parchment on Midnight
-  backgrounds. Affects both the rune icon and the wordmark in the global
-  chrome. Audit finding L1.
-- Tests-view H1 in `src/breach-clock/BreachClock.jsx` reads "Rules engine
-  tests" (sentence case). It is a descriptive structural heading and per
-  CLAUDE.md should be title case ("Rules Engine Tests"). Audit finding H1.
-- British-spelling drift: "organisation" in the step-0 prompt of
-  `src/breach-clock/BreachClock.jsx` and "modelled" in the
-  further-considerations bullet of the same file. Every other surface uses
-  American English; pick American consistently. Audit finding H2.
+All four findings from this section were cleared on 2026-05-23. See the
+Completed section below.
 
 ### Phase 4 audit — owner-review items (need a decision)
 
@@ -204,6 +188,28 @@ Cross-surface re-read:
 
 ### 2026-05-23
 
+- audit cleanup: clear the four "mechanical fixes" findings from the
+  Phase 4 visual audit in a single commit.
+  - B5/X3 — `src/pages/About.jsx`: "seven jurisdictions" → "eight";
+    "fifty cases" → "fifty-one". Verified against `data.js`
+    (JURISDICTIONS length = 8) and `engine.js` (TEST_CASES length = 51,
+    51/51 pass).
+  - L1 — `src/components/Layout.jsx`: header logo Link recolored from
+    `text-bone` to `text-parchment` so the rune (via `currentColor`) and
+    wordmark both render Parchment on Midnight; footer wordmark `<span>`
+    given an explicit `text-parchment` so the wordmark recolors while
+    the footer nav links keep their existing `text-bone hover:text-parchment`
+    treatment. Token `--color-parchment: #E8DDC4` defined in
+    `src/index.css`.
+  - H1 — `src/breach-clock/BreachClock.jsx`: Tests view H1
+    "Rules engine tests" → "Rules Engine Tests" (descriptive structural
+    heading → title case).
+  - H2 — `src/breach-clock/BreachClock.jsx`: "organisation" (Q01 prompt)
+    → "organization"; "modelled" (further-considerations bullet) →
+    "modeled". Both are UI chrome, not statutory text or paraphrase
+    quoting EU/UK GDPR; no other British spellings present in the file.
+    No `data.js` change.
+  Engine tests: 51/51 pass.
 - engine: add dedicated VA 5,000-resident test (§ 8.10 pattern 4) —
   commit `3929b63` (engine test coverage for a data.js rule, not a
   data.js change).

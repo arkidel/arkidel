@@ -47,13 +47,13 @@ export default function About() {
           </h2>
           <div className="space-y-5 text-base leading-relaxed text-midnight/80 max-w-prose">
             <p>
-              <strong className="font-semibold text-midnight">Quality over coverage.</strong>{" "}We'd rather model seven jurisdictions correctly than fifty jurisdictions sloppily. Every rule in our engine is verified against primary statutory sources and trusted secondary references, with a documented audit trail behind each substantive change.
+              <strong className="font-semibold text-midnight">Quality over coverage.</strong>{" "}We'd rather model eight jurisdictions correctly than fifty jurisdictions sloppily. Every rule in our engine is verified against primary statutory sources and trusted secondary references, with a documented audit trail behind each substantive change.
             </p>
             <p>
               <strong className="font-semibold text-midnight">Pricing that fits small companies.</strong>{" "}Arkidel is priced for the privacy and compliance functions that actually exist at startups and growing companies — not for enterprise procurement. The Breach Clock is free during our soft-launch period; future modules will be priced reasonably and predictably.
             </p>
             <p>
-              <strong className="font-semibold text-midnight">Visible methodology.</strong>{" "}Most compliance software asks you to trust that the rules behind it are correct. We think you should be able to see the work. Our rules engine ships with a public test harness — fifty cases covering threshold boundaries, dependent deadlines, and encryption suppression — that you can run yourself. Citations link to primary sources. The shape of the analysis is legible.
+              <strong className="font-semibold text-midnight">Visible methodology.</strong>{" "}Most compliance software asks you to trust that the rules behind it are correct. We think you should be able to see the work. Our rules engine ships with a public test harness — fifty-one cases covering threshold boundaries, dependent deadlines, and encryption suppression — that you can run yourself. Citations link to primary sources. The shape of the analysis is legible.
             </p>
           </div>
         </div>

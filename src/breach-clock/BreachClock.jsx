@@ -187,7 +187,7 @@ export default function BreachClock() {
               </button>
             </div>
             <h1 className="serif" style={{ fontSize: "clamp(40px, 6vw, 64px)", margin: 0, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.05, color: "#1B2A3F" }}>
-              Rules engine tests
+              Rules Engine Tests
             </h1>
             <p style={{ fontSize: "17px", marginTop: "20px", maxWidth: "640px", lineHeight: 1.6, color: "#2C2418" }}>
               Each case feeds a fact pattern to the deadline engine and asserts what should or should not fire. Run automatically every time this page loads.
@@ -412,7 +412,7 @@ export default function BreachClock() {
                   Question 01
                 </div>
                 <h2 className="serif" style={{ fontSize: "32px", fontWeight: 400, lineHeight: 1.2, margin: "0 0 28px", letterSpacing: "-0.01em", color: "#1B2A3F" }}>
-                  When did your organisation become aware of the breach?
+                  When did your organization become aware of the breach?
                 </h2>
                 <label className="section-mark">
                   Date and time of awareness
@@ -865,7 +865,7 @@ export default function BreachClock() {
                 </div>
               </div>
               <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "14px", lineHeight: 1.7 }}>
-                <li>Sectoral regimes (HIPAA, GLBA, NYDFS, financial services) may impose separate obligations not modelled here.</li>
+                <li>Sectoral regimes (HIPAA, GLBA, NYDFS, financial services) may impose separate obligations not modeled here.</li>
                 <li>Employer, insurer, processor, and joint-controller relationships may create contractual notification duties preceding statutory ones.</li>
                 <li>Law enforcement holds may permit delay of individual notification in some US jurisdictions — document the request in writing.</li>
                 <li>Residents of US states beyond those listed above may be affected; 50-state analysis recommended for any multi-state incident.</li>

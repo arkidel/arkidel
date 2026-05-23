@@ -17,7 +17,7 @@ export default function Layout() {
     <div className="min-h-screen flex flex-col bg-bone text-midnight font-sans">
       <header className="bg-midnight text-bone px-8 py-5">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3 text-bone no-underline">
+          <Link to="/" className="flex items-center gap-3 text-parchment no-underline">
             <ArkidelLogo className="w-7 h-7" />
             <span className="font-serif text-xl">Arkidel</span>
           </Link>
@@ -38,7 +38,7 @@ export default function Layout() {
 
       <footer className="bg-midnight text-bone px-8 py-8">
         <div className="max-w-5xl mx-auto flex items-center justify-between text-sm">
-          <span className="font-serif">Arkidel</span>
+          <span className="font-serif text-parchment">Arkidel</span>
           <nav className="flex gap-6">
             <Link to="/privacy" className="text-bone hover:text-parchment transition-colors no-underline">
               Privacy Policy
