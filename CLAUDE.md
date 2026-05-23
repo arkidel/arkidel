@@ -78,7 +78,8 @@ the originating Claude conversation and is backfilled into the repo as needed.
 The canonical to-do list for the project. Items move between sections as
 priorities shift. Substance items are flagged with `[substance]` and require
 the formal intake process. When starting a new Claude Code session, check
-this file for context on what's pending.
+this file for context on what's pending. The file was initialized on
+2026-05-23; session history prior to that date lives in the git log.
 
 ---
 
@@ -233,8 +234,11 @@ Georgia is a system font and doesn't need loading.
   all engine tests passing.
 - **Phase 2 (complete):** Tailwind, React Router, marketing pages
   (landing, about, with placeholders for privacy and terms).
-- **Phase 3 (in progress):** PDF memo generation; brand polish; logo
-  integration in the PDF and marketing surfaces.
+- **Phase 3 (complete (build)):** PDF memo generation; brand polish; logo
+  integration in the PDF and marketing surfaces. The build of these
+  surfaces is complete; visual verification of the PDF output, brand
+  application, and logo treatment is carried into Phase 4 as a pre-launch
+  check.
 - **Phase 4 (pending):** Privacy policy and terms of service drafted by Tom;
   Vercel deployment; arkidel.com DNS; email mailbox provisioning; waitlist
   email collection wired to a real backend; analytics (Plausible or Fathom).

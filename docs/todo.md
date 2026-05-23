@@ -13,21 +13,12 @@ historical record prior to this file's creation.
 
 ---
 
-## Phase 3 — in progress
+## Phase 3 — complete (build)
 
-PDF memo generation, brand polish, and logo integration in the PDF and
-marketing surfaces.
-
-- PDF memo generation — core layout, embedded fonts, page breaks, header
-  logo, and Disclaimer-expansion landed in prior commits. Open: confirm no
-  additional layout or content polish is needed before Phase 4.
-- Brand polish across product and marketing surfaces — CLAUDE.md's brand
-  identity section is the source of truth. Open: audit live surfaces
-  against the documented palette, typography, heading-case convention, and
-  voice guidance.
-- Logo integration — landed in the PDF header. Open: verify logo
-  treatment on all marketing surfaces (landing, about, header, footer)
-  matches the canonical SVG and color rules.
+Build of PDF memo generation, brand identity, and logo integration in the
+PDF is complete as of 2026-05-23. Visual verification of these surfaces is
+carried into Phase 4 as a pre-launch check. See the Completed section for
+the underlying commits.
 
 ## Phase 4 — pending
 
@@ -42,6 +33,10 @@ Pre-launch readiness.
   ConvertKit, or a Vercel-hosted endpoint). Currently a placeholder submit
   handler that logs to console.
 - Analytics installed (Plausible or Fathom — decision pending).
+- Pre-launch visual audit: PDF memo output, brand surfaces (palette,
+  typography, heading-case convention, voice), and logo treatment on all
+  marketing surfaces (landing, about, header, footer), checked against the
+  brand identity section of CLAUDE.md as source of truth.
 
 ## Phase 5 — post-launch
 
@@ -72,7 +67,19 @@ Pre-launch readiness.
 ### 2026-05-23
 
 - engine: add dedicated VA 5,000-resident test (§ 8.10 pattern 4) —
-  commit `3929b63`. `[substance]`-adjacent (engine test coverage for a
-  data.js rule, not a data.js change).
+  commit `3929b63` (engine test coverage for a data.js rule, not a
+  data.js change).
 - Landing: update jurisdiction count from seven to eight (Virginia) —
   commit `1d7e611`.
+
+### Phase 3 build — 2026-05-23
+
+The Phase 3 build is complete. Visual verification of these surfaces is
+deferred to the Phase 4 pre-launch visual audit; do not treat these items
+as verified.
+
+- PDF memo generation — core layout, embedded fonts, page breaks, header
+  logo, and Disclaimer-expansion. Built across commits `285d88a`,
+  `09048e7`, `c7281cc`, `64c95de`, `8221baf`, and `ecc575f`.
+- Brand identity codified in CLAUDE.md — commit `4e35c9f`.
+- Logo integration in the PDF header — commit `8221baf`.
