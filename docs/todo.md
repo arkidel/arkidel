@@ -115,29 +115,6 @@ Merriweather is now named as the production serif with rationale.
 A gate failure surfaced during this work and is tracked as its own Phase 4
 item below (URL-corruption bug isolated to JetBrains Mono).
 
-### Phase 4 — Suppressed-card heading truncation (PDF layout defect)
-
-In the PDF, the Massachusetts suppressed-obligation card title
-"Massachusetts — Massachusetts Office of Consumer Affairs and Business
-Regulation (OCABR)" is clipped mid-word, rendering as
-"...Business Regulation (OCA" with the closing characters cut off. The
-heading appears to be truncated rather than wrapped or auto-sized when
-it exceeds the available line width.
-
-Reproducible with any incident that includes Massachusetts and triggers
-the suppressed-card path. Confirmed visible in both the 10.5pt and 11pt
-gate renders from the 2026-05-23 typography gate, so it is not body-size
-dependent.
-
-Likely site: `drawCard` in `src/breach-clock/memo-pdf.js`, the
-`b.type === "topRow"` branch. The authority text is drawn as a single
-`drawTextLine` call with no wrap/measure step, so anything wider than the
-available column gets clipped at the right edge. Fix path is to wrap the
-title across two lines when it exceeds the available width, or to
-measure-and-shrink the title type size.
-
-Categorize as a PDF layout defect.
-
 ### Phase 4 audit — manual verification checklist
 
 These checks require rendered output and must be performed by the owner;
@@ -247,9 +224,23 @@ Cross-surface re-read:
   browser "Download memo" path. Same commit split `memo-pdf.js` into a
   slim Vite shim plus `memo-pdf-core.js` so the render path is Node-
   importable for the regression harness; public API unchanged.
-  Regression guard: `scripts/mono-gate.mjs`. The suppressed-card
-  heading-truncation defect (tracked above) is unaffected and stays
-  open.
+  Regression guard: `scripts/mono-gate.mjs`.
+- pdf: fix card-heading truncation in `drawCard`'s `topRow` branch. The
+  authority text was drawn as a single `drawTextLine` with no wrap or
+  measure step, so any heading wider than the available column was
+  clipped at the right edge — visible on the Massachusetts OCABR
+  suppressed card as "...Business Regulation (OCA". Fix is a general
+  heading-wrap solution covering both deadline and suppressed cards
+  (both share the `topRow` block type): added `wrapTextTwoCol` so the
+  first line reserves space for the right-aligned deadline timestamp
+  while subsequent lines use the full card-inner width; `measureBlock`
+  now returns wrapped-line height so `ensureRoom` and the card
+  background rectangle account for the extra line and cards still
+  cannot split across a page boundary. Jurisdictional-note cards use a
+  separate `noteHeader` block that already wrapped correctly and is
+  unchanged. Gated end-to-end against `/tmp/gate-truncation-suppressed.pdf`
+  and `/tmp/gate-truncation-deadline.pdf`; engine tests 51/51 pass.
+  Standing regression harness: `scripts/render-truncation-gate.mjs`.
 
 ### Phase 3 build — 2026-05-23
 

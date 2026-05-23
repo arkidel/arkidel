@@ -66,20 +66,30 @@ const LINE = 1.4; // body line-height multiplier
 // ─── Text utilities ───────────────────────────────────────────────────────
 
 function wrapText(text, font, size, maxWidth) {
+  return wrapTextTwoCol(text, font, size, maxWidth, maxWidth);
+}
+
+// Wrap with a (potentially different) first-line max width. Used by the
+// card top row, where a right-aligned element (deadline timestamp) reserves
+// space on line 1 only; lines 2+ have the full card-inner width.
+function wrapTextTwoCol(text, font, size, firstLineMaxW, restMaxW) {
   const words = String(text ?? "").split(/\s+/).filter(Boolean);
   const lines = [];
   let line = "";
+  const widthFor = () => (lines.length === 0 ? firstLineMaxW : restMaxW);
   for (const word of words) {
     const candidate = line ? line + " " + word : word;
-    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+    if (font.widthOfTextAtSize(candidate, size) <= widthFor()) {
       line = candidate;
     } else {
       if (line) lines.push(line);
-      // If a single word exceeds maxWidth (long URL), force-break it
-      if (font.widthOfTextAtSize(word, size) > maxWidth) {
+      // If a single word exceeds the available width (long URL or token),
+      // force-break it. The threshold uses the now-current line position,
+      // since lines.length may have just advanced.
+      if (font.widthOfTextAtSize(word, size) > widthFor()) {
         let chunk = "";
         for (const ch of word) {
-          if (font.widthOfTextAtSize(chunk + ch, size) > maxWidth) {
+          if (font.widthOfTextAtSize(chunk + ch, size) > widthFor()) {
             if (chunk) lines.push(chunk);
             chunk = ch;
           } else {
@@ -304,9 +314,24 @@ function measureCard(blocks, fonts) {
   return h;
 }
 
+// Right-edge gap between the heading text and the right-aligned timestamp
+// on a card's top row. Keeps the two from kissing when the heading wraps
+// near the boundary.
+const TOPROW_RIGHT_GAP = 12;
+
+function topRowLines(b, fonts) {
+  let firstLineMaxW = CARD_INNER_W;
+  if (b.right) {
+    const rightW = fonts.sansReg.widthOfTextAtSize(b.right, SIZE.body);
+    firstLineMaxW = Math.max(SIZE.authority, CARD_INNER_W - rightW - TOPROW_RIGHT_GAP);
+  }
+  const lines = wrapTextTwoCol(b.left, fonts.sansBold, SIZE.authority, firstLineMaxW, CARD_INNER_W);
+  return lines.length === 0 ? [""] : lines;
+}
+
 function measureBlock(b, fonts) {
   if (b.type === "topRow") {
-    return SIZE.authority * LINE;
+    return topRowLines(b, fonts).length * SIZE.authority * LINE;
   }
   if (b.type === "label") {
     return SIZE.label * LINE;
@@ -354,7 +379,12 @@ function drawCard(page, blocks, topY, borderColor, fonts) {
     if (i > 0) y -= SECTION_GAP_IN_CARD;
 
     if (b.type === "topRow") {
-      drawTextLine(page, b.left, innerX, y - SIZE.authority, fonts.sansBold, SIZE.authority, MIDNIGHT);
+      const lines = topRowLines(b, fonts);
+      let lineY = y;
+      for (const line of lines) {
+        drawTextLine(page, line, innerX, lineY - SIZE.authority, fonts.sansBold, SIZE.authority, MIDNIGHT);
+        lineY -= SIZE.authority * LINE;
+      }
       if (b.right) {
         const rW = fonts.sansReg.widthOfTextAtSize(b.right, SIZE.body);
         drawTextLine(
@@ -367,7 +397,7 @@ function drawCard(page, blocks, topY, borderColor, fonts) {
           INK
         );
       }
-      y -= SIZE.authority * LINE;
+      y -= lines.length * SIZE.authority * LINE;
     } else if (b.type === "labelBody") {
       drawTextLine(page, upperLabel(b.label), innerX, y - SIZE.label, fonts.sansReg, SIZE.label, MIST);
       y -= SIZE.label * LINE + LABEL_TO_BODY_GAP - 2;
