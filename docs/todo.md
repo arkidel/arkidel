@@ -24,8 +24,8 @@ the underlying commits.
 
 Pre-launch readiness.
 
-- Privacy policy drafted by Tom.
-- Terms of service drafted by Tom.
+- Draft privacy policy.
+- Draft terms of service.
 - Vercel deployment configured.
 - arkidel.com DNS pointed at Vercel.
 - Email mailbox provisioning for hello@arkidel.com.

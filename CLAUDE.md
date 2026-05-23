@@ -239,7 +239,7 @@ Georgia is a system font and doesn't need loading.
   surfaces is complete; visual verification of the PDF output, brand
   application, and logo treatment is carried into Phase 4 as a pre-launch
   check.
-- **Phase 4 (pending):** Privacy policy and terms of service drafted by Tom;
+- **Phase 4 (pending):** Draft privacy policy; draft terms of service;
   Vercel deployment; arkidel.com DNS; email mailbox provisioning; waitlist
   email collection wired to a real backend; analytics (Plausible or Fathom).
 - **Phase 5 (post-launch):** Soft launch; user feedback; expand Breach Clock
