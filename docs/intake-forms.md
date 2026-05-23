@@ -1342,6 +1342,13 @@ multi-authority array.
   add-on; corrected to reflect that subsection (M) is a separate, parallel
   AG-notification obligation with its own applicability gate (employer/payroll
   service provider) and data scope (employee TIN + tax withheld).
+- **Material change 2026-05-23 (test-coverage only):** Added a dedicated
+  single-jurisdiction test to `engine.js` (`"Virginia: 5,000 residents
+  triggers all three obligations (individual + AG + CRA)"`) for § 8.10
+  pattern 4. The pattern was previously covered only transitively by the
+  all-eight-jurisdictions stacking test; this change closes a traceability
+  gap identified in a coverage audit. No rule in `data.js` changed; this is
+  test coverage only. Engine test count: 50 → 51, all passing.
 - **Reviewer:** *(pending)*
 
 ---

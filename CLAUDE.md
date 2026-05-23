@@ -38,7 +38,7 @@ post-SB-446 verification") rather than generic messages.
 ### `src/breach-clock/engine.js` — rules engine
 
 Pure JavaScript, no React. Contains `computeDeadlines(facts)`, `isHighRisk`,
-`runTests`, and 50 test cases as of the latest jurisdiction addition. After
+`runTests`, and 51 test cases as of the latest coverage addition. After
 any engine change, the test harness must pass — check the in-app Tests view
 (footer link in the rendered component) or run programmatically.
 

@@ -603,6 +603,17 @@ const TEST_CASES = [
     expect: expectFires("Virginia", "Consumer Reporting"),
   },
   {
+    name: "Virginia: 5,000 residents triggers all three obligations (individual + AG + CRA)",
+    category: "Virginia",
+    facts: { jurisdictions: { va: true }, residentCounts: { va: 5000 }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectFires("Virginia", "Virginia Residents"),
+      expectFires("Virginia", "Attorney General"),
+      expectFires("Virginia", "Consumer Reporting"),
+      expectCount(3)
+    ),
+  },
+  {
     name: "Virginia + encryption: all three obligations suppressed (definitional)",
     category: "Encryption suppression",
     facts: {
