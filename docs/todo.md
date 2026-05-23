@@ -100,16 +100,46 @@ Findings that require an owner judgment before any code change.
   per-route title management. Audit finding X4.
 - No meta description or Open Graph / Twitter card tags in `index.html`.
 
-### Phase 4 audit — typeface standardization (in progress)
+### Phase 4 audit — typeface standardization (complete)
 
 Audit findings B1–B4 (PDF wordmark rendered in Inter SemiBold rather than
-serif; PDF serif is Crimson Text rather than the CLAUDE.md-specified
-Georgia / GT Sectra / Tiempos Headline; stale "Source Serif Pro" comments
-in `src/breach-clock/memo-pdf.js`; dead `@fontsource/source-serif-pro`
-dependency in `package.json`) are being handled in a separate dedicated
-session that will standardize on Merriweather across the site and the
-PDF. Do not duplicate that work here; update the typography lines in
-CLAUDE.md's brand-identity section as part of that session.
+serif; PDF serif is Crimson Text; stale "Source Serif Pro" comments in
+`src/breach-clock/memo-pdf.js`; dead `@fontsource/source-serif-pro`
+dependency in `package.json`) are resolved. The site and the PDF now both
+use Merriweather (browser via `@fontsource/merriweather/400.css`; PDF via
+bundled `Merriweather-Regular.ttf` + `Merriweather-Bold.ttf`). CLAUDE.md's
+brand-identity section was updated in the same session — Georgia, GT
+Sectra, Tiempos Headline, and Crimson Text references were removed and
+Merriweather is now named as the production serif with rationale.
+
+A gate failure surfaced during this work and is tracked as its own Phase 4
+item below (URL-corruption bug isolated to JetBrains Mono).
+
+### Phase 4 — JetBrains Mono URL-corruption bug (gate finding)
+
+Source URLs rendered in JetBrains Mono in the PDF mangle the `//` in
+`https://` into two Arabic-script-looking glyphs (`https:ۗ΃…`). Confirmed
+2026-05-23 via the typeface-standardization gate. The defect is isolated
+to the bundled `src/assets/fonts/JetBrainsMono-Regular.ttf` — the same
+URL string rendered through embedded Merriweather Regular extracts
+cleanly, and the link-annotation URI in the PDF dictionary is intact, so
+this is neither a pdf-lib encoding bug nor a serif-pipeline bug. In the
+actual memo, source URLs are drawn in mono (`memo-pdf.js` line 440), so
+the visible bug ships today.
+
+Two candidate fixes:
+
+1. Re-source `JetBrainsMono-Regular.ttf` from the
+   `JetBrains/JetBrainsMono` upstream release. A corrupt bundled build is
+   the likely root cause and should be tried first.
+2. Render source URLs in the serif (Merriweather Regular) instead of
+   mono. Workaround only — addresses the symptom, not the root cause, and
+   loses the deliberate mono treatment for citations.
+
+Reproduction script: `scripts/url-gate.mjs` (Node, run from project root).
+It embeds the same fonts via pdf-lib, renders three real source URLs from
+`data.js` in both serif and mono, attaches link annotations, and extracts
+the rendered text with `pdfjs-dist` so the corruption is plainly visible.
 
 ### Phase 4 audit — manual verification checklist
 
@@ -205,6 +235,11 @@ Cross-surface re-read:
   data.js change).
 - Landing: update jurisdiction count from seven to eight (Virginia) —
   commit `1d7e611`.
+- brand: standardize on Merriweather across site and PDF; retire Crimson
+  Text and `@fontsource/source-serif-pro`; switch PDF wordmark to serif;
+  update CLAUDE.md typography (resolves audit findings B1–B4). Gate
+  finding for JetBrains Mono URL corruption is tracked above as its own
+  Phase 4 item.
 
 ### Phase 3 build — 2026-05-23
 

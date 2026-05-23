@@ -2,7 +2,7 @@
 // MEMO PDF GENERATOR — phase 2
 //
 // Builds the full Breach Notification Deadline Analysis as a paginated,
-// letter-size PDF with embedded fonts (Source Serif Pro, Inter, JetBrains
+// letter-size PDF with embedded fonts (Merriweather, Inter, JetBrains
 // Mono). Page-break logic prevents cards from splitting across pages. Page
 // numbers are computed in a final pass after all content is rendered.
 //
@@ -26,13 +26,14 @@ import { JURISDICTIONS } from "./data.js";
 // font subsetter mishandles tables decoded out of WOFF1 containers — colons,
 // slashes, hyphens, and fi/ff/fl ligatures all came out wrong. TTF files
 // from the original font releases (Inter from rsms/inter, JetBrains Mono
-// from JetBrains/JetBrainsMono, Crimson Text from google/fonts upstream)
+// from JetBrains/JetBrainsMono, Merriweather from SorkinType/Merriweather)
 // embed cleanly with no transformation.
 //
-// Serif: Crimson Text (the static-TTF predecessor of Crimson Pro). Same
-// family aesthetic; google/fonts ships static Regular and SemiBold weights.
-import serifRegularUrl from "../assets/fonts/CrimsonText-Regular.ttf?url";
-import serifBoldUrl from "../assets/fonts/CrimsonText-SemiBold.ttf?url";
+// Serif: Merriweather (OFL, SorkinType upstream). Regular + Bold give the
+// body / heading hierarchy. The same family also loads on screen via
+// @fontsource/merriweather so the PDF and the web UI agree visually.
+import serifRegularUrl from "../assets/fonts/Merriweather-Regular.ttf?url";
+import serifBoldUrl from "../assets/fonts/Merriweather-Bold.ttf?url";
 import sansRegularUrl from "../assets/fonts/Inter-Regular.ttf?url";
 import sansBoldUrl from "../assets/fonts/Inter-SemiBold.ttf?url";
 import monoRegularUrl from "../assets/fonts/JetBrainsMono-Regular.ttf?url";
@@ -228,14 +229,14 @@ function drawLetterhead(page, fonts, logoImage, generatedAt) {
   });
 
   // Wordmark baseline so its visual center aligns with the icon center.
-  // For Inter at 14pt, cap-height is roughly 0.72em; visual center ≈ baseline + capHeight/2.
-  const wordmarkBaselineY = iconCenterY - SIZE.wordmark * 0.36;
+  // For Merriweather at 14pt, cap-height is roughly 0.66em; visual center ≈ baseline + capHeight/2.
+  const wordmarkBaselineY = iconCenterY - SIZE.wordmark * 0.33;
   drawTextLine(
     page,
     "Arkidel",
     CONTENT_X + ICON_SIZE + ICON_GAP,
     wordmarkBaselineY,
-    fonts.sansBold,
+    fonts.serifReg,
     SIZE.wordmark,
     MIDNIGHT
   );
@@ -314,7 +315,7 @@ function drawIncidentSummary(state, facts) {
       SIZE.label,
       MIST
     );
-    // Value (Source Serif 11pt INK)
+    // Value (Merriweather 11pt INK)
     let y = state.cursorY;
     for (const line of valueLines) {
       page.drawText(line, { x: valueX, y: y - SIZE.body, size: SIZE.body, font: fonts.serifReg, color: INK });

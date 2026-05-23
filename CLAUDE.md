@@ -121,9 +121,9 @@ The canonical SVG (uses `currentColor` for inheritance):
 </svg>
 ```
 
-The wordmark is "Arkidel" in a serif (Georgia as fallback, GT Sectra or
-Tiempos Headline as production targets), with letter-spacing around 1.2.
-The wordmark is sentence case: "Arkidel" — never "ARKIDEL" or "arkidel".
+The wordmark is "Arkidel" in Merriweather Regular, with letter-spacing
+around 1.2. The wordmark is sentence case: "Arkidel" — never "ARKIDEL"
+or "arkidel".
 
 The logo and wordmark generally appear together. On marketing surfaces and
 PDF letterheads, the rune sits to the left of the wordmark, vertically
@@ -147,8 +147,13 @@ with Midnight used sparingly for chrome and accents.
 
 ### Typography
 
-Display and headlines use a serif font: Georgia as fallback, GT Sectra or
-Tiempos Headline as production targets. 24px and up.
+Display and headlines use Merriweather, a serif by Eben Sorkin
+(SorkinType) released under the SIL Open Font License. The same family is
+used on screen and in the embedded PDF memo so the two surfaces agree
+visually. Merriweather was chosen for open-source licensing (no friction
+for PDF embedding) and because its static TTFs embed cleanly through
+pdf-lib's subsetter, which the project has been burned by in the past.
+24px and up.
 
 Body and UI use a sans-serif: Inter (current, open-source) as the practical
 choice. Söhne is the production target if/when a license is added. 16px
@@ -224,7 +229,12 @@ avoids the problem. If new fonts are added, follow the same pattern.
 For the on-screen UI, web fonts are loaded via the standard browser font
 mechanism. Inter and JetBrains Mono are loaded via `@fontsource` (which is
 fine for browser rendering; the encoding issue was specific to pdf-lib).
-Georgia is a system font and doesn't need loading.
+Merriweather is loaded for the browser via `@fontsource/merriweather`
+(Regular/400 only — no other weights or italics are used on screen). For
+the PDF, the same family is bundled as direct TTFs
+(`Merriweather-Regular.ttf`, `Merriweather-Bold.ttf`) in
+`src/assets/fonts/`, following the rule above. Two delivery paths for one
+typeface is intentional.
 
 ---
 

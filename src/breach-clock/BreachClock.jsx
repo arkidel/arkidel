@@ -161,7 +161,7 @@ export default function BreachClock() {
           * { box-sizing: border-box; }
           body { margin: 0; }
           .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-          .serif { font-family: Georgia, 'Tiempos Headline', serif; }
+          .serif { font-family: Merriweather, Georgia, serif; }
           .section-mark {
             font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500;
             letter-spacing: 0.18em; text-transform: uppercase; color: #1B2A3F; opacity: 0.7;
@@ -295,8 +295,8 @@ export default function BreachClock() {
         * { box-sizing: border-box; }
         body { margin: 0; }
         .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-        .serif { font-family: Georgia, 'Tiempos Headline', 'GT Sectra', serif; }
-        h1, h2, h3 { font-family: Georgia, 'Tiempos Headline', 'GT Sectra', serif; font-weight: 400; }
+        .serif { font-family: Merriweather, Georgia, serif; }
+        h1, h2, h3 { font-family: Merriweather, Georgia, serif; font-weight: 400; }
         .btn-primary {
           background: #1B2A3F; color: #FAF8F2; border: none; padding: 13px 24px;
           font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500;
@@ -320,7 +320,7 @@ export default function BreachClock() {
         .checkbox-card.selected { background: #1B2A3F; color: #FAF8F2; }
         .input-field {
           width: 100%; border: none; border-bottom: 1.5px solid #1B2A3F; background: transparent;
-          padding: 12px 0; font-family: Georgia, serif; font-size: 20px; color: #2C2418;
+          padding: 12px 0; font-family: Merriweather, Georgia, serif; font-size: 20px; color: #2C2418;
           outline: none;
         }
         .input-field:focus { border-bottom-color: #C76E3A; }
