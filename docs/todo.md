@@ -115,48 +115,6 @@ Merriweather is now named as the production serif with rationale.
 A gate failure surfaced during this work and is tracked as its own Phase 4
 item below (URL-corruption bug isolated to JetBrains Mono).
 
-### Phase 4 — JetBrains Mono character-corruption bug (HIGH PRIORITY)
-
-The bundled `src/assets/fonts/JetBrainsMono-Regular.ttf` corrupts at
-least the `:` and `/` characters wherever mono text is rendered in the
-PDF. This was originally logged as a URL-only cosmetic issue; the
-2026-05-23 typography gate render showed the corruption is broader and
-hits substantive output:
-
-- Source URLs: `https://` mangles into two Arabic-script-looking glyphs
-  (`https:ۗ΃…`).
-- Statutory citations: the Virginia medical-information note's
-  `Va. Code § 32.1-127.1:05` renders as `Va. Code § 32.1-127.1Σ05` — the
-  colon is gone.
-
-Citations are core legal output. A corrupted statute reference in a
-breach-notification memo is a substantive correctness defect in the
-product's primary deliverable, not a cosmetic polish item. Treat this as
-ahead of the rest of the Phase 4 punch list — fix before any other
-launch-readiness work.
-
-The defect is isolated to the bundled TTF: the same strings rendered
-through embedded Merriweather Regular extract cleanly, and the link-
-annotation URI in the PDF dictionary is intact, so this is neither a
-pdf-lib encoding bug nor a serif-pipeline bug.
-
-Two candidate fixes (unchanged from when this was logged as URL-only):
-
-1. Re-source `JetBrainsMono-Regular.ttf` from the
-   `JetBrains/JetBrainsMono` upstream release. A corrupt bundled build is
-   the likely root cause and should be tried first.
-2. Render mono text in the serif (Merriweather Regular) instead.
-   Workaround only — addresses the symptom, not the root cause, and
-   loses the deliberate mono treatment for citations.
-
-Reproduction script: `scripts/url-gate.mjs` (Node, run from project root).
-It embeds the same fonts via pdf-lib, renders three real source URLs from
-`data.js` in both serif and mono, attaches link annotations, and extracts
-the rendered text with `pdfjs-dist` so the corruption is plainly visible.
-The harness as written targets URLs; the same approach extends to any
-string containing the affected characters (the VA citation above is a
-ready test input).
-
 ### Phase 4 — Suppressed-card heading truncation (PDF layout defect)
 
 In the PDF, the Massachusetts suppressed-obligation card title
@@ -279,6 +237,19 @@ Cross-surface re-read:
   update CLAUDE.md typography (resolves audit findings B1–B4). Gate
   finding for JetBrains Mono URL corruption is tracked above as its own
   Phase 4 item.
+- pdf: resolve JetBrains Mono character-corruption defect by swapping
+  the bundled mono font to the No-Ligatures variant
+  (`JetBrainsMonoNL-Regular.ttf`) from the same JetBrains/JetBrainsMono
+  v2.304 release. Root cause was pdf-lib's fontkit subsetter applying
+  GSUB ligature substitutions to plain text, mangling adjacencies like
+  `://` and `1:0` — visible in source URLs and the Virginia medical-
+  information citation `§ 32.1-127.1:05`. Verified end-to-end on the
+  browser "Download memo" path. Same commit split `memo-pdf.js` into a
+  slim Vite shim plus `memo-pdf-core.js` so the render path is Node-
+  importable for the regression harness; public API unchanged.
+  Regression guard: `scripts/mono-gate.mjs`. The suppressed-card
+  heading-truncation defect (tracked above) is unaffected and stays
+  open.
 
 ### Phase 3 build — 2026-05-23
 
