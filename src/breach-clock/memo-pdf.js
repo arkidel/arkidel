@@ -75,10 +75,16 @@ async function loadFontBytes() {
 }
 
 // ─── Type sizes ───────────────────────────────────────────────────────────
+
+// Body text size — applies to incident-summary row values, card body blocks
+// (deadline / suppressed), and the further-considerations bullets. Single
+// point of adjustment for the memo's running body type.
+const BODY_TEXT_SIZE = 10.5;
+
 const SIZE = {
   title: 22,
   sectionHead: 14,
-  body: 11,
+  body: BODY_TEXT_SIZE,
   authority: 12,
   label: 8,
   citation: 9,
@@ -300,7 +306,7 @@ function drawIncidentSummary(state, facts) {
   state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Incident Summary", state.cursorY);
 
   for (const [label, value] of rows) {
-    const valueLines = wrapText(value, fonts.serifReg, SIZE.body, valueMaxW);
+    const valueLines = wrapText(value, fonts.sansReg, SIZE.body, valueMaxW);
     const rowH = Math.max(SIZE.body * LINE, valueLines.length * SIZE.body * LINE) + 6;
     state.ensureRoom(rowH);
     const page = state.currentPage();
@@ -315,10 +321,10 @@ function drawIncidentSummary(state, facts) {
       SIZE.label,
       MIST
     );
-    // Value (Merriweather 11pt INK)
+    // Value (Inter sans at SIZE.body, INK)
     let y = state.cursorY;
     for (const line of valueLines) {
-      page.drawText(line, { x: valueX, y: y - SIZE.body, size: SIZE.body, font: fonts.serifReg, color: INK });
+      page.drawText(line, { x: valueX, y: y - SIZE.body, size: SIZE.body, font: fonts.sansReg, color: INK });
       y -= SIZE.body * LINE;
     }
     state.cursorY = y - 4;
@@ -357,11 +363,11 @@ function measureBlock(b, fonts) {
     return SIZE.label * LINE;
   }
   if (b.type === "body") {
-    return measureWrapped(b.text, fonts.serifReg, SIZE.body, CARD_INNER_W);
+    return measureWrapped(b.text, fonts.sansReg, SIZE.body, CARD_INNER_W);
   }
   if (b.type === "labelBody") {
     return SIZE.label * LINE + LABEL_TO_BODY_GAP +
-      measureWrapped(b.body, fonts.serifReg, SIZE.body, CARD_INNER_W);
+      measureWrapped(b.body, fonts.sansReg, SIZE.body, CARD_INNER_W);
   }
   if (b.type === "labelMono") {
     return SIZE.label * LINE + LABEL_TO_BODY_GAP +
@@ -420,7 +426,7 @@ function drawCard(page, blocks, topY, borderColor, fonts) {
       drawTextLine(page, upperLabel(b.label), innerX, y - SIZE.label, fonts.sansReg, SIZE.label, MIST);
       y -= SIZE.label * LINE + LABEL_TO_BODY_GAP - 2;
       y = drawWrapped(page, b.body, innerX, y, {
-        font: fonts.serifReg, size: SIZE.body, color: INK, maxWidth: CARD_INNER_W,
+        font: fonts.sansReg, size: SIZE.body, color: INK, maxWidth: CARD_INNER_W,
       });
       y += 2;
     } else if (b.type === "labelMono") {
@@ -446,7 +452,7 @@ function drawCard(page, blocks, topY, borderColor, fonts) {
       y += 2;
     } else if (b.type === "body") {
       y = drawWrapped(page, b.text, innerX, y, {
-        font: fonts.serifReg, size: SIZE.body, color: INK, maxWidth: CARD_INNER_W,
+        font: fonts.sansReg, size: SIZE.body, color: INK, maxWidth: CARD_INNER_W,
       });
     } else if (b.type === "noteHeader") {
       drawTextLine(page, upperLabel(b.label), innerX, y - SIZE.label, fonts.sansReg, SIZE.label, MIST);
@@ -555,7 +561,7 @@ function drawFurtherConsiderations(state) {
   const textMaxW = CONTENT_W - bulletGap;
 
   for (const item of FURTHER_CONSIDERATIONS) {
-    const lines = wrapText(item, fonts.serifReg, SIZE.body, textMaxW);
+    const lines = wrapText(item, fonts.sansReg, SIZE.body, textMaxW);
     const blockH = lines.length * SIZE.body * LINE + 6;
     // Bullets can break across pages (per spec) — but try to keep at least
     // the first line with the bullet character on the same page.
@@ -567,7 +573,7 @@ function drawFurtherConsiderations(state) {
       x: bulletX,
       y: state.cursorY - SIZE.body,
       size: SIZE.body,
-      font: fonts.serifReg,
+      font: fonts.sansReg,
       color: MIDNIGHT,
     });
 
@@ -580,7 +586,7 @@ function drawFurtherConsiderations(state) {
         page = state.currentPage();
         y = state.cursorY;
       }
-      page.drawText(line, { x: textX, y: y - SIZE.body, size: SIZE.body, font: fonts.serifReg, color: INK });
+      page.drawText(line, { x: textX, y: y - SIZE.body, size: SIZE.body, font: fonts.sansReg, color: INK });
       y -= SIZE.body * LINE;
     }
     state.cursorY = y - 6;

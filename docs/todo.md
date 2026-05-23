@@ -115,31 +115,70 @@ Merriweather is now named as the production serif with rationale.
 A gate failure surfaced during this work and is tracked as its own Phase 4
 item below (URL-corruption bug isolated to JetBrains Mono).
 
-### Phase 4 — JetBrains Mono URL-corruption bug (gate finding)
+### Phase 4 — JetBrains Mono character-corruption bug (HIGH PRIORITY)
 
-Source URLs rendered in JetBrains Mono in the PDF mangle the `//` in
-`https://` into two Arabic-script-looking glyphs (`https:ۗ΃…`). Confirmed
-2026-05-23 via the typeface-standardization gate. The defect is isolated
-to the bundled `src/assets/fonts/JetBrainsMono-Regular.ttf` — the same
-URL string rendered through embedded Merriweather Regular extracts
-cleanly, and the link-annotation URI in the PDF dictionary is intact, so
-this is neither a pdf-lib encoding bug nor a serif-pipeline bug. In the
-actual memo, source URLs are drawn in mono (`memo-pdf.js` line 440), so
-the visible bug ships today.
+The bundled `src/assets/fonts/JetBrainsMono-Regular.ttf` corrupts at
+least the `:` and `/` characters wherever mono text is rendered in the
+PDF. This was originally logged as a URL-only cosmetic issue; the
+2026-05-23 typography gate render showed the corruption is broader and
+hits substantive output:
 
-Two candidate fixes:
+- Source URLs: `https://` mangles into two Arabic-script-looking glyphs
+  (`https:ۗ΃…`).
+- Statutory citations: the Virginia medical-information note's
+  `Va. Code § 32.1-127.1:05` renders as `Va. Code § 32.1-127.1Σ05` — the
+  colon is gone.
+
+Citations are core legal output. A corrupted statute reference in a
+breach-notification memo is a substantive correctness defect in the
+product's primary deliverable, not a cosmetic polish item. Treat this as
+ahead of the rest of the Phase 4 punch list — fix before any other
+launch-readiness work.
+
+The defect is isolated to the bundled TTF: the same strings rendered
+through embedded Merriweather Regular extract cleanly, and the link-
+annotation URI in the PDF dictionary is intact, so this is neither a
+pdf-lib encoding bug nor a serif-pipeline bug.
+
+Two candidate fixes (unchanged from when this was logged as URL-only):
 
 1. Re-source `JetBrainsMono-Regular.ttf` from the
    `JetBrains/JetBrainsMono` upstream release. A corrupt bundled build is
    the likely root cause and should be tried first.
-2. Render source URLs in the serif (Merriweather Regular) instead of
-   mono. Workaround only — addresses the symptom, not the root cause, and
+2. Render mono text in the serif (Merriweather Regular) instead.
+   Workaround only — addresses the symptom, not the root cause, and
    loses the deliberate mono treatment for citations.
 
 Reproduction script: `scripts/url-gate.mjs` (Node, run from project root).
 It embeds the same fonts via pdf-lib, renders three real source URLs from
 `data.js` in both serif and mono, attaches link annotations, and extracts
 the rendered text with `pdfjs-dist` so the corruption is plainly visible.
+The harness as written targets URLs; the same approach extends to any
+string containing the affected characters (the VA citation above is a
+ready test input).
+
+### Phase 4 — Suppressed-card heading truncation (PDF layout defect)
+
+In the PDF, the Massachusetts suppressed-obligation card title
+"Massachusetts — Massachusetts Office of Consumer Affairs and Business
+Regulation (OCABR)" is clipped mid-word, rendering as
+"...Business Regulation (OCA" with the closing characters cut off. The
+heading appears to be truncated rather than wrapped or auto-sized when
+it exceeds the available line width.
+
+Reproducible with any incident that includes Massachusetts and triggers
+the suppressed-card path. Confirmed visible in both the 10.5pt and 11pt
+gate renders from the 2026-05-23 typography gate, so it is not body-size
+dependent.
+
+Likely site: `drawCard` in `src/breach-clock/memo-pdf.js`, the
+`b.type === "topRow"` branch. The authority text is drawn as a single
+`drawTextLine` call with no wrap/measure step, so anything wider than the
+available column gets clipped at the right edge. Fix path is to wrap the
+title across two lines when it exceeds the available width, or to
+measure-and-shrink the title type size.
+
+Categorize as a PDF layout defect.
 
 ### Phase 4 audit — manual verification checklist
 

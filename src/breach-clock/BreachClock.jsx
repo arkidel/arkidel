@@ -320,7 +320,7 @@ export default function BreachClock() {
         .checkbox-card.selected { background: #1B2A3F; color: #FAF8F2; }
         .input-field {
           width: 100%; border: none; border-bottom: 1.5px solid #1B2A3F; background: transparent;
-          padding: 12px 0; font-family: Merriweather, Georgia, serif; font-size: 20px; color: #2C2418;
+          padding: 12px 0; font-family: 'Inter', sans-serif; font-size: 20px; color: #2C2418;
           outline: none;
         }
         .input-field:focus { border-bottom-color: #C76E3A; }

@@ -147,17 +147,30 @@ with Midnight used sparingly for chrome and accents.
 
 ### Typography
 
+The rule: display and headings use Merriweather serif; body text and all
+form and input text use Inter sans. Applied consistently across the
+on-screen UI and the embedded PDF memo — the two surfaces agree on which
+face is doing which job. The serif/sans line is what reads as "considered,
+quiet, plain" to the reader; mixing it up undermines the brand.
+
 Display and headlines use Merriweather, a serif by Eben Sorkin
 (SorkinType) released under the SIL Open Font License. The same family is
 used on screen and in the embedded PDF memo so the two surfaces agree
 visually. Merriweather was chosen for open-source licensing (no friction
 for PDF embedding) and because its static TTFs embed cleanly through
 pdf-lib's subsetter, which the project has been burned by in the past.
-24px and up.
+24px and up on screen.
 
 Body and UI use a sans-serif: Inter (current, open-source) as the practical
 choice. Söhne is the production target if/when a license is added. 16px
-body, 12–14px UI labels, 1.6 line height.
+body, 12–14px UI labels, 1.6 line height on screen. In the embedded PDF
+memo, body type renders at 10.5pt — a single `BODY_TEXT_SIZE` constant in
+`src/breach-clock/memo-pdf.js` is the one point of adjustment if it needs
+to be re-tuned. The PDF body face is also Inter, matching the screen.
+
+Form and input text follows the body rule: Inter sans, not serif. The
+Breach Clock step inputs, the Landing waitlist input, and any future form
+fields should share the same Inter stack as the buttons.
 
 Monospace uses JetBrains Mono for IDs, hashes, citations, audit entries.
 
