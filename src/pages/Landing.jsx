@@ -51,7 +51,7 @@ export default function Landing() {
               Breach Clock is a triage tool for breach notification deadlines. Enter what you know — when you became aware, where the affected residents are, what kind of data was involved, whether encryption was applied — and Breach Clock returns the obligations that fire under each jurisdiction's rules, with primary-source citations and a downloadable memo you can share with your team or counsel.
             </p>
             <p>
-              It's built for the moment a privacy professional or in-house counsel finds out about a possible incident at 4:45 on a Friday and needs to know how much time they have. Seven jurisdictions are modeled today: EU GDPR, UK GDPR, California, Texas, Colorado, Massachusetts, and New York. More are on the way.
+              It's built for the moment a privacy professional or in-house counsel finds out about a possible incident at 4:45 on a Friday and needs to know how much time they have. Eight jurisdictions are modeled today: EU GDPR, UK GDPR, California, Texas, Colorado, Massachusetts, New York, and Virginia. More are on the way.
             </p>
             <p>
               Every rule is verified against primary statutory sources and trusted secondary references reviewed by qualified attorneys. The rules engine ships with a public test harness — fifty cases covering threshold boundaries, dependent deadlines, and encryption suppression — that you can run yourself. We think you should be able to see how the tool works, not just trust that it does.
