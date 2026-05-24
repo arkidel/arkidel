@@ -36,6 +36,7 @@ export default function BreachClock() {
   const [encryptionApplied, setEncryptionApplied] = useState(false);
   const [riskLevel, setRiskLevel] = useState("");
   const [now, setNow] = useState(new Date());
+  const [downloadError, setDownloadError] = useState("");
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -107,31 +108,38 @@ export default function BreachClock() {
   };
 
   const handleDownloadMemo = async () => {
-    const facts = {
-      awarenessDate,
-      jurisdictions,
-      residentCounts,
-      sensitivity,
-      sensitivityLabels: sensitivity
-        .map((s) => sensitivityOptions.find((o) => o.id === s)?.label)
-        .filter(Boolean)
-        // Strip trailing parentheticals for the printed memo:
-        // "Identifiers (name, email, address)" → "Identifiers"
-        .map((label) => label.replace(/\s*\([^)]*\)\s*$/, "")),
-      encryptionApplied,
-      riskLevel,
-    };
-    const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed);
-    const blob = new Blob([pdfBytes], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const dateForFilename = (awarenessDate || new Date()).toISOString().slice(0, 10);
-    a.href = url;
-    a.download = `breach-notification-analysis-${dateForFilename}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setDownloadError("");
+    try {
+      const facts = {
+        awarenessDate,
+        jurisdictions,
+        residentCounts,
+        sensitivity,
+        sensitivityLabels: sensitivity
+          .map((s) => sensitivityOptions.find((o) => o.id === s)?.label)
+          .filter(Boolean)
+          // Strip trailing parentheticals for the printed memo:
+          // "Identifiers (name, email, address)" → "Identifiers"
+          .map((label) => label.replace(/\s*\([^)]*\)\s*$/, "")),
+        encryptionApplied,
+        riskLevel,
+      };
+      const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed);
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const dateForFilename = (awarenessDate || new Date()).toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `breach-notification-analysis-${dateForFilename}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Memo PDF generation failed:", err);
+      const msg = err && err.message ? err.message : String(err);
+      setDownloadError(`Memo download failed: ${msg}. See browser console for details.`);
+    }
   };
 
 
@@ -653,6 +661,23 @@ export default function BreachClock() {
                 )}
               </div>
             </div>
+            {downloadError && (
+              <div
+                role="alert"
+                style={{
+                  marginBottom: "16px",
+                  padding: "10px 14px",
+                  border: "1px solid #C76E3A",
+                  color: "#C76E3A",
+                  background: "transparent",
+                  fontFamily: "'Inter', sans-serif",
+                  fontSize: "13px",
+                  lineHeight: 1.5,
+                }}
+              >
+                {downloadError}
+              </div>
+            )}
             <div className="divider-thick" style={{ marginBottom: "40px" }} />
 
             {deadlines.length === 0 && suppressed.length > 0 && (
