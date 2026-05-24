@@ -50,14 +50,6 @@ Completed section below.
 
 Findings that require an owner judgment before any code change.
 
-- Marketing heading style: section headings on `Landing.jsx` and
-  `About.jsx` are declarative sentences ending in periods ("The first
-  module is Breach Clock.", "Why we started this.", "Arkidel is a tool,
-  not a compliance program."). CLAUDE.md's rule says title case for
-  marketing section headings. The voice intent appears deliberate; decide
-  whether to update the rule in CLAUDE.md to acknowledge declarative
-  sentence headings or restyle the pages. Audit finding H3 (and H4 for
-  the parallel pattern on the Privacy/Terms placeholders).
 - Off-palette tints and undocumented hover colors in
   `src/breach-clock/BreachClock.jsx`: urgent-card cream `#FBF5EE` (lines
   265, 354), primary-button hover `#2C3E55` (line 306), pure `#fff` card
@@ -134,9 +126,12 @@ Marketing site (`npm run dev`):
 9. Logo color on dark chrome — confirm header and footer logo render as
    Parchment after the L1 fix lands.
 10. Nav-link hover state — transitions to Parchment as intended.
-11. Heading style — read Landing/About section headings out loud; decide
-    whether the sentence-with-period style ships or gets restyled (ties
-    to finding H3).
+11. Heading style — read Landing/About section headings on the rendered
+    pages; confirm the declarative-sentence style reads well in context.
+    The rule was settled by the CLAUDE.md amendment on 2026-05-24
+    (declarative-sentence style for site-facing pages, per the
+    "Heading case convention" section); this is a pre-launch
+    read-through, not a decision point.
 12. Mobile responsiveness — resize to ≤480px and ≤768px; confirm header
     chrome doesn't crowd, hero copy wraps cleanly, jurisdiction checkbox
     grid collapses, the multi-step Breach Clock form is usable, and
@@ -185,6 +180,22 @@ Cross-surface re-read:
 ---
 
 ## Completed
+
+### 2026-05-24
+
+- audit H3/H4: marketing heading style. Resolution was to amend the
+  CLAUDE.md heading-case rule, not to restyle the pages. The
+  declarative-sentence headings on `Landing.jsx` and `About.jsx`
+  ("Why we started this.", "Arkidel is a tool, not a compliance
+  program.") are a deliberate expression of the documented "considered,
+  quiet, plain" brand voice. The rule in CLAUDE.md's "Heading case
+  convention" section was split into three conventions: title case
+  retained for PDF memo and product-UI structural headings (including
+  the Tests view H1 cleared as H1 on 2026-05-23); declarative-sentence
+  style established for section headings on site-facing marketing and
+  informational pages (Landing, About, Privacy, Terms, including the
+  current placeholders); sentence case retained for interactive prompts
+  in the Breach Clock flow. No code changes.
 
 ### 2026-05-23
 

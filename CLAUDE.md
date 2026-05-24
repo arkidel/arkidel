@@ -179,15 +179,28 @@ Spaced caps for section labels (e.g., `BASIS`, `CONDITIONAL`, `SOURCE`,
 
 ### Heading case convention
 
-Two conventions, used for different functions:
+Three conventions, used for different functions:
 
 - **Title case** for descriptive structural headings: document titles,
-  section headings on marketing pages, section headings within the PDF memo,
-  and any other static label that describes a section of content. Use
+  section headings within the PDF memo, and structural headings within
+  the product UI that label a section of content rather than address the
+  user (e.g. the Breach Clock Tests view H1, "Rules Engine Tests"). Use
   AP-style title case (capitalize nouns, verbs, adjectives, adverbs,
   pronouns; do not capitalize articles, short prepositions of four letters
   or fewer, or coordinating conjunctions; always capitalize the first and
   last word of the heading).
+- **Declarative-sentence style** for section headings on site-facing
+  marketing and informational pages — Landing, About, and the
+  Privacy/Terms pages (including the current placeholders). Sentence
+  case, with a terminal period permitted ("Why we started this.",
+  "Arkidel is a tool, not a compliance program."). This is a deliberate
+  matter of brand voice: section headings on these pages read as plain
+  declarative statements consistent with the "considered, quiet, plain"
+  voice described below, rather than as labels imposed on top of the
+  content. The voice established on Landing and About is the reference
+  for new site-facing pages. This convention does not extend into the
+  product UI or the PDF memo, both of which keep title case for their
+  structural headings per the rule above.
 - **Sentence case** for interactive prompts: the question headings that
   appear in the multi-step Breach Clock flow ("When did you become aware of
   the breach?", "Which jurisdictions' residents are affected?", "What kind
