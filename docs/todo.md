@@ -50,22 +50,12 @@ Completed section below.
 
 Findings that require an owner judgment before any code change.
 
-- Off-palette tints and undocumented hover colors in
-  `src/breach-clock/BreachClock.jsx`: urgent-card cream `#FBF5EE` (lines
-  265, 354), primary-button hover `#2C3E55` (line 306), pure `#fff` card
-  backgrounds on a Bone canvas (lines 230, 588, 815), an input-field
-  serif stack that omits Tiempos/GT Sectra (line 323), and the header
-  wordmark's missing letter-spacing in `src/components/Layout.jsx` (line
-  22). Audit findings B7–B11.
 - Cross-surface divergences: PDF cards use a 3pt left border with no fill
   while on-screen cards use white fill; marketing H1 is `text-4xl` (~36px)
   while the Breach Clock H1 is `clamp(40px, 6vw, 64px)`; the Breach Clock
   page stacks the global Layout header above its own page-internal
   "Breach Clock" header with a "Preliminary — Not Legal Advice" badge.
   Audit findings X5–X7.
-- User-facing version stamp "v0.1" in the Breach Clock footer
-  (`src/breach-clock/BreachClock.jsx` line 908) — minor tonal mismatch
-  with the brand voice. Audit finding H6.
 
 ### Phase 4 audit — launch-infrastructure gaps
 
@@ -183,6 +173,23 @@ Cross-surface re-read:
 
 ### 2026-05-24
 
+- audit cleanup: clear B7–B11 and H6 from the Phase 4 owner-review list in
+  a single consolidation commit.
+  - B7–B9 — off-palette tints in `src/breach-clock/BreachClock.jsx`
+    (`#FBF5EE`, `#2C3E55`, `#FFFFFF`) documented in CLAUDE.md's color
+    palette as intentional, named values with a note on each one's
+    purpose, so a future audit recognizes them rather than re-flagging.
+    No code change in `BreachClock.jsx`.
+  - B10 — input-field serif stack. Already resolved by the earlier
+    typography-harmonization work that changed `.input-field` to Inter
+    sans; no code change in this session.
+  - B11 — wordmark letter-spacing. CLAUDE.md's documented value (~1.2px)
+    applied to the Arkidel wordmark in both header and footer of
+    `src/components/Layout.jsx`. CLAUDE.md unchanged.
+  - H6 — user-facing version stamp. " · v0.1" removed from the Breach
+    Clock footer in `src/breach-clock/BreachClock.jsx`; rest of the
+    footer intact.
+  Engine tests: 51/51 pass.
 - audit H3/H4: marketing heading style. Resolution was to amend the
   CLAUDE.md heading-case rule, not to restyle the pages. The
   declarative-sentence headings on `Landing.jsx` and `About.jsx`

@@ -930,7 +930,7 @@ export default function BreachClock() {
 
         <footer style={{ marginTop: "80px", paddingTop: "32px", borderTop: "1px solid rgba(27,42,63,0.18)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div className="section-mark" style={{ opacity: 0.5 }}>
-            Arkidel · Breach Clock · v0.1
+            Arkidel · Breach Clock
           </div>
           <button
             onClick={() => setShowTests(true)}

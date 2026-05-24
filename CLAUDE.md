@@ -122,7 +122,7 @@ The canonical SVG (uses `currentColor` for inheritance):
 ```
 
 The wordmark is "Arkidel" in Merriweather Regular, with letter-spacing
-around 1.2. The wordmark is sentence case: "Arkidel" — never "ARKIDEL"
+around 1.2px. The wordmark is sentence case: "Arkidel" — never "ARKIDEL"
 or "arkidel".
 
 The logo and wordmark generally appear together. On marketing surfaces and
@@ -144,6 +144,16 @@ centered. The logo color follows the surface: Midnight on light backgrounds
 
 Marketing surfaces are Midnight-dominant. Product UI keeps a Bone canvas
 with Midnight used sparingly for chrome and accents.
+
+In addition to the named tokens above, three off-palette values are
+deliberate and recur in the Breach Clock UI. They are intentional — a
+future audit should recognize them rather than re-flag them.
+
+| Value | Use |
+|---|---|
+| `#FBF5EE` | Warm cream attention tint paired with Ember. Background of the urgent deadline-card variant (approaching the deadline) and of the failing-test error panel in the Tests view. |
+| `#2C3E55` | Primary-button hover color — a lightened Midnight applied via `.btn-primary:hover`. |
+| `#FFFFFF` | Pure white card-surface background on the Bone canvas. Used for deadline cards, encryption-suppression cards, and the Tests-view test list. The slight lift against `#FAF8F2` is intentional and gives the cards their own surface. |
 
 ### Typography
 
