@@ -5,7 +5,7 @@ export default function About() {
       {/* ── What we're building ───────────────────────────────────────── */}
       <section className="px-8 pt-16 pb-24">
         <div className="max-w-3xl mx-auto">
-          <h1 className="font-serif text-3xl mb-8">
+          <h1 className="font-serif text-4xl mb-8">
             What we're building.
           </h1>
           <div className="space-y-5 text-base leading-relaxed text-midnight/80 max-w-prose">

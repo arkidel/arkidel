@@ -194,7 +194,7 @@ export default function BreachClock() {
                 ← Back to Breach Clock
               </button>
             </div>
-            <h1 className="serif" style={{ fontSize: "clamp(40px, 6vw, 64px)", margin: 0, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.05, color: "#1B2A3F" }}>
+            <h1 className="serif" style={{ fontSize: "36px", margin: 0, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.15, color: "#1B2A3F" }}>
               Rules Engine Tests
             </h1>
             <p style={{ fontSize: "17px", marginTop: "20px", maxWidth: "640px", lineHeight: 1.6, color: "#2C2418" }}>
@@ -354,16 +354,16 @@ export default function BreachClock() {
         .progress-step.done { background: #5A6E4A; color: #FAF8F2; border-color: #5A6E4A; }
         .progress-line { flex: 1; height: 1px; background: #1B2A3F; opacity: 0.25; margin: 0 8px; }
         .deadline-card {
-          background: #fff; border: 1px solid rgba(27,42,63,0.18); padding: 24px;
+          background: #fff; border-left: 4px solid #1B2A3F; padding: 24px;
           position: relative; overflow: hidden;
         }
         .deadline-card.urgent {
-          border-left: 4px solid #C76E3A; border-color: #C76E3A;
+          border-left-color: #C76E3A;
           background: #FBF5EE;
         }
         .deadline-card.missed {
-          background: #1B2A3F; color: #FAF8F2; border: none;
-          border-left: 4px solid #C76E3A;
+          background: #1B2A3F; color: #FAF8F2;
+          border-left-color: #C76E3A;
         }
         .deadline-card.missed .mono { color: #FAF8F2; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -378,19 +378,32 @@ export default function BreachClock() {
 
       <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "60px 40px" }}>
         {/* Header */}
-        <header style={{ marginBottom: "60px", borderBottom: "1px solid rgba(27,42,63,0.18)", paddingBottom: "32px" }}>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "32px" }}>
-            <div className="section-mark">
-              Preliminary — Not Legal Advice
-            </div>
-          </div>
-          <h1 className="serif" style={{ fontSize: "clamp(40px, 6vw, 64px)", margin: 0, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.05, color: "#1B2A3F" }}>
+        <header style={{ marginBottom: "28px" }}>
+          <h1 className="serif" style={{ fontSize: "36px", margin: 0, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.15, color: "#1B2A3F" }}>
             Breach Clock
           </h1>
-          <p style={{ fontSize: "17px", marginTop: "20px", maxWidth: "640px", lineHeight: 1.6, fontWeight: 400, color: "#2C2418" }}>
+          <p style={{ fontSize: "15px", marginTop: "12px", maxWidth: "640px", lineHeight: 1.6, fontWeight: 400, color: "#2C2418" }}>
             A triage tool for calculating breach-notification deadlines from the moment of awareness. Currently covers {JURISDICTIONS.map((j) => j.short).join(", ").replace(/, ([^,]*)$/, ", and $1")}.
           </p>
         </header>
+
+        {/* On-ramp notice — sits directly above the wizard / results so the
+            disclaimer is attached to the tool rather than floating in chrome. */}
+        <div
+          role="note"
+          style={{
+            borderTop: "1px solid rgba(27,42,63,0.18)",
+            borderBottom: "1px solid rgba(27,42,63,0.18)",
+            padding: "14px 0",
+            marginBottom: "40px",
+            fontSize: "14px",
+            lineHeight: 1.55,
+            color: "#1B2A3F",
+            fontFamily: "'Inter', sans-serif",
+          }}
+        >
+          For preliminary triage purposes only. Breach Clock does not provide legal advice. Results must be confirmed by qualified counsel.
+        </div>
 
         {/* Progress */}
         {step < 4 && (
@@ -788,10 +801,10 @@ export default function BreachClock() {
                         <aside
                           key={note.id}
                           style={{
-                            background: "#E8DDC4",
+                            background: "#fff",
                             color: "#2C2418",
                             padding: "20px 24px",
-                            border: "1px solid rgba(27,42,63,0.18)",
+                            borderLeft: "4px solid #E8DDC4",
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", color: "#1B2A3F" }}>
@@ -838,7 +851,6 @@ export default function BreachClock() {
                       key={i}
                       style={{
                         background: "#fff",
-                        border: "1px solid rgba(27,42,63,0.18)",
                         borderLeft: "4px solid #5A6E4A",
                         padding: "20px 24px",
                       }}

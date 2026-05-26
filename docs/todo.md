@@ -33,6 +33,13 @@ Pre-launch readiness.
   ConvertKit, or a Vercel-hosted endpoint). Currently a placeholder submit
   handler that logs to console.
 - Analytics installed (Plausible or Fathom — decision pending).
+- Breach Clock page density pass — the page top and wizard still read as
+  marketing-promo styling (large type, generous whitespace) rather than the
+  denser information layout of a finished application. Revisit type scale
+  and object density across the Breach Clock page to give it working-app
+  density. Design pass requiring a defined visual target before
+  implementation, not a mechanical fix — needs owner scoping before it
+  becomes a session. Surfaced 2026-05-26 while resolving X7.
 - Pre-launch visual audit: PDF memo output, brand surfaces (palette,
   typography, heading-case convention, voice), and logo treatment on all
   marketing surfaces (landing, about, header, footer), checked against the
@@ -48,14 +55,9 @@ Completed section below.
 
 ### Phase 4 audit — owner-review items (need a decision)
 
-Findings that require an owner judgment before any code change.
-
-- Cross-surface divergences: PDF cards use a 3pt left border with no fill
-  while on-screen cards use white fill; marketing H1 is `text-4xl` (~36px)
-  while the Breach Clock H1 is `clamp(40px, 6vw, 64px)`; the Breach Clock
-  page stacks the global Layout header above its own page-internal
-  "Breach Clock" header with a "Preliminary — Not Legal Advice" badge.
-  Audit findings X5–X7.
+All three findings from this section (X5–X7) were cleared on 2026-05-26.
+See the Completed section below. The Phase 4 visual audit is now fully
+resolved.
 
 ### Phase 4 audit — launch-infrastructure gaps
 
@@ -170,6 +172,43 @@ Cross-surface re-read:
 ---
 
 ## Completed
+
+### 2026-05-26
+
+- audit cleanup: clear X5, X6, and X7 from the Phase 4 owner-review list
+  in a single consolidation commit. With these three resolved, the Phase 4
+  visual audit is now fully resolved.
+  - X6 — H1 sizing unified at 36px across all surfaces. Marketing pages
+    (`src/pages/About.jsx` updated from `text-3xl` to `text-4xl`; Landing,
+    Privacy, Terms already at `text-4xl`) and `src/breach-clock/BreachClock.jsx`
+    main + Tests view (both changed from `clamp(40px, 6vw, 64px)` to a
+    fixed 36px) now share one H1 scale. Owner approved 36px as the
+    unified value before application.
+  - X7 — Breach Clock page-top compressed. The oversized "Breach Clock"
+    H1 (was up to 64px) was reduced to the unified 36px, descriptive
+    paragraph trimmed from 17px to 15px, header bottom border and
+    margin tightened so the wizard begins inside the first viewport.
+    The floating top-right "Preliminary — Not Legal Advice" badge was
+    removed and replaced with a slim full-width notice line directly
+    above the step indicator — hairline top/bottom borders, Inter 14px,
+    full Midnight color (no opacity reduction). Notice copy is verbatim:
+    "For preliminary triage purposes only. Breach Clock does not provide
+    legal advice. Results must be confirmed by qualified counsel."
+  - X5 — Card styling reconciled on Option A (bring on-screen toward
+    the PDF). PDF unchanged (left-border-only treatment kept as the
+    standard). On-screen in `src/breach-clock/BreachClock.jsx`: the
+    standard `.deadline-card` lost its 1px all-around hairline outer
+    border and gained a 4px Midnight left border; the suppressed card
+    inline style dropped its outer border (keeping the 4px Moss left);
+    the jurisdictional-notes `<aside>` flipped from Parchment fill +
+    outer border to white fill + 4px Parchment left. Urgent (Ember
+    left + cream fill) and missed (Ember left + Midnight fill) state
+    variants kept as state cues over the category indicator. The
+    Step-0 "Counsel's note" Parchment-filled aside is a sidebar
+    callout, not a card-in-a-list, and was left alone.
+  Engine tests: 51/51 pass. Files touched: `src/breach-clock/BreachClock.jsx`,
+  `src/pages/About.jsx`, `docs/todo.md`. `src/breach-clock/memo-pdf-core.js`
+  unchanged per Option A.
 
 ### 2026-05-24
 
