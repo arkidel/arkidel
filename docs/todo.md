@@ -147,6 +147,34 @@ Cross-surface re-read:
     lands; confirm "eight jurisdictions" and "fifty-one cases" before
     they reach a launch audience.
 
+### Phase 4 — recorded design decisions
+
+Settled directions captured so future sessions don't re-open them.
+Neither item is `[substance]`.
+
+- Landing-page hero direction — decided. The hero will use a "rune at
+  scale" backdrop: the Arkidel rune-glyph enlarged and bled off one edge
+  of a Midnight-dominant hero panel, rendered low-contrast in Parchment,
+  with the hero text sitting in the open area. This is the chosen
+  direction, not a built asset. The production hero is not to be built
+  until the landing-page marketing copy (tagline and subhead) is
+  finalized — the composition depends on the final copy length. When
+  built, treat it as a responsive, full-bleed front-end task: SVG (not
+  raster), degrading gracefully on mobile.
+- Geometric-motif brand texture — scope decided. A secondary motif built
+  from the rune's vocabulary (stem, mirrored diagonals, triangle, rounded
+  box), used at faint contrast and large scale, is approved as a brand
+  texture for marketing and document surfaces only. Candidate uses: the
+  About page, secondary landing-page sections, and a very restrained
+  treatment on the PDF memo letterhead. Explicitly NOT to be used as a
+  background on the Breach Clock tool/app pages. Reason: those pages
+  already have a queued density-pass item above because they read as
+  marketing-promo rather than finished-application; decorative
+  backgrounds would work against that goal. Tool pages stay on a plain
+  Bone working canvas by design. If a future session is tempted to add
+  the motif to the Breach Clock UI, the answer is no — it was considered
+  and excluded here.
+
 ## Phase 5 — post-launch
 
 - Soft launch.
