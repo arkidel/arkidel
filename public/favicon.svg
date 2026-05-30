@@ -1,0 +1,14 @@
+<svg viewBox="5 5 90 90" xmlns="http://www.w3.org/2000/svg" aria-label="Arkidel">
+  <style>
+    /* Rune follows the OS theme: Midnight on light, Parchment on dark. */
+    svg { color: #1B2A3F; }
+    @media (prefers-color-scheme: dark) {
+      svg { color: #E8DDC4; }
+    }
+  </style>
+  <rect x="10" y="10" width="80" height="80" rx="8" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>
+  <line x1="50" y1="22" x2="50" y2="78" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+  <line x1="50" y1="38" x2="72" y2="28" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+  <line x1="50" y1="62" x2="72" y2="72" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+  <path d="M 38 42 L 24 50 L 38 58 Z" fill="currentColor" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

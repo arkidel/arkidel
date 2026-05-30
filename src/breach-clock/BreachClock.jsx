@@ -21,8 +21,10 @@ import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileW
 import { JURISDICTIONS } from "./data.js";
 import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine.js";
 import { generateMemoPdf } from "./memo-pdf.js";
+import usePageTitle from "../usePageTitle.js";
 
 export default function BreachClock() {
+  usePageTitle("Breach Clock");
   const [step, setStep] = useState(0);
   const [showTests, setShowTests] = useState(false);
   const [awareness, setAwareness] = useState("");

@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import usePageTitle from "../usePageTitle.js";
 
 export default function Landing() {
+  usePageTitle();
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
 

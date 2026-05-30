@@ -1,4 +1,7 @@
+import usePageTitle from "../usePageTitle.js";
+
 export default function About() {
+  usePageTitle("About");
   return (
     <div className="text-midnight">
 

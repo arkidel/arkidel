@@ -61,12 +61,28 @@ resolved.
 
 ### Phase 4 audit — launch-infrastructure gaps
 
-- No favicon. `index.html` has no `<link rel="icon">`; browser tabs render
-  the default globe.
-- Static `<title>` tag — `index.html` line 6 hardcodes "Arkidel — Breach
-  Clock" for every route, including About, Privacy, and Terms. Needs
-  per-route title management. Audit finding X4.
-- No meta description or Open Graph / Twitter card tags in `index.html`.
+The three original gaps — no favicon, static `<title>` for every route
+(finding X4), and no meta/Open Graph tags — were all cleared on 2026-05-30
+(see Completed). Remaining follow-ups:
+
+- Per-page meta descriptions — once the copy-review pass is complete, write
+  per-route meta descriptions (~150 chars each) for Landing, Breach Clock,
+  About, Privacy, Terms; replace the site-level default ("Practical tools
+  for privacy professionals who want to show their work.") now in
+  `index.html`.
+- Open Graph image — once the landing-page hero is built (per the "rune at
+  scale" direction in the recorded design decisions below), export a static
+  1200×630 version of that composition as the OG image, wire it into
+  `index.html` as `og:image`, and serve it from `public/` alongside the
+  favicon.
+- Simplified small-size favicon glyph (queued — after launch-readiness
+  work, not blocking) — at 16×16 the canonical rune's interior detail
+  (triangle + diagonals) doesn't survive pixel quantization, regardless of
+  viewBox tightness. The proper fix is a designed-for-small variant that
+  keeps the box and the central stem but drops or simplifies the interior
+  elements, served at 16×16 via the favicon `sizes` attribute or media
+  queries while the canonical glyph continues to serve at 32×32 and above.
+  This is a small design exercise scoped on its own, not a mechanical fix.
 
 ### Phase 4 audit — typeface standardization (complete)
 
@@ -200,6 +216,32 @@ Neither item is `[substance]`.
 ---
 
 ## Completed
+
+### 2026-05-30
+
+- web: favicon, per-route page titles (finding X4), and base meta/Open
+  Graph tags — clears all three Phase 4 launch-infrastructure gaps.
+  - Favicon generated from the Arkidel rune (not redrawn): colour-adaptive
+    SVG (Midnight on light, Parchment on dark via `prefers-color-scheme`)
+    with ICO and 180×180 apple-touch-icon fallbacks (Midnight on
+    transparent). viewBox tightened to "5 5 90 90" for 16×16 legibility;
+    files in `public/`, regenerated via `scripts/gen-favicons.mjs`. A
+    designed-for-small 16px variant is queued as a non-blocking follow-up
+    above.
+  - Per-route titles via a hand-rolled `src/usePageTitle.js` hook (no new
+    dependency) wired into Landing ("Arkidel"), Breach Clock, About,
+    Privacy, and Terms (each "… — Arkidel"). `index.html` keeps a static
+    `<title>Arkidel</title>` as the pre-hydration fallback.
+  - Site-level meta description plus Open Graph / Twitter Card tags added
+    to `index.html`; no `og:image` yet (deferred to the follow-up above,
+    pending the landing hero).
+  Verified: per-route titles render correctly (iframe loads), favicon
+  assets resolve, engine tests 51/51 pass. No `data.js` / `engine.js` /
+  `intake-forms.md` change. Files: `index.html`, `public/favicon.svg`,
+  `public/favicon.ico`, `public/apple-touch-icon.png`,
+  `scripts/gen-favicons.mjs`, `src/usePageTitle.js`, `src/pages/Landing.jsx`,
+  `src/pages/About.jsx`, `src/pages/Privacy.jsx`, `src/pages/Terms.jsx`,
+  `src/breach-clock/BreachClock.jsx`, `docs/todo.md`.
 
 ### 2026-05-26
 

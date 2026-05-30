@@ -3,7 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Arkidel — Breach Clock</title>
+
+    <!-- Favicon: SVG (colour-adaptive light/dark) preferred, ICO fallback for
+         older browsers, PNG for iOS home-screen. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Site-level description, applied to every route as the default. Per-page
+         descriptions are deferred to the copy-review pass. -->
+    <meta name="description" content="Practical tools for privacy professionals who want to show their work." />
+
+    <!-- Open Graph / Twitter Card. No og:image yet — it will be derived from the
+         landing-page hero once that's built. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Arkidel" />
+    <meta property="og:title" content="Arkidel" />
+    <meta property="og:description" content="Practical tools for privacy professionals who want to show their work." />
+    <meta property="og:url" content="https://arkidel.com/" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Arkidel" />
+    <meta name="twitter:description" content="Practical tools for privacy professionals who want to show their work." />
+
+    <!-- Fallback default; per-route titles are set by usePageTitle after hydration. -->
+    <title>Arkidel</title>
   </head>
   <body>
     <div id="root"></div>
