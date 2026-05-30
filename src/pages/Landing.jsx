@@ -28,13 +28,13 @@ export default function Landing() {
           <div className="flex flex-wrap gap-4">
             <Link
               to="/breach-clock"
-              className="inline-block bg-midnight text-bone px-6 py-3 text-sm font-medium no-underline hover:opacity-90 transition-opacity"
+              className="inline-block bg-midnight text-bone px-6 py-3 text-sm font-medium no-underline rounded-lg hover:opacity-90 transition-opacity"
             >
               Try Breach Clock
             </Link>
             <a
               href="#waitlist"
-              className="inline-block border border-midnight text-midnight px-6 py-3 text-sm font-medium no-underline hover:bg-parchment transition-colors"
+              className="inline-block border border-midnight text-midnight px-6 py-3 text-sm font-medium no-underline rounded-lg hover:bg-parchment transition-colors"
             >
               Join the waiting list
             </a>
@@ -93,11 +93,11 @@ export default function Landing() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com"
-                className="flex-1 min-w-0 px-4 py-2 text-sm border border-midnight/25 bg-bone text-midnight placeholder:text-midnight/35 focus:outline-none focus:border-midnight/60 transition-colors"
+                className="flex-1 min-w-0 px-4 py-2 text-sm border border-midnight/25 rounded-lg bg-bone text-midnight placeholder:text-midnight/35 focus:outline-none focus:border-midnight/60 transition-colors"
               />
               <button
                 type="submit"
-                className="px-5 py-2 text-sm border border-midnight/40 text-midnight bg-transparent hover:border-midnight hover:bg-parchment transition-colors"
+                className="px-5 py-2 text-sm border border-midnight/40 rounded-lg text-midnight bg-transparent hover:border-midnight hover:bg-parchment transition-colors"
               >
                 Join
               </button>

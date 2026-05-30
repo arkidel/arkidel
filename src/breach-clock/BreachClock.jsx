@@ -185,6 +185,7 @@ export default function BreachClock() {
                 style={{
                   background: "transparent",
                   border: "1px solid #1B2A3F",
+                  borderRadius: "8px",
                   padding: "9px 14px",
                   fontFamily: "'Inter', sans-serif",
                   fontSize: "13px",
@@ -310,7 +311,7 @@ export default function BreachClock() {
         .btn-primary {
           background: #1B2A3F; color: #FAF8F2; border: none; padding: 13px 24px;
           font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500;
-          letter-spacing: 0.01em; cursor: pointer;
+          letter-spacing: 0.01em; cursor: pointer; border-radius: 8px;
           transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 8px;
         }
         .btn-primary:hover:not(:disabled) { background: #2C3E55; }
@@ -318,7 +319,7 @@ export default function BreachClock() {
         .btn-ghost {
           background: transparent; color: #1B2A3F; border: 1px solid #1B2A3F; padding: 13px 24px;
           font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500;
-          letter-spacing: 0.01em; cursor: pointer;
+          letter-spacing: 0.01em; cursor: pointer; border-radius: 8px;
           transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 8px;
         }
         .btn-ghost:hover { background: #1B2A3F; color: #FAF8F2; }
@@ -653,6 +654,7 @@ export default function BreachClock() {
                   style={{
                     background: "transparent",
                     border: "1px solid #1B2A3F",
+                    borderRadius: "8px",
                     padding: "9px 14px",
                     fontFamily: "'Inter', sans-serif",
                     fontSize: "13px",

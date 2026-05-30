@@ -125,10 +125,29 @@ The wordmark is "Arkidel" in Merriweather Regular, with letter-spacing
 around 1.2px. The wordmark is sentence case: "Arkidel" — never "ARKIDEL"
 or "arkidel".
 
+When the rune and wordmark sit side by side (the header and footer in
+`src/components/Layout.jsx`), the wordmark is shifted 2px downward
+(`transform: translateY(2px)`) to optically align its x-height band with the
+vertical center of the rune. This compensates for "Arkidel" having no
+descenders, so its visual mass concentrates in the x-height band and would
+otherwise ride high relative to the rune's geometric center. The nudge was
+chosen from a true-size rendered comparison; the font-metric center is ~3.2px
+but 2px reads better in the live header.
+
 The logo and wordmark generally appear together. On marketing surfaces and
 PDF letterheads, the rune sits to the left of the wordmark, vertically
 centered. The logo color follows the surface: Midnight on light backgrounds
 (Bone, Parchment), Parchment on dark backgrounds (Midnight).
+
+**Component styling — buttons:** All buttons (and adjacent boxed form
+inputs, e.g. the waitlist email field) use an 8px corner radius, matching the
+rune box's 8px corners and the Breach Clock card corners, so they read as part
+of the same geometric vocabulary. This applies to the `.btn-primary` and
+`.btn-ghost` classes in `BreachClock.jsx`, the inline-styled buttons there
+(Download memo, Tests-view back), and the Tailwind `rounded-lg` CTAs and form
+controls on Landing. Text-link controls with no box (the footer "Tests" link,
+the inline "Try Breach Clock →" link) are excluded — a radius is meaningless
+without a border or fill.
 
 ### Color palette
 
