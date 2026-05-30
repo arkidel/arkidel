@@ -46,6 +46,15 @@ The engine is the correctness instrument for the substantive layer. If a
 test fails after a `data.js` edit, the substantive change is wrong, not the
 test.
 
+Encryption is a *global* incident fact, not a per-jurisdiction one. When
+encryption is reported, the engine evaluates suppression across every
+selected jurisdiction at once, so on a single results page you get either
+firing deadline cards or encryption-suppressed cards — never both together.
+(With encryption applied, all modeled jurisdictions' obligations are
+suppressed; without it, none are.) This is a structural property worth
+knowing when working on the results-page layout: do not design for a mixed
+state that the engine cannot produce.
+
 ### `src/breach-clock/BreachClock.jsx` — React UI
 
 UI/UX changes go here. Layout, copy, styling, form interactions, the in-app
@@ -141,13 +150,30 @@ centered. The logo color follows the surface: Midnight on light backgrounds
 
 **Component styling — buttons:** All buttons (and adjacent boxed form
 inputs, e.g. the waitlist email field) use an 8px corner radius, matching the
-rune box's 8px corners and the Breach Clock card corners, so they read as part
-of the same geometric vocabulary. This applies to the `.btn-primary` and
-`.btn-ghost` classes in `BreachClock.jsx`, the inline-styled buttons there
-(Download memo, Tests-view back), and the Tailwind `rounded-lg` CTAs and form
-controls on Landing. Text-link controls with no box (the footer "Tests" link,
-the inline "Try Breach Clock →" link) are excluded — a radius is meaningless
-without a border or fill.
+rune box's 8px corners, so they read as part of the same geometric vocabulary.
+This applies to the `.btn-primary` and `.btn-ghost` classes in
+`BreachClock.jsx`, the inline-styled buttons there (Download memo, Tests-view
+back), and the Tailwind `rounded-lg` CTAs and form controls on Landing.
+Text-link controls with no box (the footer "Tests" link, the inline "Try
+Breach Clock →" link) are excluded — a radius is meaningless without a border
+or fill.
+
+**Component styling — cards & surfaces:** Cards and larger surface elements
+use a 12px corner radius — deliberately larger than the 8px on buttons and
+inputs, following the convention that bigger surfaces carry a larger radius
+than smaller interactive controls. This keeps the geometric voice coherent
+while being proportionally tuned. The 12px applies to the simple (no
+left-accent) cards — `.checkbox-card` (rounding holds across default, hover,
+and selected, since those states change only background), the Tests-view test
+list card, the counsel-note `<aside>` beside question prompts, and the
+review-step confirmation card. The three left-accent cards — deadline
+(`.deadline-card`, Midnight stripe), suppressed-obligation (Moss stripe), and
+jurisdictional-notes (Parchment stripe) — use **asymmetric** rounding
+(`border-radius: 0 12px 12px 0`): the left edge stays square so the 4px
+categorization stripe runs straight full-height, while the top-right and
+bottom-right corners round to 12px. (This was "Option B" in the rounding
+review; the symmetric alternative, where the stripe curves with the corners,
+was "Option A" and was not chosen.)
 
 ### Color palette
 

@@ -238,7 +238,7 @@ export default function BreachClock() {
                     {items.filter((r) => r.pass).length} / {items.length}
                   </div>
                 </div>
-                <div style={{ background: "#fff", border: "1px solid rgba(27,42,63,0.18)" }}>
+                <div style={{ background: "#fff", border: "1px solid rgba(27,42,63,0.18)", borderRadius: "12px", overflow: "hidden" }}>
                   {items.map((r, i) => (
                     <div
                       key={i}
@@ -325,7 +325,7 @@ export default function BreachClock() {
         .btn-ghost:hover { background: #1B2A3F; color: #FAF8F2; }
         .checkbox-card {
           border: 1px solid #1B2A3F; padding: 18px 20px; cursor: pointer;
-          transition: all 0.15s ease; background: transparent;
+          transition: all 0.15s ease; background: transparent; border-radius: 12px;
         }
         .checkbox-card:hover { background: rgba(27,42,63,0.04); }
         .checkbox-card.selected { background: #1B2A3F; color: #FAF8F2; }
@@ -358,7 +358,7 @@ export default function BreachClock() {
         .progress-line { flex: 1; height: 1px; background: #1B2A3F; opacity: 0.25; margin: 0 8px; }
         .deadline-card {
           background: #fff; border-left: 4px solid #1B2A3F; padding: 24px;
-          position: relative; overflow: hidden;
+          position: relative; overflow: hidden; border-radius: 0 12px 12px 0;
         }
         .deadline-card.urgent {
           border-left-color: #C76E3A;
@@ -450,7 +450,7 @@ export default function BreachClock() {
                   style={{ marginTop: "8px" }}
                 />
               </div>
-              <aside style={{ background: "#E8DDC4", color: "#2C2418", padding: "28px", marginTop: "40px", border: "1px solid rgba(27,42,63,0.18)" }}>
+              <aside style={{ background: "#E8DDC4", color: "#2C2418", padding: "28px", marginTop: "40px", border: "1px solid rgba(27,42,63,0.18)", borderRadius: "12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", color: "#1B2A3F" }}>
                   <Info size={16} />
                   <div className="section-mark" style={{ opacity: 1 }}>
@@ -609,7 +609,7 @@ export default function BreachClock() {
             <h2 className="serif" style={{ fontSize: "32px", fontWeight: 400, lineHeight: 1.2, margin: "0 0 36px", letterSpacing: "-0.01em", color: "#1B2A3F" }}>
               Review the inputs before running the clock.
             </h2>
-            <div style={{ border: "1px solid rgba(27,42,63,0.18)", background: "#fff", padding: "32px", marginBottom: "32px" }}>
+            <div style={{ border: "1px solid rgba(27,42,63,0.18)", background: "#fff", padding: "32px", marginBottom: "32px", borderRadius: "12px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: "20px 40px" }}>
                 <div className="section-mark">Awareness</div>
                 <div style={{ fontSize: "18px" }}>{awarenessDate?.toLocaleString()}</div>
@@ -809,6 +809,7 @@ export default function BreachClock() {
                             color: "#2C2418",
                             padding: "20px 24px",
                             borderLeft: "4px solid #E8DDC4",
+                            borderRadius: "0 12px 12px 0",
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", color: "#1B2A3F" }}>
@@ -857,6 +858,7 @@ export default function BreachClock() {
                         background: "#fff",
                         borderLeft: "4px solid #5A6E4A",
                         padding: "20px 24px",
+                        borderRadius: "0 12px 12px 0",
                       }}
                     >
                       <div className="section-mark" style={{ marginBottom: "8px" }}>
