@@ -6,9 +6,9 @@ export default function Layout() {
     <div className="min-h-screen flex flex-col bg-bone text-midnight font-sans">
       <header className="bg-midnight text-bone px-8 py-5">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3 text-parchment no-underline">
-            <ArkidelLogo className="w-7 h-7" />
-            <span className="font-serif text-xl tracking-[1.2px]" style={{ transform: "translateY(2px)" }}>Arkidel</span>
+          <Link to="/" className="flex items-center gap-[17px] text-parchment no-underline">
+            <ArkidelLogo className="w-[39px] h-[39px]" />
+            <span className="font-serif text-[28px] leading-9 tracking-[1.2px]" style={{ transform: "translateY(2.6px)" }}>Arkidel</span>
           </Link>
           <nav className="flex items-center gap-8 text-sm">
             <Link to="/breach-clock" className="text-bone hover:text-parchment transition-colors no-underline whitespace-nowrap">
