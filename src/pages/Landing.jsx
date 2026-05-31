@@ -17,7 +17,7 @@ export default function Landing() {
     <div className="text-midnight">
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <section className="min-h-[80vh] flex flex-col justify-center px-8 py-20">
+      <section className="px-8 pt-20 pb-24">
         <div className="max-w-3xl mx-auto w-full">
           <h1 className="font-serif text-4xl leading-snug mb-6 max-w-2xl">
             Compliance tools for privacy professionals who do the actual work.
@@ -38,6 +38,50 @@ export default function Landing() {
             >
               Join the waiting list
             </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Pillars ───────────────────────────────────────────────────── */}
+      <section className="bg-midnight px-8 py-16">
+        <div className="max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 items-start gap-x-8 gap-y-12">
+            <div className="border-t-2 border-parchment/30 pt-6">
+              <span className="block font-mono text-xs tracking-wider text-parchment/60 mb-3">01</span>
+              <h3 className="font-serif text-base text-bone mb-3">
+                Built by privacy attorneys.
+              </h3>
+              <p className="text-sm leading-relaxed text-mist">
+                Every Arkidel module is researched, written, and signed off by qualified privacy attorneys before it ships — not assembled by a developer working from blog posts. You're using a tool built by the people who do this work for a living.
+              </p>
+            </div>
+            <div className="border-t-2 border-parchment/30 pt-6">
+              <span className="block font-mono text-xs tracking-wider text-parchment/60 mb-3">02</span>
+              <h3 className="font-serif text-base text-bone mb-3">
+                We show our work.
+              </h3>
+              <p className="text-sm leading-relaxed text-mist">
+                Behind every answer is a citation to the primary source it rests on — the statute, regulation, or guidance — with the date we last verified it. When you have to explain why, the reasoning is in the product, not stuck in someone's memory.
+              </p>
+            </div>
+            <div className="border-t-2 border-parchment/30 pt-6">
+              <span className="block font-mono text-xs tracking-wider text-parchment/60 mb-3">03</span>
+              <h3 className="font-serif text-base text-bone mb-3">
+                The form is the expertise.
+              </h3>
+              <p className="text-sm leading-relaxed text-mist">
+                Each tool asks the questions that matter, in the order that matters, and rules out the ones that don't. The structure isn't a wrapper around the analysis — the structure <em className="italic">is</em> the analysis, encoded once and applied the same way every time.
+              </p>
+            </div>
+            <div className="border-t-2 border-parchment/30 pt-6">
+              <span className="block font-mono text-xs tracking-wider text-parchment/60 mb-3">04</span>
+              <h3 className="font-serif text-base text-bone mb-3">
+                Durable artifacts.
+              </h3>
+              <p className="text-sm leading-relaxed text-mist">
+                You leave with documents your workflow actually runs on — exportable records, citations, and decision logs you can hand to counsel or produce later. Not a session you have to screenshot before it's gone.
+              </p>
+            </div>
           </div>
         </div>
       </section>
