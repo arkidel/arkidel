@@ -27,7 +27,10 @@ export default function Layout() {
 
       <footer className="bg-midnight text-bone px-8 py-8">
         <div className="max-w-5xl mx-auto flex items-center justify-between text-sm">
-          <span className="font-serif text-parchment tracking-[1.2px]" style={{ transform: "translateY(2px)" }}>Arkidel</span>
+          <span className="flex items-center gap-[9px] text-parchment">
+            <ArkidelLogo className="w-5 h-5" />
+            <span className="font-serif text-sm tracking-[1.2px]" style={{ transform: "translateY(1.3px)" }}>Arkidel</span>
+          </span>
           <nav className="flex gap-6">
             <Link to="/privacy" className="text-bone hover:text-parchment transition-colors no-underline">
               Privacy Policy
