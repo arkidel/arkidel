@@ -33,7 +33,7 @@ export default function About() {
               We started Arkidel because the middle ground didn't exist.
             </p>
             <p>
-              Privacy professionals at small companies have two real options today. They can pay for enterprise platforms designed for Fortune 500 privacy offices — software that costs tens of thousands of dollars a year, takes months to deploy, and assumes a team of compliance specialists to operate. Or they can stitch together ad-hoc workflows out of spreadsheets, statutory text, and law-firm advisories — which works until something happens at 4:45 on a Friday and the cost of getting it wrong shows up in a regulator's inbox.
+              Privacy professionals at small companies have two real options today. They can pay for enterprise platforms designed for Fortune 500 privacy offices — software that costs tens of thousands of dollars a year, takes months to deploy, and assumes a team of compliance specialists to operate. Or they can stitch together ad-hoc workflows out of spreadsheets, statutory text, and law-firm advisories — which works until something happens and the cost of getting it wrong shows up in a regulator's inbox.
             </p>
             <p>
               Neither option is good. The first one is overbuilt and overpriced for the real shape of small-company privacy work. The second one creates real risk and burns the time of professionals who should be doing higher-leverage work. We're building the thing that should exist between them: software that's substantively reliable, priced to fit small-company budgets, and designed for professionals who already know what they're doing.
@@ -50,7 +50,7 @@ export default function About() {
           </h2>
           <div className="space-y-5 text-base leading-relaxed text-midnight/80 max-w-prose">
             <p>
-              <strong className="font-semibold text-midnight">Quality over coverage.</strong>{" "}We'd rather model eight jurisdictions correctly than fifty jurisdictions sloppily. Every rule in our engine is verified against primary statutory sources and trusted secondary references, with a documented audit trail behind each substantive change.
+              <strong className="font-semibold text-midnight">Quality over coverage.</strong>{" "}We'd rather roll out a few jurisdictional models at a time, correctly, than dozens of jurisdictions sloppily. Every rule in our engine is verified against primary statutory sources and trusted secondary references, with a documented audit trail behind each substantive change.
             </p>
             <p>
               <strong className="font-semibold text-midnight">Pricing that fits small companies.</strong>{" "}Arkidel is priced for the privacy and compliance functions that actually exist at startups and growing companies — not for enterprise procurement. The Breach Clock is free during our soft-launch period; future modules will be priced reasonably and predictably.
@@ -72,10 +72,10 @@ export default function About() {
             <p>
               Questions, suggestions, or interest in early access to upcoming modules — we'd like to hear from you at{" "}
               <a
-                href="mailto:hello@arkidel.com"
+                href="mailto:info@arkidel.com"
                 className="text-midnight underline underline-offset-2 decoration-midnight/40 hover:decoration-midnight transition-colors"
               >
-                hello@arkidel.com
+                info@arkidel.com
               </a>
               .
             </p>

@@ -23,7 +23,7 @@ export default function Landing() {
             Compliance tools for privacy professionals who do the actual work.
           </h1>
           <p className="text-base leading-relaxed text-midnight/75 mb-10 max-w-prose">
-            Arkidel makes reliable, attorney-built software for the small compliance functions inside startups and growing companies. Tools that respect what you already know, work the way you'd expect, and don't pretend to replace the judgment you bring to the job.
+            Arkidel makes reliable, attorney-built data protection software for compliance professionals at startups and growing companies. Our tools respect what you already know, work the way you'd expect, and don't pretend to replace the judgment you bring to the job.
           </p>
           <div className="flex flex-wrap gap-4">
             <Link
@@ -90,17 +90,17 @@ export default function Landing() {
       <section className="border-t border-midnight/10 px-8 py-24">
         <div className="max-w-3xl mx-auto">
           <h2 className="font-serif text-3xl mb-8">
-            The first module is Breach Clock.
+            The clock is already running.
           </h2>
           <div className="space-y-5 text-base leading-relaxed text-midnight/80 max-w-prose">
             <p>
               Breach Clock is a triage tool for breach notification deadlines. Enter what you know — when you became aware, where the affected residents are, what kind of data was involved, whether encryption was applied — and Breach Clock returns the obligations that fire under each jurisdiction's rules, with primary-source citations and a downloadable memo you can share with your team or counsel.
             </p>
             <p>
-              It's built for the moment a privacy professional or in-house counsel finds out about a possible incident at 4:45 on a Friday and needs to know how much time they have. Eight jurisdictions are modeled today: EU GDPR, UK GDPR, California, Texas, Colorado, Massachusetts, New York, and Virginia. More are on the way.
+              Arkidel Breach Clock is built for that moment: it's 4:47 p.m. on a Friday. You're in compliance, or maybe in-house counsel. Your mind's already in weekend mode. An email pops up: security incident, personal data involved. Before the clock hits 5:00 p.m., you're sure you've got a personal data breach. Everyone's looking to you. What do we do? Which laws apply? How much time do we have? That's where we come in. Know your deadline before it knows you.
             </p>
             <p>
-              Every rule is verified against primary statutory sources and trusted secondary references reviewed by qualified attorneys. The rules engine ships with a public test harness — fifty-one cases covering threshold boundaries, dependent deadlines, and encryption suppression — that you can run yourself. We think you should be able to see how the tool works, not just trust that it does.
+              The rules engine ships with a public test harness — fifty-one cases covering threshold boundaries, dependent deadlines, and encryption suppression — that you can run yourself. Eight jurisdictions are modeled today: EU GDPR, UK GDPR, California, Texas, Colorado, Massachusetts, New York, and Virginia. More are on the way.
             </p>
           </div>
           <Link
@@ -136,7 +136,7 @@ export default function Landing() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
+                placeholder="you@email.com"
                 className="flex-1 min-w-0 px-4 py-2 text-sm border border-midnight/25 rounded-lg bg-bone text-midnight placeholder:text-midnight/35 focus:outline-none focus:border-midnight/60 transition-colors"
               />
               <button
