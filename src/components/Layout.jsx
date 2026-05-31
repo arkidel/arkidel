@@ -1,16 +1,5 @@
 import { Link, Outlet } from "react-router-dom";
-
-function ArkidelLogo({ className }) {
-  return (
-    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className={className}>
-      <rect x="10" y="10" width="80" height="80" rx="8" fill="none" stroke="currentColor" strokeWidth="6" strokeLinejoin="round" />
-      <line x1="50" y1="22" x2="50" y2="78" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-      <line x1="50" y1="38" x2="72" y2="28" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-      <line x1="50" y1="62" x2="72" y2="72" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-      <path d="M 38 42 L 24 50 L 38 58 Z" fill="currentColor" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  );
-}
+import ArkidelLogo from "./ArkidelLogo.jsx";
 
 export default function Layout() {
   return (

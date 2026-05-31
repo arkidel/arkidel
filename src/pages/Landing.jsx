@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import usePageTitle from "../usePageTitle.js";
+import ArkidelLogo from "../components/ArkidelLogo.jsx";
 
 export default function Landing() {
   usePageTitle();
@@ -17,8 +18,23 @@ export default function Landing() {
     <div className="text-midnight">
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <section className="px-8 pt-20 pb-24">
-        <div className="max-w-3xl mx-auto w-full">
+      <section className="relative overflow-hidden px-8 pt-20 pb-24">
+        {/* Rune-at-scale brand texture. The actual Arkidel mark, framed box
+            dropped so only the inner glyph (stem, diagonals, arrow) shows —
+            rendered as vector so it stays crisp at large size. Enlarged and
+            pushed hard off the right edge so it crops to a partial mark, reading
+            as brand texture rather than a contained logo; the left-pointing
+            arrow stays inside the visible area. Parchment on the Bone hero reads
+            as a quiet watermark at full strength. Hidden below md so it never
+            crowds the stacked mobile text; quieter (smaller, pushed further off)
+            on tablet. */}
+        <div
+          aria-hidden="true"
+          className="hidden md:block absolute top-1/2 right-0 -translate-y-1/2 translate-x-[36%] lg:translate-x-[30%] w-[520px] lg:w-[840px] text-parchment pointer-events-none select-none z-0"
+        >
+          <ArkidelLogo frame={false} className="w-full h-auto" />
+        </div>
+        <div className="relative z-10 max-w-3xl mx-auto w-full">
           <h1 className="font-serif text-4xl leading-snug mb-6 max-w-2xl">
             Compliance tools for privacy professionals who do the actual work.
           </h1>
