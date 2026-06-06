@@ -707,19 +707,18 @@ export default function BreachClock() {
   // notes flow in document order rather than aligning to their fields, so the
   // title is what carries the connection.
   const NOTE_TITLES = {
-    awareness: "Note on the awareness date",
-    q1: "Note on data categories",
-    encryption: "Note on encryption",
+    awareness: "Awareness",
+    q1: "Data categories",
+    encryption: "Encryption",
   };
 
   const renderNote = (key) => (
     <aside className="counsel-note">
       <div style={{ display: "flex", alignItems: "center", gap: "9px", marginBottom: "10px", color: "#1B2A3F" }}>
         <Info size={14} />
-        <span className="section-mark" style={{ opacity: 1 }}>Counsel's note</span>
-      </div>
-      <div className="serif" style={{ fontSize: "16px", lineHeight: 1.3, color: "#1B2A3F", margin: "0 0 8px" }}>
-        {NOTE_TITLES[key]}
+        <span className="serif" style={{ fontSize: "16px", lineHeight: 1.3, color: "#1B2A3F" }}>
+          {NOTE_TITLES[key]}
+        </span>
       </div>
       <p style={{ fontSize: "13px", lineHeight: 1.6, margin: 0 }}>{noteBody(key)}</p>
     </aside>
@@ -1404,6 +1403,17 @@ export default function BreachClock() {
           outline: none; transition: border-color 0.15s ease;
         }
         .form-textarea { resize: vertical; line-height: 1.55; min-height: 84px; }
+        .form-select {
+          -webkit-appearance: none; -moz-appearance: none; appearance: none;
+          /* Custom caret inset to match the field's 13px horizontal padding,
+             with padding-right sized to keep the value text clear of it. */
+          padding-right: 38px;
+          background-color: #fff;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%232C2418' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 13px center;
+          background-size: 12px;
+        }
         .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #C76E3A; }
         .form-input:disabled, .form-select:disabled, .form-textarea:disabled {
           opacity: 0.45; cursor: not-allowed; background: #FAF8F2;
