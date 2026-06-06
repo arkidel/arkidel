@@ -656,6 +656,63 @@ function collectJurisdictionalNotes(facts) {
   return out;
 }
 
+// ─── Section: incident report (record fields) ─────────────────────────────
+//
+// Renders the unified-form record fields (general info, discovery, occurrence,
+// summary, data-subject categories, measures) as an ordered list of group
+// sub-headings and stacked label/value fields. The structure is built UI-side
+// and arrives as facts.incidentReport — an array of { type: "group", title } and
+// { type: "field", label, value, multiline } entries — so all field labels and
+// option text live in the component, not here. Only populated fields are passed
+// in; "information not available" groups are dropped before this runs.
+//
+// Quick mode passes no incidentReport, so the memo is the deadline analysis
+// alone; full mode includes this section after the analysis and before the
+// further-considerations bullets.
+function drawIncidentReport(state, sections) {
+  if (!sections || sections.length === 0) return;
+  const { fonts } = state;
+
+  state.ensureRoom(SIZE.sectionHead + 40);
+  state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Incident Report", state.cursorY);
+
+  const drawGroup = (title) => {
+    state.ensureRoom(SIZE.authority * LINE + 14);
+    state.cursorY -= 6;
+    drawTextLine(state.currentPage(), title, CONTENT_X, state.cursorY - SIZE.authority, fonts.serifBold, SIZE.authority, MIDNIGHT);
+    state.cursorY -= SIZE.authority * LINE + 6;
+  };
+
+  const drawField = (label, value, multiline) => {
+    const paras = multiline
+      ? String(value).split(/\n+/).map((s) => s.trim()).filter(Boolean)
+      : [String(value).trim()];
+    if (paras.length === 0) return;
+    let h = SIZE.label * LINE + LABEL_TO_BODY_GAP;
+    paras.forEach((p, i) => {
+      if (i > 0) h += 4;
+      h += measureWrapped(p, fonts.sansReg, SIZE.body, CONTENT_W);
+    });
+    h += 10;
+    state.ensureRoom(h);
+    drawTextLine(state.currentPage(), upperLabel(label), CONTENT_X, state.cursorY - SIZE.label, fonts.sansReg, SIZE.label, MIST);
+    state.cursorY -= SIZE.label * LINE + 2;
+    paras.forEach((p, i) => {
+      if (i > 0) state.cursorY -= 4;
+      state.cursorY = drawWrapped(state.currentPage(), p, CONTENT_X, state.cursorY, {
+        font: fonts.sansReg, size: SIZE.body, color: INK, maxWidth: CONTENT_W,
+      });
+    });
+    state.cursorY -= 10;
+  };
+
+  for (const entry of sections) {
+    if (entry.type === "group") drawGroup(entry.title);
+    else if (entry.type === "field") drawField(entry.label, entry.value, entry.multiline);
+  }
+  state.cursorY -= 8;
+}
+
 // ─── Main entry point ─────────────────────────────────────────────────────
 //
 // renderMemoPdfBytes(facts, deadlines, suppressed, { fontBytes, logoBytes, generatedAt })
@@ -703,6 +760,10 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
   const jurNotes = collectJurisdictionalNotes(facts);
   if (jurNotes.length > 0) {
     drawCardSection(state, "Jurisdictional Notes", jurNotes, ({ jurShort, note }) => noteBlocks(jurShort, note), PARCHMENT);
+  }
+
+  if (facts.incidentReport && facts.incidentReport.length > 0) {
+    drawIncidentReport(state, facts.incidentReport);
   }
 
   drawFurtherConsiderations(state);
