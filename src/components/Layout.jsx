@@ -12,7 +12,7 @@ export default function Layout() {
           </Link>
           <nav className="flex items-center gap-8 text-sm">
             <Link to="/breach-clock" className="text-bone hover:text-parchment transition-colors no-underline whitespace-nowrap">
-              Breach Clock
+              Respond
             </Link>
             <Link to="/about" className="text-bone hover:text-parchment transition-colors no-underline whitespace-nowrap">
               About

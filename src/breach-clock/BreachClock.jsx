@@ -208,7 +208,7 @@ function InfoTip({ text, size = 13 }) {
 }
 
 export default function BreachClock() {
-  usePageTitle("Breach Clock");
+  usePageTitle("Respond");
   const [showTests, setShowTests] = useState(false);
   const [quickMode, setQuickMode] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -517,7 +517,7 @@ export default function BreachClock() {
                   color: "#1B2A3F",
                 }}
               >
-                ← Back to Breach Clock
+                ← Back to Respond
               </button>
             </div>
             <h1 className="serif" style={{ fontSize: "36px", margin: 0, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.15, color: "#1B2A3F" }}>
@@ -1441,7 +1441,7 @@ export default function BreachClock() {
         {/* Header */}
         <header style={{ marginBottom: "28px" }}>
           <h1 className="serif" style={{ fontSize: "36px", margin: 0, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.15, color: "#1B2A3F" }}>
-            Breach Clock
+            Respond
           </h1>
           <p style={{ fontSize: "15px", marginTop: "12px", maxWidth: "640px", lineHeight: 1.6, fontWeight: 400, color: "#2C2418" }}>
             A triage tool for calculating breach-notification deadlines from the moment of awareness. Currently covers {JURISDICTIONS.map((j) => j.short).join(", ").replace(/, ([^,]*)$/, ", and $1")}.
@@ -1462,7 +1462,7 @@ export default function BreachClock() {
             fontFamily: "'Inter', sans-serif",
           }}
         >
-          For preliminary triage purposes only. Breach Clock does not provide legal advice. Results must be confirmed by qualified counsel.
+          For preliminary triage purposes only. Respond does not provide legal advice. Results must be confirmed by qualified counsel.
         </div>
 
         {/* Form intro note — standout, not a field */}
@@ -1515,7 +1515,7 @@ export default function BreachClock() {
         )}
 
         <footer style={{ marginTop: "80px", paddingTop: "32px", borderTop: "1px solid rgba(27,42,63,0.18)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div className="section-mark" style={{ opacity: 0.5 }}>Arkidel · Breach Clock</div>
+          <div className="section-mark" style={{ opacity: 0.5 }}>Arkidel · Respond</div>
           <button
             onClick={() => setShowTests(true)}
             className="section-mark"

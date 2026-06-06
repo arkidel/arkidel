@@ -9,7 +9,7 @@ export default function Privacy() {
 
       <section className="mb-12">
         <h2 className="font-serif text-2xl mb-3">What data we collect</h2>
-        <p>Breach fact inputs are processed client-side only — no account, no login, no server-side storage of breach data entered into the Breach Clock.</p>
+        <p>Breach fact inputs are processed client-side only — no account, no login, no server-side storage of breach data entered into Respond.</p>
       </section>
 
       <section className="mb-12">

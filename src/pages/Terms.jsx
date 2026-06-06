@@ -9,7 +9,7 @@ export default function Terms() {
 
       <section className="mb-12">
         <h2 className="font-serif text-2xl mb-3">Use of service</h2>
-        <p>Acceptable use policy. Breach Clock output is informational only and does not constitute legal advice.</p>
+        <p>Acceptable use policy. Respond output is informational only and does not constitute legal advice.</p>
       </section>
 
       <section className="mb-12">

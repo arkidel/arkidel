@@ -13,7 +13,7 @@ export default function About() {
           </h1>
           <div className="space-y-5 text-base leading-relaxed text-midnight/80 max-w-prose">
             <p>
-              Arkidel is a compliance suite built for the small or solo privacy and compliance functions inside startups and growing companies. Our first module, Breach Clock, is a triage tool for breach notification deadlines across multiple jurisdictions. The next module is a DPIA/PIA workflow. After that, more modules in the categories most useful to privacy professionals at companies that take data governance seriously.
+              Arkidel is a compliance suite built for the small or solo privacy and compliance functions inside startups and growing companies. Our first module, Respond, is a triage tool for breach notification deadlines across multiple jurisdictions. The next module is a DPIA/PIA workflow. After that, more modules in the categories most useful to privacy professionals at companies that take data governance seriously.
             </p>
             <p>
               Arkidel is built and maintained by qualified attorneys with substantive privacy and data protection experience. We're independently operated and bootstrapped. No venture capital, no growth-at-all-costs incentives, no roadmap dictated by the metrics a Series B board wants to see.
@@ -53,7 +53,7 @@ export default function About() {
               <strong className="font-semibold text-midnight">Quality over coverage.</strong>{" "}We'd rather roll out a few jurisdictional models at a time, correctly, than dozens of jurisdictions sloppily. Every rule in our engine is verified against primary statutory sources and trusted secondary references, with a documented audit trail behind each substantive change.
             </p>
             <p>
-              <strong className="font-semibold text-midnight">Pricing that fits small companies.</strong>{" "}Arkidel is priced for the privacy and compliance functions that actually exist at startups and growing companies — not for enterprise procurement. The Breach Clock is free during our soft-launch period; future modules will be priced reasonably and predictably.
+              <strong className="font-semibold text-midnight">Pricing that fits small companies.</strong>{" "}Arkidel is priced for the privacy and compliance functions that actually exist at startups and growing companies — not for enterprise procurement. Respond is free during our soft-launch period; future modules will be priced reasonably and predictably.
             </p>
             <p>
               <strong className="font-semibold text-midnight">Visible methodology.</strong>{" "}Most compliance software asks you to trust that the rules behind it are correct. We think you should be able to see the work. Our rules engine ships with a public test harness — fifty-one cases covering threshold boundaries, dependent deadlines, and encryption suppression — that you can run yourself. Citations link to primary sources. The shape of the analysis is legible.

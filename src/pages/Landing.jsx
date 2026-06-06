@@ -46,7 +46,7 @@ export default function Landing() {
               to="/breach-clock"
               className="inline-block bg-midnight text-bone px-6 py-3 text-sm font-medium no-underline rounded-lg hover:opacity-90 transition-opacity"
             >
-              Try Breach Clock
+              Try Respond
             </Link>
             <a
               href="#waitlist"
@@ -110,10 +110,10 @@ export default function Landing() {
           </h2>
           <div className="space-y-5 text-base leading-relaxed text-midnight/80 max-w-prose">
             <p>
-              Breach Clock is a triage tool for breach notification deadlines. Enter what you know — when you became aware, where the affected residents are, what kind of data was involved, whether encryption was applied — and Breach Clock returns the obligations that fire under each jurisdiction's rules, with primary-source citations and a downloadable memo you can share with your team or counsel.
+              Respond is a triage tool for breach notification deadlines. Enter what you know — when you became aware, where the affected residents are, what kind of data was involved, whether encryption was applied — and Respond returns the obligations that fire under each jurisdiction's rules, with primary-source citations and a downloadable memo you can share with your team or counsel.
             </p>
             <p>
-              Arkidel Breach Clock is built for that moment: it's 4:47 p.m. on a Friday. You're in compliance, or maybe in-house counsel. Your mind's already in weekend mode. An email pops up: security incident, personal data involved. Before the clock hits 5:00 p.m., you're sure you've got a personal data breach. Everyone's looking to you. What do we do? Which laws apply? How much time do we have? That's where we come in. Know your deadline before it knows you.
+              Respond is built for that moment: it's 4:47 p.m. on a Friday. You're in compliance, or maybe in-house counsel. Your mind's already in weekend mode. An email pops up: security incident, personal data involved. Before the clock hits 5:00 p.m., you're sure you've got a personal data breach. Everyone's looking to you. What do we do? Which laws apply? How much time do we have? That's where we come in. Know your deadline before it knows you.
             </p>
             <p>
               The rules engine ships with a public test harness — fifty-one cases covering threshold boundaries, dependent deadlines, and encryption suppression — that you can run yourself. Eight jurisdictions are modeled today: EU GDPR, UK GDPR, California, Texas, Colorado, Massachusetts, New York, and Virginia. More are on the way.
@@ -123,7 +123,7 @@ export default function Landing() {
             to="/breach-clock"
             className="inline-block mt-8 text-sm text-midnight font-medium no-underline border-b border-midnight/30 hover:border-midnight pb-px transition-colors"
           >
-            Try Breach Clock →
+            Try Respond →
           </Link>
         </div>
       </section>
