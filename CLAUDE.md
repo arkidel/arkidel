@@ -65,13 +65,67 @@ Do not make substantive legal changes in this file — those belong in
 counsel notes say substantively, stop and surface the change rather than
 making it.
 
+**Unified incident form (replaced the step wizard).** The Breach Clock is one
+form, not a multi-step wizard. The five engine inputs are ordinary fields
+interspersed with incident-record fields across six sections: (1) general
+information, (2) how & when discovered, (3) when the incident occurred,
+(4) incident summary, (5) data affected, (6) measures.
+
+- **Operative vs. record is internal, not user-facing.** Five fields feed the
+  engine — awareness → `awarenessDate`; jurisdictions → `jurisdictions`;
+  per-jurisdiction counts → `residentCounts`; Q1 personal-data types →
+  `sensitivity`; encryption → `encryptionApplied`. They're grouped under
+  `OPERATIVE_KEYS` so quick mode and the cross-check can target them, but they
+  carry **no** "required/operative" badge in the default full view (the lone
+  visible "Required" badge is on the record-only incident title, used for the
+  filename). The form prompts for what's missing rather than badging fields.
+  Everything else is a record field, captured for the report and never seen by
+  the engine. The engine wiring is unchanged: `computeDeadlines` /`isHighRisk`
+  and the input shape are exactly as before; the wizard's state and handlers
+  were relocated, not rebuilt.
+- **Live deadline result** is surfaced at the top (not at the end of a long
+  form) and recomputes reactively in both modes once the minimal operative
+  inputs are present (awareness + ≥1 jurisdiction + ≥1 Q1 type — the same
+  conditions the old `canAdvance` enforced).
+- **Quick mode** is a focusing view over one shared state, not a separate
+  workflow. Toggling shows only the operative fields + the result and hides
+  every record section; entered data persists both ways with no re-entry.
+- **Q1 retains all ten sensitivity options with their exact IDs.** `location`
+  and `communications` are kept (they are not high-risk, so the engine ignores
+  them) rather than dropped — removing user-facing data categories would be a
+  substantive reduction, and the IDs must match what the engine treats as
+  high-risk.
+- **Q1 ⇄ Q2 cross-check.** Section 5's Q2 ("categories of data subjects")
+  expands per selected category to record-only sub-fields (count, data types,
+  other). Each tagged Q2 data type rolls up to a Q1 category; selecting a tag
+  (`gov_id`, `financial`, `health`, `special`, `credentials`) whose Q1 category
+  is unchecked raises a non-blocking, on-brand (Ember/`#FBF5EE`) warning that
+  names the category and points back to Q1, and it resolves live because Q1 is
+  editable in place. `biometric` and `children` are Q1-only by design — no Q2
+  tags fabricate them.
+
 ### `src/breach-clock/memo-pdf.js` — PDF memo generation
 
 Generates the downloadable memo as a PDF using pdf-lib. The PDF layout,
 typography, and structure live here. Substantive content (the deadline
 cards, counsel notes, suppressed obligations) is derived from the engine
 output and `data.js` — do not hardcode content here that should come from
-those sources.
+those sources. The actual render path is the pure `memo-pdf-core.js`
+(importable from Node for the gate scripts); `memo-pdf.js` is the thin Vite
+shim that loads font/logo bytes and delegates to it.
+
+**Incident-report section.** Full-mode downloads append an "Incident Report"
+section (`drawIncidentReport` in `memo-pdf-core.js`) after the deadline
+analysis and before "Further Considerations". The structure is built UI-side
+in `BreachClock.jsx` (`buildIncidentReportSections` → `facts.incidentReport`,
+an ordered array of `{type:"group"}` / `{type:"field"}` entries) so all field
+labels and option text stay in the component — the core just renders whatever
+it's given, in order, matching the memo's type/colors (group sub-headings in
+mixed-case serif; field labels uppercased like the rest of the memo's labels).
+Empty fields and "information not available" groups are dropped before render.
+Quick mode passes no `incidentReport`, so its memo is the deadline analysis
+alone and keeps the `breach-notification-analysis-<date>.pdf` filename; full
+mode names the file from the sanitized incident reference/title + date.
 
 ### `docs/intake-forms.md` — audit trail
 
