@@ -509,8 +509,12 @@ function drawCardSection(state, headingText, items, blocksFn, borderColor) {
 
   const firstBlocks = blocksFn(items[0]);
   const firstCardHeight = measureCard(firstBlocks, fonts);
-  const headingFootprint = SIZE.sectionHead + 30;
-  state.ensureRoom(headingFootprint + firstCardHeight);
+  // Keep the section heading with the WHOLE first card (measureCard is the
+  // card's true rendered height). Cards draw atomically — each subsequent card
+  // is likewise reserved whole via ensureRoom(h) below — so a card's title
+  // block (its first block, e.g. the CALIFORNIA / NEW YORK note eyebrow + title)
+  // always rides with the body that follows it and cannot strand at a boundary.
+  keepHeaderWithNext(state, SIZE.sectionHead + 24, firstCardHeight);
   state.cursorY = drawSectionHeading(state.currentPage(), fonts, headingText, state.cursorY);
 
   for (let i = 0; i < items.length; i++) {
@@ -537,7 +541,10 @@ const FURTHER_CONSIDERATIONS = [
 
 function drawFurtherConsiderations(state) {
   const { fonts } = state;
-  state.ensureRoom(SIZE.sectionHead + 30);
+  // Keep the heading with the first bullet's first line — mirror the per-bullet
+  // renderer's own reservation (SIZE.body * LINE + 6) so the header can't land
+  // at a page foot with the whole list pushed to the next page.
+  keepHeaderWithNext(state, SIZE.sectionHead + 24, SIZE.body * LINE + 6);
   state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Further Considerations", state.cursorY);
 
   const bulletX = CONTENT_X;
