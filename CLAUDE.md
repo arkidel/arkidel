@@ -17,6 +17,12 @@ respect their expertise.
 
 This project has two distinct layers, and they are not treated the same way.
 
+**Protected files — explicit sign-off required.** Three files may not be edited
+without surfacing the change and getting explicit confirmation first:
+`src/breach-clock/data.js`, `src/breach-clock/engine.js`, and
+`docs/intake-forms.md`. Every other file in the repo is ordinary engineering —
+edit it as normal. The per-file notes below give the specific process for each.
+
 ### `src/breach-clock/data.js` — substantive legal layer (PROTECTED)
 
 Contains the `JURISDICTIONS` array — the source of truth for all breach-
@@ -165,11 +171,31 @@ unchanged) — the awareness/jurisdictions/categories/encryption recap. It was
 renamed from "Incident Summary" to avoid colliding with the incident-report
 "Incident summary" narrative group, which is distinct and unchanged.
 
-**Keep-with-next headers.** `keepHeaderWithNext(state, headerH, firstLineH)`
-guards every section and group heading: a heading is only placed if it plus the
-first line of the content that follows both fit on the current page, else it
-breaks to a new page first. This prevents an orphaned header (the bug was the
-"Incident summary" header stranded at a page bottom with a large gap).
+**Keep-with-next headers — one uniform guard.** Every header that introduces
+following content reserves the header *plus the true rendered height of its
+first following element*, through one helper, `keepHeaderWithNext`, which breaks
+to a new page first if both won't fit. Never estimate by line count — mirror
+whatever renderer draws that first element:
+
+- **Field-followed headers** — the Incident Report section and group headers,
+  and the Analysis Inputs first row — reserve `fieldHeight`, which mirrors
+  `drawField` *including its bottom padding*. (The original orphan was exactly a
+  missing +10pt pad in the reservation.)
+- **Bullet-followed headers** — Further Considerations — reserve the bullet
+  renderer's own first-line reservation.
+- **Card sections** — Deadline Obligations, encryption-suppressed, and
+  Jurisdictional Notes — reserve the whole first card via `measureCard`. Cards
+  draw atomically, so a card's eyebrow + title always rides with its body.
+
+Why uniform: orphaned headers recurred (Incident summary → Data subjects →
+Further Considerations), each surfacing only once a longer memo pushed that
+header to a page boundary. Guarding header types one at a time kept exposing the
+next one; the uniform guard is the structural fix. To add a new header type,
+mirror its first element's renderer — never go back to estimating lines.
+
+Known edge (low priority): reserving the whole first card assumes the card fits
+on a page after the heading; a single card taller than a page would need
+separate handling. Not an issue at current note lengths.
 
 ### `docs/intake-forms.md` — audit trail
 
@@ -434,6 +460,18 @@ Three conventions, used for different functions:
 
 Card-internal spaced-caps labels (`BASIS`, `CONDITIONAL`, `SOURCE`, etc.)
 are unaffected — they remain in their existing all-caps treatment.
+
+**Producing Title Case (structural + PDF + on-screen form headers).** The Breach
+Clock's on-screen form section headers follow the Title-Case structural rule
+too, matching the PDF section and group headers. Set the literal strings in
+Title Case — never use an automatic capitalize or CSS `text-transform` to
+generate it, which wrongly capitalizes short interior words like "the" and
+mishandles "&". Keep short interior words lowercase ("When the Incident
+Occurred") and preserve "&" ("How & When Discovered"). User-entered values pass
+through untouched and are never auto-capitalized — e.g. the category name after
+the em dash in "Data Subjects — {name}". The incident-report group titles are a
+single shared source (`buildIncidentReportSections`) consumed by both the PDF
+and the on-screen review, so fixing a literal once corrects both surfaces.
 
 ### Voice
 
