@@ -382,7 +382,7 @@ export default function BreachClock() {
     if (record.incidentTypes.includes("other")) {
       incidentTypeLabels.push(record.incidentTypeOther.trim() ? `Other: ${record.incidentTypeOther.trim()}` : "Other");
     }
-    pushGroup("General information", [
+    pushGroup("General Information", [
       { label: "Incident reference / title", value: record.incidentTitle },
       { label: "Source of incident", value: record.sourceOfIncident },
       { label: "Incident location", value: record.incidentLocation },
@@ -407,24 +407,24 @@ export default function BreachClock() {
       discovery.push({ label: "Type of third party", value: record.thirdPartyType });
       if (tpName) discovery.push({ label: `${record.thirdPartyType} details`, value: tpName });
     }
-    pushGroup("How & when discovered", discovery);
+    pushGroup("How & When Discovered", discovery);
 
     if (!record.occurrenceNotAvailable) {
-      pushGroup("When the incident occurred", [
+      pushGroup("When the Incident Occurred", [
         { label: "Occurrence date", value: record.occurrenceDate },
         { label: "Exact time (incl. time zone)", value: record.occurrenceTime },
         { label: "Additional detail", value: record.occurrenceDetail, multiline: true },
       ]);
     }
 
-    pushGroup("Incident summary", [
+    pushGroup("Incident Summary", [
       { label: "Summary of the incident", value: record.incidentSummary, multiline: true },
     ]);
 
     record.dataSubjectBlocks.forEach((b, i) => {
       const name = b.name.trim() || `Category ${i + 1}`;
       const others = b.others.map((o) => o.trim()).filter(Boolean);
-      pushGroup(`Data subjects — ${name}`, [
+      pushGroup(`Data Subjects — ${name}`, [
         { label: "Approximate count", value: b.count ? fmtCount(b.count) : "" },
         { label: "Data elements", value: labelsFor(DATA_ELEMENTS, b.elements).join(", ") },
         { label: "Other elements", value: others.join(", ") },

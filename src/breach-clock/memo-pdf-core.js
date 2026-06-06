@@ -686,18 +686,27 @@ function drawIncidentReport(state, sections) {
   if (!sections || sections.length === 0) return;
   const { fonts } = state;
 
-  // First line of a field's value — used for keep-with-next sizing so a header
-  // (section or group) never lands without at least one line of its content.
-  const fieldFirstLineH = (entry) => {
+  // Full rendered height of a field block — mirrors drawField exactly (label
+  // line + every wrapped value line + the 10pt bottom pad). Used for
+  // keep-with-next sizing so a header is reserved together with the WHOLE of
+  // its first field; reserving only the first line would let drawField's own
+  // ensureRoom break the page right after the header and orphan it.
+  const fieldHeight = (entry) => {
     if (!entry || entry.type !== "field") return 0;
-    const first = entry.multiline
-      ? (String(entry.value).split(/\n+/).map((s) => s.trim()).filter(Boolean)[0] || "")
-      : String(entry.value).trim();
-    return SIZE.label * LINE + LABEL_TO_BODY_GAP + SIZE.body * LINE; // label line + first body line
+    const paras = entry.multiline
+      ? String(entry.value).split(/\n+/).map((s) => s.trim()).filter(Boolean)
+      : [String(entry.value).trim()];
+    if (paras.length === 0) return 0;
+    let h = SIZE.label * LINE + LABEL_TO_BODY_GAP;
+    paras.forEach((p, i) => {
+      if (i > 0) h += 4;
+      h += measureWrapped(p, fonts.sansReg, SIZE.body, CONTENT_W);
+    });
+    return h + 10;
   };
   const groupH = SIZE.authority * LINE + 12;
 
-  // Section heading kept with the first group heading + that group's first field line.
+  // Section heading kept with the first group heading + that group's first field.
   const firstGroup = sections.find((e) => e.type === "group");
   const firstFieldAfterGroup = (() => {
     const gi = sections.indexOf(firstGroup);
@@ -707,7 +716,7 @@ function drawIncidentReport(state, sections) {
     }
     return null;
   })();
-  keepHeaderWithNext(state, SIZE.sectionHead + 24, (firstGroup ? groupH : 0) + fieldFirstLineH(firstFieldAfterGroup));
+  keepHeaderWithNext(state, SIZE.sectionHead + 24, (firstGroup ? groupH : 0) + fieldHeight(firstFieldAfterGroup));
   state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Incident Report", state.cursorY);
 
   const drawGroup = (title) => {
@@ -742,9 +751,11 @@ function drawIncidentReport(state, sections) {
   for (let i = 0; i < sections.length; i++) {
     const entry = sections[i];
     if (entry.type === "group") {
-      // Keep the group heading with the first line of its first field.
+      // Keep the group heading with the whole of its first field — this covers
+      // every group in the report, including each repeated "Data Subjects — …"
+      // category header in the Q2 repeater, not just the first group.
       const next = sections[i + 1];
-      keepHeaderWithNext(state, groupH, fieldFirstLineH(next));
+      keepHeaderWithNext(state, groupH, fieldHeight(next));
       drawGroup(entry.title);
     } else if (entry.type === "field") {
       drawField(entry.label, entry.value, entry.multiline);
