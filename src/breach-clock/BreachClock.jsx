@@ -3,12 +3,14 @@
 //
 // One form, not a step wizard, laid out in two columns: a wide main column
 // (~3 parts) carrying the form, and a right rail (~1 part) carrying the
-// parchment counsel notes (anchored to the field each annotates, flowing with
-// scroll) and the pinned controls. Nothing computes on screen during entry —
-// the user fills the form and presses Submit. On a valid Submit the main column
-// switches to a read-only review (entered answers + computed deadline
-// obligations); only there do the artifact controls (Download memo / Edit)
-// appear, at the top of the rail.
+// parchment counsel notes. Nothing is pinned — the whole page scrolls as one.
+// The rail notes flow in normal document order (top-down, in the order their
+// questions appear) and each carries a title that connects it to its topic;
+// they cluster near the top rather than aligning to their fields. Nothing
+// computes on screen during entry — the user fills the form and presses Submit.
+// On a valid Submit the main column switches to a read-only review (entered
+// answers + computed deadline obligations) with the artifact controls (Download
+// memo / Edit) at the top of the review content.
 //
 // Operative vs. record. Five inputs feed the engine (grouped under
 // OPERATIVE_KEYS so quick mode and the cross-check can target them): awareness,
@@ -25,7 +27,7 @@
 // (footer link) after any change near the wiring.
 // =============================================================================
 
-import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, X } from "lucide-react";
 import { JURISDICTIONS } from "./data.js";
 import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine.js";
@@ -231,12 +233,6 @@ export default function BreachClock() {
   const [now, setNow] = useState(new Date());
   const [downloadError, setDownloadError] = useState("");
 
-  // Layout refs for anchoring the rail counsel notes to their fields.
-  const shellRef = useRef(null);
-  const mainRef = useRef(null);
-  const fieldRefs = { awareness: useRef(null), q1: useRef(null), encryption: useRef(null) };
-  const noteRefs = { awareness: useRef(null), q1: useRef(null), encryption: useRef(null) };
-
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
@@ -249,29 +245,6 @@ export default function BreachClock() {
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
   }, []);
-
-  // Anchor each rail counsel note to the top of the field it annotates. The
-  // offset is measured relative to the shell (scroll-independent), and re-run
-  // whenever the main column resizes (content grows/shrinks) or layout deps
-  // change. Disabled on narrow screens (notes render inline) and on review.
-  useLayoutEffect(() => {
-    if (isNarrow || submitted) return;
-    const measure = () => {
-      const shell = shellRef.current;
-      if (!shell) return;
-      const shellTop = shell.getBoundingClientRect().top;
-      for (const key of ["awareness", "q1", "encryption"]) {
-        const f = fieldRefs[key].current;
-        const n = noteRefs[key].current;
-        if (f && n) n.style.top = `${f.getBoundingClientRect().top - shellTop}px`;
-      }
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (mainRef.current) ro.observe(mainRef.current);
-    window.addEventListener("resize", measure);
-    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
-  }, [isNarrow, submitted, quickMode]);
 
   // ── Record updaters ──
   const updateRecord = (key, value) => setRecord((r) => ({ ...r, [key]: value }));
@@ -730,21 +703,33 @@ export default function BreachClock() {
     return null;
   };
 
+  // Each note carries a title connecting it to the topic it annotates — the
+  // notes flow in document order rather than aligning to their fields, so the
+  // title is what carries the connection.
+  const NOTE_TITLES = {
+    awareness: "Note on the awareness date",
+    q1: "Note on data categories",
+    encryption: "Note on encryption",
+  };
+
   const renderNote = (key) => (
     <aside className="counsel-note">
-      <div style={{ display: "flex", alignItems: "center", gap: "9px", marginBottom: "9px", color: "#1B2A3F" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "9px", marginBottom: "10px", color: "#1B2A3F" }}>
         <Info size={14} />
         <span className="section-mark" style={{ opacity: 1 }}>Counsel's note</span>
+      </div>
+      <div className="serif" style={{ fontSize: "16px", lineHeight: 1.3, color: "#1B2A3F", margin: "0 0 8px" }}>
+        {NOTE_TITLES[key]}
       </div>
       <p style={{ fontSize: "13px", lineHeight: 1.6, margin: 0 }}>{noteBody(key)}</p>
     </aside>
   );
 
   // ── Operative field renderers (shared by full + quick mode) ──
-  // Each annotated field carries a ref so its rail note can be aligned, and
-  // renders its note inline when the layout has collapsed to one column.
+  // On narrow screens each annotated field renders its note inline beneath
+  // itself; on desktop the notes flow in the rail (see the shell below).
   const renderAwarenessField = () => (
-    <div ref={fieldRefs.awareness} style={{ marginBottom: "24px" }}>
+    <div style={{ marginBottom: "24px" }}>
       {labelRow("Date & time of awareness", "To the best of your knowledge, when did the first person in your organization to realize an incident may have occurred become aware of it?")}
       <input
         type="datetime-local"
@@ -809,7 +794,7 @@ export default function BreachClock() {
   };
 
   const renderQ1 = () => (
-    <div ref={fieldRefs.q1} style={{ marginBottom: "24px" }}>
+    <div style={{ marginBottom: "24px" }}>
       {labelRow("Did the incident involve any of the following types of personal data?")}
       {multiCheck(SENSITIVITY_OPTIONS, sensitivity, toggleSensitivity, 2)}
       {isNarrow && <div style={{ marginTop: "14px" }}>{renderNote("q1")}</div>}
@@ -817,7 +802,7 @@ export default function BreachClock() {
   );
 
   const renderEncryption = () => (
-    <div ref={fieldRefs.encryption} style={{ marginBottom: "24px" }}>
+    <div style={{ marginBottom: "24px" }}>
       {labelRow("Was the compromised data encrypted, with an uncompromised key?")}
       {checkRow(
         encryptionApplied,
@@ -1246,6 +1231,17 @@ export default function BreachClock() {
     );
     return (
       <>
+        {/* Artifact controls — top of the review content so they're visible on
+            submit without scrolling; nothing is pinned, so they scroll away. */}
+        <div style={{ display: "flex", gap: "12px", marginBottom: "28px", flexWrap: "wrap" }}>
+          <button className="btn-primary" onClick={handleDownloadMemo} style={{ justifyContent: "center" }}>
+            <Download size={14} /> Download memo
+          </button>
+          <button className="btn-ghost" onClick={handleEdit} style={{ justifyContent: "center" }}>
+            <ArrowLeft size={14} /> Edit answers
+          </button>
+        </div>
+
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
           <h2 className="serif" style={{ fontSize: "28px", fontWeight: 400, margin: 0, color: "#1B2A3F", letterSpacing: "-0.01em" }}>
             Review
@@ -1328,28 +1324,17 @@ export default function BreachClock() {
     );
   };
 
-  // ── Rail controls (sticky top of the rail) ──
+  // ── Mode control (top of the rail on desktop, top of the page on narrow;
+  //    flows with the page, nothing pinned). Only shown during entry — the
+  //    post-submit Download/Edit controls live at the top of the review. ──
   const railControls = () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-      {submitted ? (
-        <>
-          <button className="btn-primary" onClick={handleDownloadMemo} style={{ justifyContent: "center" }}>
-            <Download size={14} /> Download memo
-          </button>
-          <button className="btn-ghost" onClick={handleEdit} style={{ justifyContent: "center" }}>
-            <ArrowLeft size={14} /> Edit answers
-          </button>
-        </>
-      ) : (
-        <div>
-          <div className="section-mark" style={{ marginBottom: "10px", opacity: 0.6 }}>Mode</div>
-          {checkRow(
-            quickMode,
-            "Just notification requirements & timing",
-            () => setQuickMode(!quickMode),
-            { desc: "Show only the fields that drive the deadline calculation. Entered data is kept either way." }
-          )}
-        </div>
+    <div>
+      <div className="section-mark" style={{ marginBottom: "10px", opacity: 0.6 }}>Mode</div>
+      {checkRow(
+        quickMode,
+        "Just notification requirements & timing",
+        () => setQuickMode(!quickMode),
+        { desc: "Show only the fields that drive the deadline calculation. Entered data is kept either way." }
       )}
     </div>
   );
@@ -1490,26 +1475,29 @@ export default function BreachClock() {
           </p>
         </div>
 
-        {/* Two-column shell (collapses to one column on narrow screens) */}
+        {/* Two-column shell (collapses to one column on narrow screens).
+            Nothing is pinned: the whole page scrolls as one. On desktop the
+            rail carries the mode control then the titled counsel notes, all in
+            normal document order. */}
         {isNarrow ? (
           <div>
-            <div style={{ marginBottom: "32px" }}>{railControls()}</div>
+            {!submitted && <div style={{ marginBottom: "32px" }}>{railControls()}</div>}
             {main}
           </div>
         ) : (
-          <div ref={shellRef} style={{ display: "grid", gridTemplateColumns: "minmax(0, 3fr) minmax(0, 1fr)" }}>
-            <div ref={mainRef} style={{ paddingRight: "40px", minWidth: 0 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 3fr) minmax(0, 1fr)" }}>
+            <div style={{ paddingRight: "40px", minWidth: 0 }}>
               {main}
             </div>
-            <div style={{ position: "relative", paddingLeft: "40px", borderLeft: "1px solid rgba(27,42,63,0.18)", minWidth: 0 }}>
-              <div style={{ position: "sticky", top: "24px", zIndex: 10, background: "#FAF8F2", paddingBottom: "16px" }}>
-                {railControls()}
-              </div>
+            <div style={{ paddingLeft: "40px", borderLeft: "1px solid rgba(27,42,63,0.18)", minWidth: 0 }}>
               {!submitted && (
                 <>
-                  <div ref={noteRefs.awareness} style={{ position: "absolute", left: "40px", right: 0, top: 0 }}>{renderNote("awareness")}</div>
-                  <div ref={noteRefs.q1} style={{ position: "absolute", left: "40px", right: 0, top: 0 }}>{renderNote("q1")}</div>
-                  <div ref={noteRefs.encryption} style={{ position: "absolute", left: "40px", right: 0, top: 0 }}>{renderNote("encryption")}</div>
+                  {railControls()}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "28px" }}>
+                    {renderNote("awareness")}
+                    {renderNote("q1")}
+                    {renderNote("encryption")}
+                  </div>
                 </>
               )}
             </div>
