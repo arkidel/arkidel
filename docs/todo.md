@@ -212,6 +212,13 @@ Neither item is `[substance]`.
 - No localStorage persistence for in-progress Breach Clock entries.
   Deliberate v1 decision per CLAUDE.md; revisit post-launch if user
   feedback supports it.
+- "Mode" control language — revisit the label/wording of the mode control
+  in the form's rail controls (the "Mode" toggle for quick mode). Exact
+  change TBD. Surfaced 2026-06-06.
+- Remove the "Start over" button from the first page of the form — the
+  control that resets the form back to the start. Confirm exact scope
+  (which view/state the button appears in) before removing it. Surfaced
+  2026-06-06.
 
 ---
 
