@@ -1020,7 +1020,7 @@ export default function BreachClock() {
         <section style={{ marginBottom: "40px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "28px" }}>
             <h2 className="serif" style={{ fontSize: "24px", fontWeight: 400, margin: 0, color: "#1B2A3F", letterSpacing: "-0.01em" }}>
-              Notification inputs
+              Notification Inputs
             </h2>
             <div style={{ flex: 1, height: "1px", background: "rgba(27,42,63,0.18)" }} />
           </div>
