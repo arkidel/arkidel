@@ -83,26 +83,57 @@ information, (2) how & when discovered, (3) when the incident occurred,
   the engine. The engine wiring is unchanged: `computeDeadlines` /`isHighRisk`
   and the input shape are exactly as before; the wizard's state and handlers
   were relocated, not rebuilt.
-- **Live deadline result** is surfaced at the top (not at the end of a long
-  form) and recomputes reactively in both modes once the minimal operative
-  inputs are present (awareness + ≥1 jurisdiction + ≥1 Q1 type — the same
-  conditions the old `canAdvance` enforced).
+- **Two-column layout + anchored counsel-note rail.** The form fills a wide
+  main column (~3 parts); a right rail (~1 part) carries the parchment counsel
+  notes (awareness, Q1, encryption). Each note is anchored by a measured offset
+  (`useLayoutEffect` + `ResizeObserver`, recomputed on resize) to the top of the
+  field it annotates and flows with scroll — deliberately **not** sticky. The
+  mode/artifact controls ARE pinned (sticky) at the top of the rail. A hairline
+  vertical rule divides the columns. Below the `md` (768px) breakpoint the layout
+  collapses to one column: notes render inline beneath their fields, controls
+  stack at the top. (The anchoring is JS-measured because the two columns flow
+  independently — pure CSS can't align a rail note to an arbitrary main-column
+  field while also giving the controls a full-height sticky region.)
+- **Checkbox-row selection idiom.** Every selection control — jurisdictions, Q1,
+  type-of-incident, the CIA data-security principles, the data-element
+  checklists, and the boolean toggles (quick mode, encryption, "not available")
+  — uses one `.check-row`: a prominent always-visible square checkbox + a
+  clickable, hover-lit, keyboard-operable (`role="checkbox"`, space/enter) row.
+  Dropdowns, text, textarea, and number inputs keep their plain styling.
+- **Submit-gated review (no live result).** Nothing computes on screen during
+  entry. A Submit button validates the minimal operative inputs (awareness + ≥1
+  jurisdiction + ≥1 Q1 type — the old `canAdvance` conditions) and, if any are
+  missing, lists them instead of proceeding. On a valid submit the main column
+  switches to a read-only **review**: an analysis-inputs recap plus the computed
+  deadline obligations. Only there do the rail controls become **Download memo**
+  + **Edit answers**; Edit returns to the form with all values intact. Quick
+  mode's review shows the operative answers + obligations only (no incident-
+  report recap, no further-considerations); full mode includes both.
 - **Quick mode** is a focusing view over one shared state, not a separate
-  workflow. Toggling shows only the operative fields + the result and hides
-  every record section; entered data persists both ways with no re-entry.
+  workflow — it shows only the operative fields; entered record data persists
+  across toggles.
 - **Q1 retains all ten sensitivity options with their exact IDs.** `location`
   and `communications` are kept (they are not high-risk, so the engine ignores
   them) rather than dropped — removing user-facing data categories would be a
   substantive reduction, and the IDs must match what the engine treats as
   high-risk.
-- **Q1 ⇄ Q2 cross-check.** Section 5's Q2 ("categories of data subjects")
-  expands per selected category to record-only sub-fields (count, data types,
-  other). Each tagged Q2 data type rolls up to a Q1 category; selecting a tag
-  (`gov_id`, `financial`, `health`, `special`, `credentials`) whose Q1 category
-  is unchecked raises a non-blocking, on-brand (Ember/`#FBF5EE`) warning that
-  names the category and points back to Q1, and it resolves live because Q1 is
-  editable in place. `biometric` and `children` are Q1-only by design — no Q2
-  tags fabricate them.
+- **Dynamic, user-named data-subject categories.** Section 5's "categories of
+  data subjects" is a repeater of removable blocks (start with one): each block
+  is a user-entered name + approximate count + a **shared** 14-element checklist
+  + repeatable custom "Other" element fields. It replaced the earlier fixed
+  Customers/Employees/Visitors/Other structure. All record-only.
+- **Element → Q1 cross-check.** Each checklist element may tag a Q1 category;
+  selecting a tagged element whose Q1 category is unchecked raises a
+  non-blocking, on-brand (Ember/`#FBF5EE`) warning naming the category, shown at
+  the data section and re-shown on review while unresolved (its prompt is to
+  update Q1 — there is no live clock to re-run). The mapping: Password →
+  `credentials`; National identification number → `gov_id`; Government ID →
+  `gov_id`; Payment card information → `financial`; Fingerprint → `biometric`;
+  Health or medical information → `health`; Sensitive/Special-category data →
+  `special`. All other elements (name, email, username, physical address, IP,
+  date of birth, photos) and custom "Other" entries never trigger. Fingerprint
+  makes `biometric` reachable here; `children` has no element and stays a
+  Q1-only selection — do not invent one.
 
 ### `src/breach-clock/memo-pdf.js` — PDF memo generation
 
@@ -115,17 +146,30 @@ those sources. The actual render path is the pure `memo-pdf-core.js`
 shim that loads font/logo bytes and delegates to it.
 
 **Incident-report section.** Full-mode downloads append an "Incident Report"
-section (`drawIncidentReport` in `memo-pdf-core.js`) after the deadline
-analysis and before "Further Considerations". The structure is built UI-side
-in `BreachClock.jsx` (`buildIncidentReportSections` → `facts.incidentReport`,
-an ordered array of `{type:"group"}` / `{type:"field"}` entries) so all field
-labels and option text stay in the component — the core just renders whatever
-it's given, in order, matching the memo's type/colors (group sub-headings in
-mixed-case serif; field labels uppercased like the rest of the memo's labels).
-Empty fields and "information not available" groups are dropped before render.
-Quick mode passes no `incidentReport`, so its memo is the deadline analysis
-alone and keeps the `breach-notification-analysis-<date>.pdf` filename; full
-mode names the file from the sanitized incident reference/title + date.
+section (`drawIncidentReport` in `memo-pdf-core.js`). It always **starts on a
+fresh page** (`state.addPage()` before it) — it is a distinct artifact appended
+to the analysis. The structure is built UI-side in `BreachClock.jsx`
+(`buildIncidentReportSections` → `facts.incidentReport`, an ordered array of
+`{type:"group"}` / `{type:"field"}` entries) so all field labels and option text
+stay in the component — the core just renders whatever it's given, in order,
+matching the memo's type/colors (group sub-headings in mixed-case serif; field
+labels uppercased like the rest of the memo's labels). Empty fields and
+"information not available" groups are dropped before render; data-subject
+counts are formatted with thousands separators. Quick mode passes no
+`incidentReport`, so its memo is the deadline analysis alone and keeps the
+`breach-notification-analysis-<date>.pdf` filename; full mode names the file
+from the sanitized incident reference/title + date.
+
+**Top recap section is "Analysis Inputs"** (`drawIncidentSummary`, name
+unchanged) — the awareness/jurisdictions/categories/encryption recap. It was
+renamed from "Incident Summary" to avoid colliding with the incident-report
+"Incident summary" narrative group, which is distinct and unchanged.
+
+**Keep-with-next headers.** `keepHeaderWithNext(state, headerH, firstLineH)`
+guards every section and group heading: a heading is only placed if it plus the
+first line of the content that follows both fit on the current page, else it
+breaks to a new page first. This prevents an orphaned header (the bug was the
+"Incident summary" header stranded at a page bottom with a large gap).
 
 ### `docs/intake-forms.md` — audit trail
 
