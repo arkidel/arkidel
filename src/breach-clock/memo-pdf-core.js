@@ -233,6 +233,15 @@ function drawLetterhead(page, fonts, logoImage, generatedAt) {
   return ruleY - 42;
 }
 
+// Keep-with-next: ensure a header plus the first line of the content that
+// follows it both fit on the current page; otherwise break to a new page
+// first, so a header never lands orphaned at the bottom of a page.
+function keepHeaderWithNext(state, headerHeight, firstContentHeight) {
+  if (state.cursorY - (headerHeight + firstContentHeight) < CONTENT_BOTTOM) {
+    state.addPage();
+  }
+}
+
 function drawSectionHeading(page, fonts, text, topY) {
   const baselineY = topY - SIZE.sectionHead;
   drawTextLine(page, text, CONTENT_X, baselineY, fonts.serifBold, SIZE.sectionHead, MIDNIGHT);
@@ -263,8 +272,12 @@ function drawIncidentSummary(state, facts) {
       : "Not reported"],
   ];
 
-  state.ensureRoom(SIZE.sectionHead + 30);
-  state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Incident Summary", state.cursorY);
+  // Keep-with-next: don't strand the heading without its first row.
+  const firstRowH = rows.length
+    ? Math.max(SIZE.body * LINE, wrapText(rows[0][1], fonts.sansReg, SIZE.body, valueMaxW).length * SIZE.body * LINE) + 6
+    : 0;
+  keepHeaderWithNext(state, SIZE.sectionHead + 20, firstRowH);
+  state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Analysis Inputs", state.cursorY);
 
   for (const [label, value] of rows) {
     const valueLines = wrapText(value, fonts.sansReg, SIZE.body, valueMaxW);
@@ -673,11 +686,31 @@ function drawIncidentReport(state, sections) {
   if (!sections || sections.length === 0) return;
   const { fonts } = state;
 
-  state.ensureRoom(SIZE.sectionHead + 40);
+  // First line of a field's value — used for keep-with-next sizing so a header
+  // (section or group) never lands without at least one line of its content.
+  const fieldFirstLineH = (entry) => {
+    if (!entry || entry.type !== "field") return 0;
+    const first = entry.multiline
+      ? (String(entry.value).split(/\n+/).map((s) => s.trim()).filter(Boolean)[0] || "")
+      : String(entry.value).trim();
+    return SIZE.label * LINE + LABEL_TO_BODY_GAP + SIZE.body * LINE; // label line + first body line
+  };
+  const groupH = SIZE.authority * LINE + 12;
+
+  // Section heading kept with the first group heading + that group's first field line.
+  const firstGroup = sections.find((e) => e.type === "group");
+  const firstFieldAfterGroup = (() => {
+    const gi = sections.indexOf(firstGroup);
+    for (let i = gi + 1; i < sections.length; i++) {
+      if (sections[i].type === "field") return sections[i];
+      if (sections[i].type === "group") break;
+    }
+    return null;
+  })();
+  keepHeaderWithNext(state, SIZE.sectionHead + 24, (firstGroup ? groupH : 0) + fieldFirstLineH(firstFieldAfterGroup));
   state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Incident Report", state.cursorY);
 
   const drawGroup = (title) => {
-    state.ensureRoom(SIZE.authority * LINE + 14);
     state.cursorY -= 6;
     drawTextLine(state.currentPage(), title, CONTENT_X, state.cursorY - SIZE.authority, fonts.serifBold, SIZE.authority, MIDNIGHT);
     state.cursorY -= SIZE.authority * LINE + 6;
@@ -706,9 +739,16 @@ function drawIncidentReport(state, sections) {
     state.cursorY -= 10;
   };
 
-  for (const entry of sections) {
-    if (entry.type === "group") drawGroup(entry.title);
-    else if (entry.type === "field") drawField(entry.label, entry.value, entry.multiline);
+  for (let i = 0; i < sections.length; i++) {
+    const entry = sections[i];
+    if (entry.type === "group") {
+      // Keep the group heading with the first line of its first field.
+      const next = sections[i + 1];
+      keepHeaderWithNext(state, groupH, fieldFirstLineH(next));
+      drawGroup(entry.title);
+    } else if (entry.type === "field") {
+      drawField(entry.label, entry.value, entry.multiline);
+    }
   }
   state.cursorY -= 8;
 }
@@ -763,6 +803,9 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
   }
 
   if (facts.incidentReport && facts.incidentReport.length > 0) {
+    // The incident report is a distinct artifact appended to the analysis —
+    // always start it on a fresh page.
+    state.addPage();
     drawIncidentReport(state, facts.incidentReport);
   }
 

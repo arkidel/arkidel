@@ -1,47 +1,48 @@
 // =============================================================================
 // BREACH CLOCK — unified incident form (single React component).
 //
-// One form, not a step wizard. The five engine-driving inputs (awareness;
-// jurisdictions + resident counts; Q1 personal-data types; encryption) are
-// ordinary fields interspersed with incident-record fields. The form produces
-// the existing deadline analysis (live, surfaced at the top) and — in full
-// mode — feeds a new "Incident report" section into the downloadable PDF.
+// One form, not a step wizard, laid out in two columns: a wide main column
+// (~3 parts) carrying the form, and a right rail (~1 part) carrying the
+// parchment counsel notes (anchored to the field each annotates, flowing with
+// scroll) and the pinned controls. Nothing computes on screen during entry —
+// the user fills the form and presses Submit. On a valid Submit the main column
+// switches to a read-only review (entered answers + computed deadline
+// obligations); only there do the artifact controls (Download memo / Edit)
+// appear, at the top of the rail.
 //
-// Operative vs. record. Five inputs feed the engine; they're grouped under the
-// OPERATIVE_KEYS flag below so quick mode and the Q1/Q2 cross-check can target
-// them. They are NOT labeled "required/operative" in the default full view —
-// the form prompts for what's missing rather than badging fields. Everything
-// else is a record field: captured into the incident report, never seen by the
-// engine.
+// Operative vs. record. Five inputs feed the engine (grouped under
+// OPERATIVE_KEYS so quick mode and the cross-check can target them): awareness,
+// jurisdictions + resident counts, Q1 personal-data types, encryption. They are
+// NOT badged "required/operative" in the default full view — Submit validates
+// them and says what's missing instead. Everything else is a record field,
+// captured into the incident report, never seen by the engine.
 //
-// Quick mode is a focusing view, not a separate workflow: one shared state,
-// toggling only hides/shows sections, entered data persists both ways. When on,
-// only the operative fields and the deadline result show.
-//
-// Engine wiring is unchanged. computeDeadlines / isHighRisk and the five inputs
-// (awarenessDate, jurisdictions, residentCounts, sensitivity, encryptionApplied)
-// keep the exact interface they had in the wizard — this file relocates the
-// fields and reuses the same state/handlers. Substantive legal changes still
-// belong in data.js, never here. Verify the engine with the in-app Tests view
+// Quick mode is a focusing view over one shared state (not a separate
+// workflow): it shows only the operative fields; entered record data persists
+// across toggles. Engine wiring is unchanged — computeDeadlines / isHighRisk
+// and the five-input shape are exactly as in the wizard; substantive legal
+// changes still belong in data.js. Verify the engine with the in-app Tests view
 // (footer link) after any change near the wiring.
 // =============================================================================
 
-import React, { useState, useEffect } from "react";
-import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download } from "lucide-react";
+import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, X } from "lucide-react";
 import { JURISDICTIONS } from "./data.js";
 import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine.js";
 import { generateMemoPdf } from "./memo-pdf.js";
 import usePageTitle from "../usePageTitle.js";
 
 // Engine inputs. Grouped so quick mode (show only these) and the cross-check
-// can reference the operative set without re-listing it inline. Not surfaced to
-// the user as a label — see the module header.
+// can reference the operative set without re-listing it inline.
 const OPERATIVE_KEYS = ["awareness", "jurisdictions", "residentCounts", "sensitivity", "encryption"];
 
+// Collapse the two-column layout below this width (Tailwind `md` = 768px, the
+// project's marketing-page mobile breakpoint).
+const NARROW_QUERY = "(max-width: 768px)";
+
 // Q1 personal-data categories — these ARE the engine `sensitivity` input; IDs
-// must match what engine.js treats as high-risk. The two non-high-risk extras
-// (location, communications) are kept for record completeness; the engine
-// ignores any id outside its HIGH_RISK_CATEGORIES set.
+// must match what engine.js treats as high-risk. location/communications are
+// kept for record completeness; the engine ignores ids outside its high-risk set.
 const SENSITIVITY_OPTIONS = [
   { id: "identifiers", label: "Identifiers (name, email, address)" },
   { id: "gov_id", label: "Government IDs (SSN, passport, driver's license)" },
@@ -77,53 +78,41 @@ const INCIDENT_TYPES = [
 
 const THIRD_PARTY_TYPES = ["Vendor", "Customer", "Individual", "Other"];
 
-// Q2 data-subject categories. Each tagged data type rolls up (via `tag`) to a
-// Q1 sensitivity category — the cross-check warns when a tag is selected here
-// whose Q1 category is not. Only gov_id / financial / health / special /
-// credentials are reachable from Q2; biometric and children are Q1-only.
-const DATA_SUBJECT_CATEGORIES = [
-  { id: "customers", label: "Customers" },
-  { id: "employees", label: "Employees & temp workers" },
-  { id: "visitors", label: "Website & social visitors" },
-  { id: "other", label: "Other category" },
-];
-
-const CUSTOMER_DATA_TYPES = [
-  { id: "name", label: "Name" },
-  { id: "dob", label: "Date of birth" },
-  { id: "contact", label: "Contact details" },
-  { id: "gov_id", label: "Government ID", tag: "gov_id" },
-  { id: "financial", label: "Payment/financial", tag: "financial" },
-  { id: "special", label: "Special-category", tag: "special" },
-];
-
-const EMPLOYEE_DATA_TYPES = [
-  { id: "name", label: "Name" },
-  { id: "contact", label: "Contact details" },
-  { id: "gov_id", label: "Government ID", tag: "gov_id" },
-  { id: "financial", label: "Payroll/bank", tag: "financial" },
-  { id: "health", label: "Health/sick-leave", tag: "health" },
-  { id: "performance", label: "Performance/disciplinary" },
-  { id: "credentials", label: "Credentials", tag: "credentials" },
-  { id: "special", label: "Special-category", tag: "special" },
-];
-
-const VISITOR_DATA_TYPES = [
+// Shared data-element checklist used by every data-subject category block.
+// `tag` rolls an element up to a Q1 sensitivity category for the cross-check;
+// untagged elements never trigger it. Children's data has no element here and
+// stays a Q1-only selection by design.
+const DATA_ELEMENTS = [
+  { id: "name", label: "First and/or last name" },
+  { id: "email", label: "Email address" },
+  { id: "username", label: "Username" },
+  { id: "password", label: "Password", tag: "credentials" },
+  { id: "physical_address", label: "Physical address" },
   { id: "ip", label: "IP address" },
-  { id: "profile", label: "Profile details" },
-  { id: "message", label: "Message contents" },
-  { id: "engagement", label: "Engagement" },
-  { id: "analytics", label: "Analytics/demographics" },
+  { id: "dob", label: "Date of birth" },
+  { id: "national_id", label: "National identification number", tag: "gov_id" },
+  { id: "gov_id", label: "Government ID", tag: "gov_id" },
+  { id: "payment_card", label: "Payment card information", tag: "financial" },
+  { id: "photo", label: "Photo(s)" },
+  { id: "fingerprint", label: "Fingerprint", tag: "biometric" },
+  { id: "health", label: "Health or medical information", tag: "health" },
+  { id: "special", label: "Sensitive/Special-category data (e.g., information about health, race, ethnicity, religion, sexual orientation or sexual life, political or philosophical opinions, trade union membership)", tag: "special" },
 ];
 
-// Q1 category label for each Q2 tag — used in the cross-check warning text.
+// Q1 category label for each cross-check tag — used in the warning text.
 const TAG_TO_Q1_LABEL = {
   gov_id: "Government IDs",
   financial: "Financial",
   health: "Health or medical information",
   special: "Special category",
   credentials: "Authentication credentials",
+  biometric: "Biometric or genetic data",
 };
+
+// Monotonic id source for data-subject blocks (module scope — the component is
+// a singleton; this avoids Date.now/random in render and keeps keys stable).
+let _blockSeq = 0;
+const makeBlock = () => ({ id: `blk-${++_blockSeq}`, name: "", count: "", elements: [], others: [] });
 
 const EMPTY_RECORD = {
   // 1. General information
@@ -151,20 +140,8 @@ const EMPTY_RECORD = {
   occurrenceDetail: "",
   // 4. Incident summary
   incidentSummary: "",
-  // 5. Data affected — Q2 (record only)
-  dataSubjectCategories: [],
-  customersCount: "",
-  customersDataTypes: [],
-  customersOther: "",
-  employeesCount: "",
-  employeesDataTypes: [],
-  employeesOther: "",
-  visitorsCount: "",
-  visitorsDataTypes: [],
-  visitorsOther: "",
-  otherLabel: "",
-  otherCount: "",
-  otherDataAffected: "",
+  // 5. Data affected — dynamic data-subject blocks (record only)
+  dataSubjectBlocks: [],
   // 6. Measures
   measuresTaken: "",
   measuresTakenNotAvailable: false,
@@ -180,10 +157,61 @@ const slugify = (s) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
 
+const fmtCount = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) && String(v).trim() !== "" ? n.toLocaleString() : String(v).trim();
+};
+
+// ── Tooltip ──────────────────────────────────────────────────────────────
+// Module-scope component (so it keeps its own open state and doesn't remount).
+// Shows on hover AND on focus/tap, so it works with a keyboard and on touch
+// devices that have no hover. Replaces the old `title`-attribute trigger, whose
+// content never appeared.
+function InfoTip({ text, size = 13 }) {
+  const [open, setOpen] = useState(false);
+  if (!text) return null;
+  return (
+    <span style={{ position: "relative", display: "inline-flex", verticalAlign: "middle" }}>
+      <button
+        type="button"
+        aria-label={text}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}
+        style={{
+          background: "none", border: "none", padding: 0, margin: 0, cursor: "help",
+          display: "inline-flex", alignItems: "center", color: "#1B2A3F", opacity: 0.5,
+        }}
+      >
+        <Info size={size} />
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          style={{
+            position: "absolute", zIndex: 60, top: "calc(100% + 8px)", left: 0,
+            width: "270px", maxWidth: "70vw", background: "#1B2A3F", color: "#FAF8F2",
+            padding: "11px 13px", borderRadius: "8px", fontSize: "12px", lineHeight: 1.5,
+            fontFamily: "'Inter', sans-serif", letterSpacing: 0, textTransform: "none",
+            fontWeight: 400, boxShadow: "0 6px 18px rgba(27,42,63,0.22)",
+          }}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function BreachClock() {
   usePageTitle("Breach Clock");
   const [showTests, setShowTests] = useState(false);
   const [quickMode, setQuickMode] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [isNarrow, setIsNarrow] = useState(false);
 
   // ── Operative state (feeds the engine) — unchanged from the wizard ──
   const [awareness, setAwareness] = useState("");
@@ -197,23 +225,78 @@ export default function BreachClock() {
   const [encryptionApplied, setEncryptionApplied] = useState(false);
 
   // ── Record state (incident report only; never seen by the engine) ──
-  const [record, setRecord] = useState(() => ({ ...EMPTY_RECORD }));
+  const [record, setRecord] = useState(() => ({ ...EMPTY_RECORD, dataSubjectBlocks: [makeBlock()] }));
 
   const [riskLevel, setRiskLevel] = useState("");
   const [now, setNow] = useState(new Date());
   const [downloadError, setDownloadError] = useState("");
+
+  // Layout refs for anchoring the rail counsel notes to their fields.
+  const shellRef = useRef(null);
+  const mainRef = useRef(null);
+  const fieldRefs = { awareness: useRef(null), q1: useRef(null), encryption: useRef(null) };
+  const noteRefs = { awareness: useRef(null), q1: useRef(null), encryption: useRef(null) };
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW_QUERY);
+    const on = () => setIsNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+
+  // Anchor each rail counsel note to the top of the field it annotates. The
+  // offset is measured relative to the shell (scroll-independent), and re-run
+  // whenever the main column resizes (content grows/shrinks) or layout deps
+  // change. Disabled on narrow screens (notes render inline) and on review.
+  useLayoutEffect(() => {
+    if (isNarrow || submitted) return;
+    const measure = () => {
+      const shell = shellRef.current;
+      if (!shell) return;
+      const shellTop = shell.getBoundingClientRect().top;
+      for (const key of ["awareness", "q1", "encryption"]) {
+        const f = fieldRefs[key].current;
+        const n = noteRefs[key].current;
+        if (f && n) n.style.top = `${f.getBoundingClientRect().top - shellTop}px`;
+      }
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (mainRef.current) ro.observe(mainRef.current);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, [isNarrow, submitted, quickMode]);
+
+  // ── Record updaters ──
   const updateRecord = (key, value) => setRecord((r) => ({ ...r, [key]: value }));
   const toggleRecordArray = (key, id) =>
     setRecord((r) => {
       const arr = r[key] || [];
       return { ...r, [key]: arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id] };
     });
+
+  // ── Data-subject block updaters ──
+  const mapBlocks = (fn) => setRecord((r) => ({ ...r, dataSubjectBlocks: r.dataSubjectBlocks.map(fn) }));
+  const addBlock = () => setRecord((r) => ({ ...r, dataSubjectBlocks: [...r.dataSubjectBlocks, makeBlock()] }));
+  const removeBlock = (id) => setRecord((r) => ({ ...r, dataSubjectBlocks: r.dataSubjectBlocks.filter((b) => b.id !== id) }));
+  const updateBlock = (id, patch) => mapBlocks((b) => (b.id === id ? { ...b, ...patch } : b));
+  const toggleBlockElement = (id, elId) =>
+    mapBlocks((b) =>
+      b.id === id
+        ? { ...b, elements: b.elements.includes(elId) ? b.elements.filter((x) => x !== elId) : [...b.elements, elId] }
+        : b
+    );
+  const addBlockOther = (id) => mapBlocks((b) => (b.id === id ? { ...b, others: [...b.others, ""] } : b));
+  const updateBlockOther = (id, idx, val) =>
+    mapBlocks((b) => (b.id === id ? { ...b, others: b.others.map((o, i) => (i === idx ? val : o)) } : b));
+  const removeBlockOther = (id, idx) =>
+    mapBlocks((b) => (b.id === id ? { ...b, others: b.others.filter((_, i) => i !== idx) } : b));
 
   const toggleJurisdiction = (k) => setJurisdictions({ ...jurisdictions, [k]: !jurisdictions[k] });
   const toggleSensitivity = (id) =>
@@ -254,7 +337,7 @@ export default function BreachClock() {
     encryptionApplied,
   });
 
-  // ── Minimal operative inputs for a live result (mirrors the old canAdvance) ──
+  // ── Minimal operative inputs required to submit (mirrors the old canAdvance) ──
   const hasAwareness = !!awarenessDate && awarenessDate <= now;
   const hasJurisdiction = anyJurisdiction;
   const hasSensitivity = sensitivity.length > 0;
@@ -265,31 +348,25 @@ export default function BreachClock() {
   if (!hasJurisdiction) missingInputs.push("at least one affected jurisdiction");
   if (!hasSensitivity) missingInputs.push("at least one type of personal data involved");
 
-  // ── Q1 ⇄ Q2 cross-check ──
-  // Collect Q2 tags that are selected, then flag any whose Q1 category is not.
-  const selectedQ2Tags = new Set();
-  const collectTags = (catId, types, defs) => {
-    if (!record.dataSubjectCategories.includes(catId)) return;
-    types.forEach((id) => {
-      const def = defs.find((d) => d.id === id);
-      if (def?.tag) selectedQ2Tags.add(def.tag);
-    });
-  };
-  collectTags("customers", record.customersDataTypes, CUSTOMER_DATA_TYPES);
-  collectTags("employees", record.employeesDataTypes, EMPLOYEE_DATA_TYPES);
-  // visitors carry no tagged types.
-  const crossCheckMissing = [...selectedQ2Tags].filter((tag) => !sensitivity.includes(tag));
+  // ── Q1 ⇄ data-element cross-check ──
+  const selectedTags = new Set();
+  record.dataSubjectBlocks.forEach((b) =>
+    b.elements.forEach((elId) => {
+      const def = DATA_ELEMENTS.find((d) => d.id === elId);
+      if (def?.tag) selectedTags.add(def.tag);
+    })
+  );
+  const crossCheckMissing = [...selectedTags].filter((tag) => !sensitivity.includes(tag));
 
   const sensitivityLabelsForMemo = sensitivity
     .map((s) => SENSITIVITY_OPTIONS.find((o) => o.id === s)?.label)
     .filter(Boolean)
-    // Strip trailing parentheticals for the printed memo.
     .map((label) => label.replace(/\s*\([^)]*\)\s*$/, ""));
 
   const labelsFor = (opts, ids) => ids.map((id) => opts.find((o) => o.id === id)?.label).filter(Boolean);
 
-  // Build the ordered incident-report structure consumed by the PDF generator.
-  // Only populated fields survive; "information not available" groups drop out.
+  // Ordered incident-report structure consumed by the PDF generator and the
+  // on-screen review. Only populated fields survive; "not available" groups drop.
   const buildIncidentReportSections = () => {
     const out = [];
     const pushGroup = (title, fields) => {
@@ -301,7 +378,6 @@ export default function BreachClock() {
       populated.forEach((f) => out.push({ type: "field", label: f.label, value: String(f.value), multiline: !!f.multiline }));
     };
 
-    // 1. General information
     const incidentTypeLabels = INCIDENT_TYPES.filter((t) => t.id !== "other" && record.incidentTypes.includes(t.id)).map((t) => t.label);
     if (record.incidentTypes.includes("other")) {
       incidentTypeLabels.push(record.incidentTypeOther.trim() ? `Other: ${record.incidentTypeOther.trim()}` : "Other");
@@ -317,7 +393,6 @@ export default function BreachClock() {
       { label: "Type of incident", value: incidentTypeLabels.join(", ") },
     ]);
 
-    // 2. How & when discovered
     const tpName =
       record.thirdPartyType === "Customer" ? record.thirdPartyCustomerName
       : record.thirdPartyType === "Vendor" ? record.thirdPartyVendorName
@@ -334,7 +409,6 @@ export default function BreachClock() {
     }
     pushGroup("How & when discovered", discovery);
 
-    // 3. When the incident occurred (skip entirely if marked unavailable)
     if (!record.occurrenceNotAvailable) {
       pushGroup("When the incident occurred", [
         { label: "Occurrence date", value: record.occurrenceDate },
@@ -343,36 +417,20 @@ export default function BreachClock() {
       ]);
     }
 
-    // 4. Incident summary
     pushGroup("Incident summary", [
       { label: "Summary of the incident", value: record.incidentSummary, multiline: true },
     ]);
 
-    // 5. Data affected — Q2 categories of data subjects (record only)
-    const q2 = [];
-    if (record.dataSubjectCategories.includes("customers")) {
-      q2.push({ label: "Customers — approximate count", value: record.customersCount });
-      q2.push({ label: "Customers — data types", value: labelsFor(CUSTOMER_DATA_TYPES, record.customersDataTypes).join(", ") });
-      q2.push({ label: "Customers — other", value: record.customersOther });
-    }
-    if (record.dataSubjectCategories.includes("employees")) {
-      q2.push({ label: "Employees & temp workers — count", value: record.employeesCount });
-      q2.push({ label: "Employees & temp workers — data types", value: labelsFor(EMPLOYEE_DATA_TYPES, record.employeesDataTypes).join(", ") });
-      q2.push({ label: "Employees & temp workers — other", value: record.employeesOther });
-    }
-    if (record.dataSubjectCategories.includes("visitors")) {
-      q2.push({ label: "Website & social visitors — count", value: record.visitorsCount });
-      q2.push({ label: "Website & social visitors — data types", value: labelsFor(VISITOR_DATA_TYPES, record.visitorsDataTypes).join(", ") });
-      q2.push({ label: "Website & social visitors — other", value: record.visitorsOther });
-    }
-    if (record.dataSubjectCategories.includes("other")) {
-      q2.push({ label: "Other category — label", value: record.otherLabel });
-      q2.push({ label: "Other category — count", value: record.otherCount });
-      q2.push({ label: "Other category — data affected", value: record.otherDataAffected, multiline: true });
-    }
-    pushGroup("Data affected — categories of data subjects", q2);
+    record.dataSubjectBlocks.forEach((b, i) => {
+      const name = b.name.trim() || `Category ${i + 1}`;
+      const others = b.others.map((o) => o.trim()).filter(Boolean);
+      pushGroup(`Data subjects — ${name}`, [
+        { label: "Approximate count", value: b.count ? fmtCount(b.count) : "" },
+        { label: "Data elements", value: labelsFor(DATA_ELEMENTS, b.elements).join(", ") },
+        { label: "Other elements", value: others.join(", ") },
+      ]);
+    });
 
-    // 6. Measures
     const measures = [];
     if (!record.measuresTakenNotAvailable) {
       measures.push({ label: "Measures taken (incl. mitigation)", value: record.measuresTaken, multiline: true });
@@ -396,7 +454,6 @@ export default function BreachClock() {
         sensitivityLabels: sensitivityLabelsForMemo,
         encryptionApplied,
         riskLevel,
-        // Quick mode → deadline analysis only. Full mode → include the report.
         incidentReport: quickMode ? null : buildIncidentReportSections(),
       };
       const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed);
@@ -419,14 +476,28 @@ export default function BreachClock() {
     }
   };
 
+  const handleSubmit = () => {
+    setAttemptedSubmit(true);
+    if (!canCompute) return;
+    setSubmitted(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleEdit = () => {
+    setSubmitted(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const reset = () => {
     setQuickMode(false);
+    setSubmitted(false);
+    setAttemptedSubmit(false);
     setAwareness("");
     setJurisdictions(Object.fromEntries(JURISDICTIONS.map((j) => [j.id, false])));
     setResidentCounts(Object.fromEntries(JURISDICTIONS.filter((j) => j.residentField).map((j) => [j.id, ""])));
     setSensitivity([]);
     setEncryptionApplied(false);
-    setRecord({ ...EMPTY_RECORD });
+    setRecord({ ...EMPTY_RECORD, dataSubjectBlocks: [makeBlock()] });
     setRiskLevel("");
     setDownloadError("");
   };
@@ -585,7 +656,7 @@ export default function BreachClock() {
   const labelRow = (text, tooltip, badge) => (
     <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "8px" }}>
       <span className="section-mark">{text}</span>
-      {tooltip && <Info size={13} style={{ color: "#1B2A3F", opacity: 0.5, flexShrink: 0, cursor: "help" }} title={tooltip} aria-label={tooltip} />}
+      {tooltip && <InfoTip text={tooltip} />}
       {badge && (
         <span className="mono" style={{ fontSize: "10px", letterSpacing: "0.08em", color: "#C76E3A", textTransform: "uppercase" }}>
           {badge}
@@ -601,43 +672,32 @@ export default function BreachClock() {
     </div>
   );
 
-  const multiSelect = (options, selectedArr, onToggle, cols = 2) => (
-    <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: "10px" }}>
-      {options.map((o) => {
-        const sel = selectedArr.includes(o.id);
-        return (
-          <div
-            key={o.id}
-            className={`checkbox-card ${sel ? "selected" : ""}`}
-            onClick={() => onToggle(o.id)}
-            style={{ padding: "12px 16px" }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
-              <div>
-                <div style={{ fontSize: "14px" }}>{o.label}</div>
-                {o.desc && <div style={{ fontSize: "12px", opacity: 0.75, marginTop: "3px", lineHeight: 1.4 }}>{o.desc}</div>}
-              </div>
-              {sel && <CheckCircle2 size={15} style={{ flexShrink: 0, marginTop: "1px" }} />}
-            </div>
-          </div>
-        );
-      })}
+  // Checkbox-row: a prominent always-visible checkbox + clickable, hover-lit
+  // row. The one selection idiom across the form (jurisdictions, Q1, incident
+  // types, CIA principles, data elements, and the boolean toggles).
+  const checkRow = (checked, label, onToggle, opts = {}) => (
+    <div
+      role="checkbox"
+      aria-checked={checked}
+      tabIndex={0}
+      className={`check-row ${checked ? "selected" : ""}`}
+      onClick={onToggle}
+      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); onToggle(); } }}
+    >
+      <span className="check-box" aria-hidden="true">{checked && <Check size={14} strokeWidth={3} />}</span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span className="check-label">{label}</span>
+        {opts.sub && <span className="mono check-sub">{opts.sub}</span>}
+        {opts.desc && <span className="check-desc">{opts.desc}</span>}
+      </span>
     </div>
   );
 
-  const toggleCard = (label, checked, onChange, desc) => (
-    <div
-      className={`checkbox-card ${checked ? "selected" : ""}`}
-      onClick={() => onChange(!checked)}
-      style={{ padding: "14px 18px" }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px" }}>
-        <div>
-          <div style={{ fontSize: "15px", fontWeight: 500 }}>{label}</div>
-          {desc && <div style={{ fontSize: "13px", lineHeight: 1.5, opacity: 0.8, marginTop: "4px" }}>{desc}</div>}
-        </div>
-        {checked && <CheckCircle2 size={18} style={{ flexShrink: 0, marginTop: "2px" }} />}
-      </div>
+  const multiCheck = (options, selected, onToggle, cols = 2) => (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: "4px" }}>
+      {options.map((o) => (
+        <div key={o.id}>{checkRow(selected.includes(o.id), o.label, () => onToggle(o.id), { desc: o.desc })}</div>
+      ))}
     </div>
   );
 
@@ -647,14 +707,44 @@ export default function BreachClock() {
       <h2 className="serif" style={{ fontSize: "24px", fontWeight: 400, margin: 0, color: "#1B2A3F", letterSpacing: "-0.01em" }}>
         {title}
       </h2>
-      {tooltip && <Info size={15} style={{ color: "#1B2A3F", opacity: 0.45, flexShrink: 0, cursor: "help" }} title={tooltip} aria-label={tooltip} />}
+      {tooltip && <InfoTip text={tooltip} size={15} />}
       <div style={{ flex: 1, height: "1px", background: "rgba(27,42,63,0.18)" }} />
     </div>
   );
 
+  // ── Counsel notes (rendered in the rail on desktop, inline on narrow) ──
+  const noteBody = (key) => {
+    if (key === "awareness") {
+      return (
+        <>
+          Under Art. 33 GDPR, the clock starts at <strong>awareness</strong>, not discovery — interpreted as reasonable certainty that a security incident has compromised personal data. Earlier signals (anomalies, suspicions) may begin an investigation period but typically do not yet start the 72-hour clock. If you are uncertain which moment qualifies, document your reasoning and consider using the earliest defensible timestamp.
+        </>
+      );
+    }
+    if (key === "q1") {
+      return "These types of personal data are directly relevant to determining whether you must notify applicable regulators about an incident identified as a personal data breach. They drive the deadline calculation.";
+    }
+    if (key === "encryption") {
+      return "Properly encrypted data with an uncompromised key may suppress some or all notification obligations. The mechanism varies by jurisdiction — most U.S. state statutes (CA, TX, CO, MA among modeled) exclude encrypted data from the breach definition itself; EU and UK GDPR provide a conditional Art. 34(3)(a) exemption from individual notification only. Specific standards vary (e.g., Massachusetts requires 128-bit or higher).";
+    }
+    return null;
+  };
+
+  const renderNote = (key) => (
+    <aside className="counsel-note">
+      <div style={{ display: "flex", alignItems: "center", gap: "9px", marginBottom: "9px", color: "#1B2A3F" }}>
+        <Info size={14} />
+        <span className="section-mark" style={{ opacity: 1 }}>Counsel's note</span>
+      </div>
+      <p style={{ fontSize: "13px", lineHeight: 1.6, margin: 0 }}>{noteBody(key)}</p>
+    </aside>
+  );
+
   // ── Operative field renderers (shared by full + quick mode) ──
+  // Each annotated field carries a ref so its rail note can be aligned, and
+  // renders its note inline when the layout has collapsed to one column.
   const renderAwarenessField = () => (
-    <div style={{ marginBottom: "24px" }}>
+    <div ref={fieldRefs.awareness} style={{ marginBottom: "24px" }}>
       {labelRow("Date & time of awareness", "To the best of your knowledge, when did the first person in your organization to realize an incident may have occurred become aware of it?")}
       <input
         type="datetime-local"
@@ -664,15 +754,7 @@ export default function BreachClock() {
         max={new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
         style={{ maxWidth: "340px" }}
       />
-      <aside style={{ background: "#E8DDC4", color: "#2C2418", padding: "18px 22px", marginTop: "14px", border: "1px solid rgba(27,42,63,0.18)", borderRadius: "12px", maxWidth: "640px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", color: "#1B2A3F" }}>
-          <Info size={15} />
-          <div className="section-mark" style={{ opacity: 1 }}>Counsel's note</div>
-        </div>
-        <p style={{ fontSize: "13px", lineHeight: 1.6, margin: 0 }}>
-          Under Art. 33 GDPR, the clock starts at <strong>awareness</strong>, not discovery — interpreted as reasonable certainty that a security incident has compromised personal data. Earlier signals (anomalies, suspicions) may begin an investigation period but typically do not yet start the 72-hour clock. If you are uncertain which moment qualifies, document your reasoning and consider using the earliest defensible timestamp.
-        </p>
-      </aside>
+      {isNarrow && <div style={{ marginTop: "14px" }}>{renderNote("awareness")}</div>}
     </div>
   );
 
@@ -681,27 +763,15 @@ export default function BreachClock() {
     return (
       <div style={{ marginBottom: "24px" }}>
         {labelRow("Which jurisdictions' residents are affected?")}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "14px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "4px" }}>
           {JURISDICTIONS.map((jur) => (
-            <div
-              key={jur.id}
-              className={`checkbox-card ${jurisdictions[jur.id] ? "selected" : ""}`}
-              onClick={() => toggleJurisdiction(jur.id)}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <div style={{ fontSize: "20px", fontWeight: 500, marginBottom: "6px" }}>{jur.name}</div>
-                  <div className="mono" style={{ fontSize: "11px", letterSpacing: "0.1em", opacity: 0.7 }}>{jur.statute}</div>
-                </div>
-                {jurisdictions[jur.id] && <CheckCircle2 size={20} />}
-              </div>
-            </div>
+            <div key={jur.id}>{checkRow(jurisdictions[jur.id], jur.name, () => toggleJurisdiction(jur.id), { sub: jur.statute })}</div>
           ))}
         </div>
         {visibleCounts.length > 0 && (
-          <div style={{ marginTop: "24px", padding: "24px", border: "1px solid rgba(27,42,63,0.18)", background: "#fff", borderRadius: "12px" }}>
+          <div style={{ marginTop: "20px", padding: "22px", border: "1px solid rgba(27,42,63,0.18)", background: "#fff", borderRadius: "12px" }}>
             {labelRow("Residents affected — statutory-threshold count", "The number of this jurisdiction's residents whose data was affected. Used to test statutory notification thresholds — distinct from the per-category data-subject counts below.")}
-            <div style={{ display: "grid", gridTemplateColumns: visibleCounts.length === 1 ? "1fr" : "repeat(2, 1fr)", gap: "28px", marginTop: "4px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: visibleCounts.length === 1 ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "24px", marginTop: "4px" }}>
               {visibleCounts.map((jur) => {
                 const thresholdObligations = jur.obligations.filter((o) => o.gating?.residentThreshold !== undefined);
                 return (
@@ -739,194 +809,67 @@ export default function BreachClock() {
   };
 
   const renderQ1 = () => (
-    <div style={{ marginBottom: "24px" }}>
-      {labelRow(
-        "Did the incident involve any of the following types of personal data?",
-        "These types of personal data are directly relevant to determining whether you must notify applicable regulators about an incident identified as a personal data breach."
-      )}
-      {multiSelect(SENSITIVITY_OPTIONS, sensitivity, toggleSensitivity, 2)}
+    <div ref={fieldRefs.q1} style={{ marginBottom: "24px" }}>
+      {labelRow("Did the incident involve any of the following types of personal data?")}
+      {multiCheck(SENSITIVITY_OPTIONS, sensitivity, toggleSensitivity, 2)}
+      {isNarrow && <div style={{ marginTop: "14px" }}>{renderNote("q1")}</div>}
     </div>
   );
 
   const renderEncryption = () => (
-    <div style={{ marginBottom: "24px" }}>
+    <div ref={fieldRefs.encryption} style={{ marginBottom: "24px" }}>
       {labelRow("Was the compromised data encrypted, with an uncompromised key?")}
-      <div
-        className={`checkbox-card ${encryptionApplied ? "selected" : ""}`}
-        onClick={() => setEncryptionApplied(!encryptionApplied)}
-        style={{ padding: "18px 22px" }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px" }}>
-          <div>
-            <div style={{ fontSize: "16px", fontWeight: 500, marginBottom: "6px" }}>
-              The compromised data was encrypted, and the encryption key was not also compromised.
-            </div>
-            <div style={{ fontSize: "13px", lineHeight: 1.5, opacity: 0.8 }}>
-              Properly encrypted data with an uncompromised key may suppress some or all notification obligations. The mechanism varies by jurisdiction — most U.S. state statutes (CA, TX, CO, MA among modeled) exclude encrypted data from the breach definition itself; EU and UK GDPR provide a conditional Art. 34(3)(a) exemption from individual notification only. Specific standards vary (e.g., Massachusetts requires 128-bit or higher).
-            </div>
-          </div>
-          {encryptionApplied && <CheckCircle2 size={20} style={{ flexShrink: 0, marginTop: "2px" }} />}
-        </div>
-      </div>
+      {checkRow(
+        encryptionApplied,
+        "The compromised data was encrypted, and the encryption key was not also compromised.",
+        () => setEncryptionApplied(!encryptionApplied)
+      )}
+      {isNarrow && <div style={{ marginTop: "14px" }}>{renderNote("encryption")}</div>}
     </div>
   );
 
-  // ── The live deadline result (shown in both modes, at the top) ──
-  const renderResultBody = () => {
-    if (!canCompute) {
-      return (
-        <div style={{ padding: "24px 28px", background: "#1B2A3F", color: "#FAF8F2", borderRadius: "12px" }}>
-          <div className="section-mark" style={{ color: "#FAF8F2", opacity: 0.85, marginBottom: "10px" }}>
-            Awaiting inputs
+  // ── Deadline obligations (the analysis; shown only on the review) ──
+  const renderObligations = () => (
+    <>
+      {deadlines.length === 0 && suppressed.length > 0 && (
+        <div style={{ marginBottom: "16px", padding: "24px 28px", background: "#5A6E4A", color: "#FAF8F2", borderRadius: "12px" }}>
+          <div className="section-mark" style={{ color: "#FAF8F2", opacity: 0.85, marginBottom: "8px" }}>Result</div>
+          <div className="serif" style={{ fontSize: "24px", fontWeight: 400, lineHeight: 1.2 }}>
+            No notification obligations fire under the facts provided.
           </div>
-          <p style={{ fontSize: "15px", lineHeight: 1.6, margin: "0 0 12px" }}>
-            To calculate notification requirements and timing, provide:
+          <p style={{ fontSize: "14px", marginTop: "12px", opacity: 0.9, lineHeight: 1.6 }}>
+            Based on the encryption fact reported, every obligation that would otherwise apply has been suppressed — either because the breach falls outside the statutory definition (U.S. states) or because individual notification is exempted by an unintelligibility-of-data provision (EU/UK GDPR Art. 34(3)(a)). Confirm encryption met each jurisdiction's standard before relying on this analysis.
           </p>
-          <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "14px", lineHeight: 1.7, opacity: 0.92 }}>
-            {missingInputs.map((m) => <li key={m}>{m}</li>)}
-          </ul>
         </div>
-      );
-    }
+      )}
 
-    return (
-      <>
-        {deadlines.length === 0 && suppressed.length > 0 && (
-          <div style={{ marginBottom: "16px", padding: "24px 28px", background: "#5A6E4A", color: "#FAF8F2", borderRadius: "12px" }}>
-            <div className="section-mark" style={{ color: "#FAF8F2", opacity: 0.85, marginBottom: "8px" }}>Result</div>
-            <div className="serif" style={{ fontSize: "24px", fontWeight: 400, lineHeight: 1.2 }}>
-              No notification obligations fire under the facts provided.
-            </div>
-            <p style={{ fontSize: "14px", marginTop: "12px", opacity: 0.9, lineHeight: 1.6 }}>
-              Based on the encryption fact reported, every obligation that would otherwise apply has been suppressed — either because the breach falls outside the statutory definition (U.S. states) or because individual notification is exempted by an unintelligibility-of-data provision (EU/UK GDPR Art. 34(3)(a)). Confirm encryption met each jurisdiction's standard before relying on this analysis.
-            </p>
-          </div>
-        )}
-
-        {deadlines.length === 0 && suppressed.length === 0 && (
-          <div style={{ marginBottom: "16px", padding: "24px 28px", background: "#1B2A3F", color: "#FAF8F2", borderRadius: "12px" }}>
-            <div className="section-mark" style={{ color: "#FAF8F2", opacity: 0.85, marginBottom: "8px" }}>No deadlines computed</div>
-            <p style={{ fontSize: "14px", marginTop: "8px", opacity: 0.9, lineHeight: 1.6 }}>
-              No obligations fire under the inputs provided. Verify your jurisdiction selections and resident counts.
-            </p>
-          </div>
-        )}
-
-        <div style={{ display: "grid", gap: "16px" }}>
-          {deadlines.map((d, i) => {
-            const timeRemaining = d.deadline ? d.deadline.getTime() - now.getTime() : null;
-            const isMissed = timeRemaining !== null && timeRemaining < 0;
-            const isUrgent = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 3600 * 1000;
-            return (
-              <div key={i} className={`deadline-card ${isMissed ? "missed" : isUrgent ? "urgent" : ""}`}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
-                  <div>
-                    <div className="section-mark" style={{ marginBottom: "10px" }}>{d.jurisdiction}</div>
-                    <div className="serif" style={{ fontSize: "26px", fontWeight: 400, lineHeight: 1.15, marginBottom: "12px", letterSpacing: "-0.01em" }}>
-                      Notify {d.authority}
-                    </div>
-                    <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>{d.basis}</div>
-                    <div className="rule-text">{d.conditional}</div>
-                    {d.source_url && (
-                      <a
-                        href={d.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: "6px",
-                          fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500,
-                          marginTop: "14px", color: "inherit", textDecoration: "none",
-                          borderBottom: "1px solid currentColor", paddingBottom: "2px", opacity: 0.8,
-                        }}
-                      >
-                        View primary source ↗
-                      </a>
-                    )}
-                  </div>
-                  <div style={{ textAlign: "right", minWidth: "240px" }}>
-                    {d.deadline ? (
-                      <>
-                        <div className="section-mark" style={{ marginBottom: "6px" }}>
-                          {isMissed ? "Overdue by" : "Time remaining"}
-                        </div>
-                        <div className="mono" style={{ fontSize: "28px", fontWeight: 500, letterSpacing: "-0.02em" }}>
-                          {formatDuration(timeRemaining)}
-                        </div>
-                        <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "6px" }}>
-                          Due {d.deadline.toLocaleString()}
-                        </div>
-                      </>
-                    ) : (
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 14px", border: "1px solid currentColor" }}>
-                        <AlertTriangle size={14} />
-                        <div className="section-mark">No fixed hour deadline</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+      {deadlines.length === 0 && suppressed.length === 0 && (
+        <div style={{ marginBottom: "16px", padding: "24px 28px", background: "#1B2A3F", color: "#FAF8F2", borderRadius: "12px" }}>
+          <div className="section-mark" style={{ color: "#FAF8F2", opacity: 0.85, marginBottom: "8px" }}>No deadlines computed</div>
+          <p style={{ fontSize: "14px", marginTop: "8px", opacity: 0.9, lineHeight: 1.6 }}>
+            No obligations fire under the inputs provided. Verify your jurisdiction selections and resident counts.
+          </p>
         </div>
+      )}
 
-        {(() => {
-          const selectedJurs = JURISDICTIONS.filter((j) => jurisdictions[j.id] && j.counselNotes && j.counselNotes.length > 0);
-          if (selectedJurs.length === 0) return null;
+      <div style={{ display: "grid", gap: "16px" }}>
+        {deadlines.map((d, i) => {
+          const timeRemaining = d.deadline ? d.deadline.getTime() - now.getTime() : null;
+          const isMissed = timeRemaining !== null && timeRemaining < 0;
+          const isUrgent = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 3600 * 1000;
           return (
-            <div style={{ marginTop: "40px" }}>
-              <div className="section-mark" style={{ marginBottom: "16px" }}>Jurisdictional notes</div>
-              <div style={{ display: "grid", gap: "12px" }}>
-                {selectedJurs.flatMap((jur) =>
-                  jur.counselNotes.map((note) => (
-                    <aside key={note.id} style={{ background: "#fff", color: "#2C2418", padding: "20px 24px", borderLeft: "4px solid #E8DDC4", borderRadius: "0 12px 12px 0" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", color: "#1B2A3F" }}>
-                        <Info size={14} />
-                        <div className="section-mark" style={{ opacity: 1 }}>{jur.short}</div>
-                      </div>
-                      <div className="serif" style={{ fontSize: "18px", fontWeight: 400, lineHeight: 1.3, marginBottom: "10px", letterSpacing: "-0.005em" }}>
-                        {note.title}
-                      </div>
-                      <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 10px" }}>{note.content}</p>
-                      {note.citation && (
-                        <div className="mono" style={{ fontSize: "11px", opacity: 0.7 }}>
-                          {note.citation}
-                          {note.source_url && (
-                            <>
-                              {" — "}
-                              <a href={note.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "#1B2A3F", textDecoration: "underline" }}>
-                                primary source
-                              </a>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </aside>
-                  ))
-                )}
-              </div>
-            </div>
-          );
-        })()}
-
-        {suppressed.length > 0 && (
-          <div style={{ marginTop: "40px" }}>
-            <div className="section-mark" style={{ marginBottom: "16px" }}>
-              Notification likely not required — encryption suppression
-            </div>
-            <div style={{ display: "grid", gap: "12px" }}>
-              {suppressed.map((s, i) => (
-                <div key={i} style={{ background: "#fff", borderLeft: "4px solid #5A6E4A", padding: "20px 24px", borderRadius: "0 12px 12px 0" }}>
-                  <div className="section-mark" style={{ marginBottom: "8px" }}>{s.jurisdiction}</div>
-                  <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
-                    {s.authority}
+            <div key={i} className={`deadline-card ${isMissed ? "missed" : isUrgent ? "urgent" : ""}`}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
+                <div>
+                  <div className="section-mark" style={{ marginBottom: "10px" }}>{d.jurisdiction}</div>
+                  <div className="serif" style={{ fontSize: "26px", fontWeight: 400, lineHeight: 1.15, marginBottom: "12px", letterSpacing: "-0.01em" }}>
+                    Notify {d.authority}
                   </div>
-                  <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>
-                    {s.original_citation} → {s.suppression_citation} ({s.suppression_type === "breach_definition" ? "no breach as defined" : "notification exempted by unintelligibility"})
-                  </div>
-                  <div className="rule-text">{s.suppression_description}</div>
-                  {s.source_url && (
+                  <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>{d.basis}</div>
+                  <div className="rule-text">{d.conditional}</div>
+                  {d.source_url && (
                     <a
-                      href={s.source_url}
+                      href={d.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
@@ -940,16 +883,481 @@ export default function BreachClock() {
                     </a>
                   )}
                 </div>
-              ))}
+                <div style={{ textAlign: "right", minWidth: "200px" }}>
+                  {d.deadline ? (
+                    <>
+                      <div className="section-mark" style={{ marginBottom: "6px" }}>
+                        {isMissed ? "Overdue by" : "Time remaining"}
+                      </div>
+                      <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em" }}>
+                        {formatDuration(timeRemaining)}
+                      </div>
+                      <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "6px" }}>
+                        Due {d.deadline.toLocaleString()}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 14px", border: "1px solid currentColor" }}>
+                      <AlertTriangle size={14} />
+                      <div className="section-mark">No fixed hour deadline</div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
+          );
+        })}
+      </div>
+
+      {(() => {
+        const selectedJurs = JURISDICTIONS.filter((j) => jurisdictions[j.id] && j.counselNotes && j.counselNotes.length > 0);
+        if (selectedJurs.length === 0) return null;
+        return (
+          <div style={{ marginTop: "40px" }}>
+            <div className="section-mark" style={{ marginBottom: "16px" }}>Jurisdictional notes</div>
+            <div style={{ display: "grid", gap: "12px" }}>
+              {selectedJurs.flatMap((jur) =>
+                jur.counselNotes.map((note) => (
+                  <aside key={note.id} style={{ background: "#fff", color: "#2C2418", padding: "20px 24px", borderLeft: "4px solid #E8DDC4", borderRadius: "0 12px 12px 0" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", color: "#1B2A3F" }}>
+                      <Info size={14} />
+                      <div className="section-mark" style={{ opacity: 1 }}>{jur.short}</div>
+                    </div>
+                    <div className="serif" style={{ fontSize: "18px", fontWeight: 400, lineHeight: 1.3, marginBottom: "10px", letterSpacing: "-0.005em" }}>
+                      {note.title}
+                    </div>
+                    <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 10px" }}>{note.content}</p>
+                    {note.citation && (
+                      <div className="mono" style={{ fontSize: "11px", opacity: 0.7 }}>
+                        {note.citation}
+                        {note.source_url && (
+                          <>
+                            {" — "}
+                            <a href={note.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "#1B2A3F", textDecoration: "underline" }}>
+                              primary source
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </aside>
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {suppressed.length > 0 && (
+        <div style={{ marginTop: "40px" }}>
+          <div className="section-mark" style={{ marginBottom: "16px" }}>
+            Notification likely not required — encryption suppression
+          </div>
+          <div style={{ display: "grid", gap: "12px" }}>
+            {suppressed.map((s, i) => (
+              <div key={i} style={{ background: "#fff", borderLeft: "4px solid #5A6E4A", padding: "20px 24px", borderRadius: "0 12px 12px 0" }}>
+                <div className="section-mark" style={{ marginBottom: "8px" }}>{s.jurisdiction}</div>
+                <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
+                  {s.authority}
+                </div>
+                <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>
+                  {s.original_citation} → {s.suppression_citation} ({s.suppression_type === "breach_definition" ? "no breach as defined" : "notification exempted by unintelligibility"})
+                </div>
+                <div className="rule-text">{s.suppression_description}</div>
+                {s.source_url && (
+                  <a
+                    href={s.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "6px",
+                      fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500,
+                      marginTop: "14px", color: "inherit", textDecoration: "none",
+                      borderBottom: "1px solid currentColor", paddingBottom: "2px", opacity: 0.8,
+                    }}
+                  >
+                    View primary source ↗
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  // ── Cross-check warning (field-level + re-shown on review) ──
+  const crossCheckBanner = () =>
+    crossCheckMissing.length > 0 ? (
+      <div
+        role="alert"
+        style={{
+          margin: "4px 0 24px",
+          padding: "16px 20px",
+          background: "#FBF5EE",
+          borderLeft: "4px solid #C76E3A",
+          borderRadius: "0 12px 12px 0",
+          display: "flex",
+          gap: "12px",
+          alignItems: "flex-start",
+        }}
+      >
+        <AlertTriangle size={18} style={{ color: "#C76E3A", flexShrink: 0, marginTop: "2px" }} />
+        <div style={{ fontSize: "14px", lineHeight: 1.6, color: "#2C2418" }}>
+          You selected data elements that imply Q1 categories not currently checked:{" "}
+          <strong>{crossCheckMissing.map((t) => TAG_TO_Q1_LABEL[t]).join(", ")}</strong>. If these were involved, add them in Q1 (Data affected) — they affect the deadline calculation.
+        </div>
+      </div>
+    ) : null;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Form (full or quick) — rendered in the main column.
+  // ─────────────────────────────────────────────────────────────────────────
+  const renderForm = () => (
+    <>
+      {quickMode ? (
+        <section style={{ marginBottom: "40px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "28px" }}>
+            <h2 className="serif" style={{ fontSize: "24px", fontWeight: 400, margin: 0, color: "#1B2A3F", letterSpacing: "-0.01em" }}>
+              Notification inputs
+            </h2>
+            <div style={{ flex: 1, height: "1px", background: "rgba(27,42,63,0.18)" }} />
+          </div>
+          {renderAwarenessField()}
+          {renderJurisdictionsField()}
+          {renderQ1()}
+          {crossCheckBanner()}
+          {renderEncryption()}
+        </section>
+      ) : (
+        <>
+          {/* 1. General information */}
+          <section style={{ marginBottom: "56px" }}>
+            {sectionHeading("01", "General Information")}
+            {field(
+              "Incident reference / title",
+              "A descriptive title or reference number for the incident.",
+              <input className="form-input" value={record.incidentTitle} onChange={(e) => updateRecord("incidentTitle", e.target.value)} placeholder="e.g. INC-2026-014 — Misdirected payroll export" style={{ maxWidth: "560px" }} />,
+              { badge: "Required" }
+            )}
+            {field(
+              "Source of incident",
+              "Did the incident involve a system controlled by your organization, or a third-party system?",
+              <select className="form-select" value={record.sourceOfIncident} onChange={(e) => updateRecord("sourceOfIncident", e.target.value)} style={{ maxWidth: "280px" }}>
+                <option value="">Select…</option>
+                {SOURCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            )}
+            {field(
+              "Incident location",
+              "The geographical location of the incident, if available and applicable (e.g., where a laptop was stolen, the location of a data center, or of the individual who caused the incident).",
+              <input className="form-input" value={record.incidentLocation} onChange={(e) => updateRecord("incidentLocation", e.target.value)} style={{ maxWidth: "560px" }} />
+            )}
+            {field(
+              "Department reporting",
+              "Which organizational unit reported the incident?",
+              <input className="form-input" value={record.departmentReporting} onChange={(e) => updateRecord("departmentReporting", e.target.value)} style={{ maxWidth: "560px" }} />
+            )}
+            {field("Systems & services impacted", null, <textarea className="form-textarea" value={record.systemsImpacted} onChange={(e) => updateRecord("systemsImpacted", e.target.value)} />)}
+            {field(
+              "Backups — existence & availability",
+              "Were the systems in question backed up in any way? Where are they located?",
+              <textarea className="form-textarea" value={record.backups} onChange={(e) => updateRecord("backups", e.target.value)} />
+            )}
+            {field(
+              "Which data security principles of the personal data were compromised?",
+              null,
+              multiCheck(DATA_PRINCIPLES, record.dataPrinciples, (id) => toggleRecordArray("dataPrinciples", id), 1)
+            )}
+            {field(
+              "Type of incident",
+              null,
+              <>
+                {multiCheck(INCIDENT_TYPES, record.incidentTypes, (id) => toggleRecordArray("incidentTypes", id), 3)}
+                {record.incidentTypes.includes("other") && (
+                  <input className="form-input" value={record.incidentTypeOther} onChange={(e) => updateRecord("incidentTypeOther", e.target.value)} placeholder="Specify the type of incident" style={{ marginTop: "12px", maxWidth: "560px" }} />
+                )}
+              </>
+            )}
+          </section>
+
+          {/* 2. How & when discovered */}
+          <section style={{ marginBottom: "56px" }}>
+            {sectionHeading("02", "How & When Discovered")}
+            {field("Summary of how discovered", null, <textarea className="form-textarea" value={record.howDiscovered} onChange={(e) => updateRecord("howDiscovered", e.target.value)} />)}
+            {renderAwarenessField()}
+            {field(
+              "Did you learn about the incident from a third party?",
+              "For example, did one of your organization's vendors report a security incident to you?",
+              <select className="form-select" value={record.learnedFromThirdParty} onChange={(e) => updateRecord("learnedFromThirdParty", e.target.value)} style={{ maxWidth: "280px" }}>
+                <option value="">Select…</option>
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            )}
+            {record.learnedFromThirdParty === "Yes" && (
+              <>
+                {field(
+                  "Type of third party",
+                  null,
+                  <select className="form-select" value={record.thirdPartyType} onChange={(e) => updateRecord("thirdPartyType", e.target.value)} style={{ maxWidth: "280px" }}>
+                    <option value="">Select…</option>
+                    {THIRD_PARTY_TYPES.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                )}
+                {record.thirdPartyType === "Customer" && field("Customer name", null, <input className="form-input" value={record.thirdPartyCustomerName} onChange={(e) => updateRecord("thirdPartyCustomerName", e.target.value)} style={{ maxWidth: "560px" }} />)}
+                {record.thirdPartyType === "Vendor" && field("Vendor name & services", null, <input className="form-input" value={record.thirdPartyVendorName} onChange={(e) => updateRecord("thirdPartyVendorName", e.target.value)} style={{ maxWidth: "560px" }} />)}
+                {record.thirdPartyType === "Individual" && field("Individual name", null, <input className="form-input" value={record.thirdPartyIndividualName} onChange={(e) => updateRecord("thirdPartyIndividualName", e.target.value)} style={{ maxWidth: "560px" }} />)}
+                {record.thirdPartyType === "Other" && field("Other", null, <input className="form-input" value={record.thirdPartyOther} onChange={(e) => updateRecord("thirdPartyOther", e.target.value)} style={{ maxWidth: "560px" }} />)}
+              </>
+            )}
+          </section>
+
+          {/* 3. When the incident occurred */}
+          <section style={{ marginBottom: "56px" }}>
+            {sectionHeading("03", "When the Incident Occurred", "The actual date and time the incident took place, as opposed to when someone in your organization became aware of it.")}
+            <div style={{ marginBottom: "20px" }}>
+              {checkRow(record.occurrenceNotAvailable, "Information not available", () => updateRecord("occurrenceNotAvailable", !record.occurrenceNotAvailable))}
+            </div>
+            <div style={{ opacity: record.occurrenceNotAvailable ? 0.45 : 1, pointerEvents: record.occurrenceNotAvailable ? "none" : "auto" }}>
+              {field("Occurrence date", null, <input type="date" className="form-input" value={record.occurrenceDate} onChange={(e) => updateRecord("occurrenceDate", e.target.value)} disabled={record.occurrenceNotAvailable} style={{ maxWidth: "280px" }} />)}
+              {field("Exact time (incl. time zone)", null, <input className="form-input" value={record.occurrenceTime} onChange={(e) => updateRecord("occurrenceTime", e.target.value)} disabled={record.occurrenceNotAvailable} placeholder="e.g. 14:30 ET" style={{ maxWidth: "280px" }} />)}
+              {field("Additional detail", null, <textarea className="form-textarea" value={record.occurrenceDetail} onChange={(e) => updateRecord("occurrenceDetail", e.target.value)} disabled={record.occurrenceNotAvailable} />)}
+            </div>
+          </section>
+
+          {/* 4. Incident summary */}
+          <section style={{ marginBottom: "56px" }}>
+            {sectionHeading("04", "Incident Summary")}
+            {field(
+              "Summary of the incident",
+              "Write a descriptive summary in your own words. The more detail, the better.",
+              <textarea className="form-textarea" style={{ minHeight: "120px" }} value={record.incidentSummary} onChange={(e) => updateRecord("incidentSummary", e.target.value)} />
+            )}
+          </section>
+
+          {/* 5. Data affected */}
+          <section style={{ marginBottom: "56px" }}>
+            {sectionHeading("05", "Data Affected")}
+            {renderJurisdictionsField()}
+            {renderQ1()}
+            {crossCheckBanner()}
+            {renderEncryption()}
+
+            {/* Dynamic data-subject category repeater (record only) */}
+            <div style={{ marginTop: "8px" }}>
+              {labelRow("Which categories of data subjects were affected?")}
+              {record.dataSubjectBlocks.map((b, i) => (
+                <div key={b.id} style={{ border: "1px solid rgba(27,42,63,0.18)", borderRadius: "12px", padding: "20px 22px", marginBottom: "16px", background: "#fff" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                    <span className="section-mark">Category {i + 1}</span>
+                    {record.dataSubjectBlocks.length > 1 && (
+                      <button type="button" onClick={() => removeBlock(b.id)} className="btn-inline-remove">
+                        <X size={13} /> Remove
+                      </button>
+                    )}
+                  </div>
+                  {field("Category name", "Name this group of affected people (e.g., Customers, Employees, Newsletter subscribers).", <input className="form-input" value={b.name} onChange={(e) => updateBlock(b.id, { name: e.target.value })} placeholder="e.g. Customers" style={{ maxWidth: "420px" }} />)}
+                  {field("Approximate count", null, <input type="number" className="form-input" value={b.count} onChange={(e) => updateBlock(b.id, { count: e.target.value })} style={{ maxWidth: "240px" }} />)}
+                  {field("Which data elements were affected?", null, multiCheck(DATA_ELEMENTS, b.elements, (elId) => toggleBlockElement(b.id, elId), 2))}
+                  <div>
+                    {labelRow("Other elements (not listed)")}
+                    {b.others.map((o, oi) => (
+                      <div key={oi} style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "center" }}>
+                        <input className="form-input" value={o} onChange={(e) => updateBlockOther(b.id, oi, e.target.value)} placeholder="Describe another data element" style={{ maxWidth: "420px" }} />
+                        <button type="button" onClick={() => removeBlockOther(b.id, oi)} className="btn-inline-remove" aria-label="Remove element">
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => addBlockOther(b.id)} className="btn-link">
+                      <Plus size={13} /> add another
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button type="button" onClick={addBlock} className="btn-ghost" style={{ marginTop: "4px" }}>
+                <Plus size={14} /> Add another category of data subjects
+              </button>
+            </div>
+          </section>
+
+          {/* 6. Measures */}
+          <section style={{ marginBottom: "56px" }}>
+            {sectionHeading("06", "Measures")}
+            {field(
+              "Measures taken (incl. mitigation)",
+              null,
+              <>
+                <textarea className="form-textarea" value={record.measuresTaken} onChange={(e) => updateRecord("measuresTaken", e.target.value)} disabled={record.measuresTakenNotAvailable} style={{ opacity: record.measuresTakenNotAvailable ? 0.45 : 1 }} />
+                <div style={{ marginTop: "12px" }}>
+                  {checkRow(record.measuresTakenNotAvailable, "Not available", () => updateRecord("measuresTakenNotAvailable", !record.measuresTakenNotAvailable))}
+                </div>
+              </>
+            )}
+            {field(
+              "Measures proposed (incl. proposed mitigation)",
+              null,
+              <>
+                <textarea className="form-textarea" value={record.measuresProposed} onChange={(e) => updateRecord("measuresProposed", e.target.value)} disabled={record.measuresProposedNotAvailable} style={{ opacity: record.measuresProposedNotAvailable ? 0.45 : 1 }} />
+                <div style={{ marginTop: "12px" }}>
+                  {checkRow(record.measuresProposedNotAvailable, "Not available", () => updateRecord("measuresProposedNotAvailable", !record.measuresProposedNotAvailable))}
+                </div>
+              </>
+            )}
+          </section>
+        </>
+      )}
+
+      {/* Submit */}
+      {attemptedSubmit && !canCompute && (
+        <div role="alert" style={{ marginBottom: "20px", padding: "16px 20px", background: "#FBF5EE", borderLeft: "4px solid #C76E3A", borderRadius: "0 12px 12px 0" }}>
+          <div className="section-mark" style={{ color: "#C76E3A", opacity: 1, marginBottom: "8px" }}>Before submitting</div>
+          <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 8px", color: "#2C2418" }}>
+            To compute notification requirements and timing, provide:
+          </p>
+          <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "14px", lineHeight: 1.7, color: "#2C2418" }}>
+            {missingInputs.map((m) => <li key={m}>{m}</li>)}
+          </ul>
+        </div>
+      )}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+        <button className="btn-ghost" onClick={reset}>
+          <ArrowLeft size={14} /> Start over
+        </button>
+        <button className="btn-primary" onClick={handleSubmit}>
+          Submit &amp; compute deadlines <ArrowRight size={14} />
+        </button>
+      </div>
+    </>
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Review (read-only) — rendered in the main column after a valid Submit.
+  // ─────────────────────────────────────────────────────────────────────────
+  const renderReview = () => {
+    const reportSections = quickMode ? [] : buildIncidentReportSections();
+    const recapRow = (label, value) => (
+      <React.Fragment key={label}>
+        <div className="section-mark" style={{ paddingTop: "2px" }}>{label}</div>
+        <div style={{ fontSize: "15px", lineHeight: 1.55 }}>{value}</div>
+      </React.Fragment>
+    );
+    return (
+      <>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
+          <h2 className="serif" style={{ fontSize: "28px", fontWeight: 400, margin: 0, color: "#1B2A3F", letterSpacing: "-0.01em" }}>
+            Review
+          </h2>
+          <div style={{ flex: 1, height: "1px", background: "rgba(27,42,63,0.18)" }} />
+          {quickMode && <span className="section-mark" style={{ opacity: 0.6 }}>Quick mode</span>}
+        </div>
+
+        {downloadError && (
+          <div role="alert" style={{ marginBottom: "20px", padding: "10px 14px", border: "1px solid #C76E3A", color: "#C76E3A", fontSize: "13px", lineHeight: 1.5, borderRadius: "8px" }}>
+            {downloadError}
+          </div>
+        )}
+
+        {crossCheckBanner()}
+
+        {/* Analysis inputs recap */}
+        <div className="section-mark" style={{ marginBottom: "14px" }}>Analysis inputs</div>
+        <div style={{ border: "1px solid rgba(27,42,63,0.18)", background: "#fff", padding: "24px 28px", marginBottom: "36px", borderRadius: "12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(120px, 180px) 1fr", gap: "16px 28px" }}>
+            {recapRow("Awareness", awarenessDate ? awarenessDate.toLocaleString() : "—")}
+            {recapRow(
+              "Jurisdictions",
+              JURISDICTIONS.filter((j) => jurisdictions[j.id]).map((j) => {
+                const c = residentCounts[j.id];
+                const suffix = j.residentField && c ? ` (${fmtCount(c)} residents)` : "";
+                return `${j.short}${suffix}`;
+              }).join(" · ") || "—"
+            )}
+            {recapRow("Data types (Q1)", sensitivity.map((s) => SENSITIVITY_OPTIONS.find((o) => o.id === s)?.label).filter(Boolean).join(" · ") || "—")}
+            {recapRow("Encryption", encryptionApplied ? "Applied — suppression evaluated" : "Not reported")}
+          </div>
+        </div>
+
+        {/* Computed obligations */}
+        <div className="section-mark" style={{ marginBottom: "16px" }}>
+          {deadlines.length > 0 ? "Notification deadlines" : "Analysis"}
+        </div>
+        <div className="divider-thick" style={{ marginBottom: "24px" }} />
+        {renderObligations()}
+
+        {/* Incident-report recap (full mode only) */}
+        {!quickMode && reportSections.length > 0 && (
+          <div style={{ marginTop: "44px" }}>
+            <div className="section-mark" style={{ marginBottom: "16px" }}>Incident report</div>
+            <div style={{ border: "1px solid rgba(27,42,63,0.18)", background: "#fff", padding: "24px 28px", borderRadius: "12px" }}>
+              {reportSections.map((entry, i) =>
+                entry.type === "group" ? (
+                  <div key={i} className="serif" style={{ fontSize: "17px", color: "#1B2A3F", margin: i === 0 ? "0 0 10px" : "22px 0 10px" }}>
+                    {entry.title}
+                  </div>
+                ) : (
+                  <div key={i} style={{ marginBottom: "12px" }}>
+                    <div className="section-mark" style={{ marginBottom: "4px" }}>{entry.label}</div>
+                    <div style={{ fontSize: "14px", lineHeight: 1.6, whiteSpace: entry.multiline ? "pre-wrap" : "normal" }}>{entry.value}</div>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Further considerations (full mode) */}
+        {!quickMode && (
+          <div style={{ marginTop: "36px", padding: "28px", background: "#E8DDC4", color: "#2C2418", border: "1px solid rgba(27,42,63,0.18)", borderRadius: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", color: "#1B2A3F" }}>
+              <FileWarning size={18} />
+              <div className="section-mark" style={{ opacity: 1 }}>Further considerations</div>
+            </div>
+            <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "14px", lineHeight: 1.7 }}>
+              <li>Sectoral regimes (HIPAA, GLBA, NYDFS, financial services) may impose separate obligations not modeled here.</li>
+              <li>Employer, insurer, processor, and joint-controller relationships may create contractual notification duties preceding statutory ones.</li>
+              <li>Law enforcement holds may permit delay of individual notification in some US jurisdictions — document the request in writing.</li>
+              <li>Residents of US states beyond those listed above may be affected; 50-state analysis recommended for any multi-state incident.</li>
+              <li>This tool provides a preliminary timeline only and does not constitute legal advice. Confirm all conclusions with qualified counsel.</li>
+            </ul>
           </div>
         )}
       </>
     );
   };
 
+  // ── Rail controls (sticky top of the rail) ──
+  const railControls = () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      {submitted ? (
+        <>
+          <button className="btn-primary" onClick={handleDownloadMemo} style={{ justifyContent: "center" }}>
+            <Download size={14} /> Download memo
+          </button>
+          <button className="btn-ghost" onClick={handleEdit} style={{ justifyContent: "center" }}>
+            <ArrowLeft size={14} /> Edit answers
+          </button>
+        </>
+      ) : (
+        <div>
+          <div className="section-mark" style={{ marginBottom: "10px", opacity: 0.6 }}>Mode</div>
+          {checkRow(
+            quickMode,
+            "Just notification requirements & timing",
+            () => setQuickMode(!quickMode),
+            { desc: "Show only the fields that drive the deadline calculation. Entered data is kept either way." }
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const main = submitted ? renderReview() : renderForm();
+
   // ─────────────────────────────────────────────────────────────────────────
-  // Main view — one unified form.
+  // Main view.
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: "100vh", background: "#FAF8F2", color: "#2C2418", fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -975,12 +1383,36 @@ export default function BreachClock() {
           transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 8px;
         }
         .btn-ghost:hover { background: #1B2A3F; color: #FAF8F2; }
-        .checkbox-card {
-          border: 1px solid #1B2A3F; padding: 18px 20px; cursor: pointer;
-          transition: all 0.15s ease; background: transparent; border-radius: 12px;
+        .btn-link {
+          background: transparent; border: none; padding: 4px 0; cursor: pointer;
+          font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; color: #1B2A3F;
+          display: inline-flex; align-items: center; gap: 5px; opacity: 0.85;
         }
-        .checkbox-card:hover { background: rgba(27,42,63,0.04); }
-        .checkbox-card.selected { background: #1B2A3F; color: #FAF8F2; }
+        .btn-link:hover { opacity: 1; text-decoration: underline; }
+        .btn-inline-remove {
+          background: transparent; border: none; padding: 4px 6px; cursor: pointer;
+          font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; color: #1B2A3F;
+          display: inline-flex; align-items: center; gap: 5px; opacity: 0.6; border-radius: 6px;
+        }
+        .btn-inline-remove:hover { opacity: 1; background: rgba(27,42,63,0.06); }
+        /* Checkbox-row selection idiom */
+        .check-row {
+          display: flex; align-items: flex-start; gap: 13px; padding: 12px 14px;
+          cursor: pointer; border-radius: 8px; transition: background 0.15s ease;
+          outline: none;
+        }
+        .check-row:hover { background: rgba(27,42,63,0.05); }
+        .check-row.selected { background: rgba(27,42,63,0.045); }
+        .check-row:focus-visible { box-shadow: 0 0 0 2px #C76E3A; }
+        .check-box {
+          width: 22px; height: 22px; border: 2px solid #1B2A3F; border-radius: 6px;
+          flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+          background: #fff; margin-top: 1px; transition: all 0.12s ease; color: #FAF8F2;
+        }
+        .check-row.selected .check-box { background: #1B2A3F; border-color: #1B2A3F; }
+        .check-label { font-size: 15px; line-height: 1.4; display: block; }
+        .check-sub { font-size: 11px; letter-spacing: 0.1em; opacity: 0.65; display: block; margin-top: 4px; }
+        .check-desc { font-size: 13px; opacity: 0.7; line-height: 1.45; display: block; margin-top: 4px; }
         .form-input, .form-select, .form-textarea {
           width: 100%; border: 1px solid rgba(27,42,63,0.25); border-radius: 8px; background: #fff;
           padding: 11px 13px; font-family: 'Inter', sans-serif; font-size: 15px; color: #2C2418;
@@ -991,6 +1423,10 @@ export default function BreachClock() {
         .form-input:disabled, .form-select:disabled, .form-textarea:disabled {
           opacity: 0.45; cursor: not-allowed; background: #FAF8F2;
         }
+        .counsel-note {
+          background: #E8DDC4; color: #2C2418; padding: 16px 18px;
+          border: 1px solid rgba(27,42,63,0.18); border-radius: 12px;
+        }
         .deadline-card {
           background: #fff; border-left: 4px solid #1B2A3F; padding: 24px;
           position: relative; overflow: hidden; border-radius: 0 12px 12px 0;
@@ -998,21 +1434,15 @@ export default function BreachClock() {
         .deadline-card.urgent { border-left-color: #C76E3A; background: #FBF5EE; }
         .deadline-card.missed { background: #1B2A3F; color: #FAF8F2; border-left-color: #C76E3A; }
         .deadline-card.missed .mono { color: #FAF8F2; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .pulse { animation: pulse 1.5s ease-in-out infinite; }
         .divider-thick { height: 1px; background: #1B2A3F; width: 100%; opacity: 0.25; }
         .rule-text { font-size: 13px; line-height: 1.6; opacity: 0.75; }
-        .q2-expand {
-          margin-top: 14px; margin-left: 4px; padding: 18px 0 4px 20px;
-          border-left: 2px solid rgba(27,42,63,0.15);
-        }
         .section-mark {
           font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500;
           letter-spacing: 0.18em; text-transform: uppercase; color: #1B2A3F; opacity: 0.7;
         }
       `}</style>
 
-      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "60px 40px" }}>
+      <div style={{ maxWidth: "1180px", margin: "0 auto", padding: isNarrow ? "40px 20px" : "60px 40px" }}>
         {/* Header */}
         <header style={{ marginBottom: "28px" }}>
           <h1 className="serif" style={{ fontSize: "36px", margin: 0, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.15, color: "#1B2A3F" }}>
@@ -1048,7 +1478,7 @@ export default function BreachClock() {
             border: "1px solid rgba(27,42,63,0.18)",
             borderRadius: "12px",
             padding: "20px 24px",
-            marginBottom: "28px",
+            marginBottom: "36px",
             display: "flex",
             gap: "14px",
             alignItems: "flex-start",
@@ -1060,342 +1490,31 @@ export default function BreachClock() {
           </p>
         </div>
 
-        {/* Quick mode toggle */}
-        <div style={{ marginBottom: "32px" }}>
-          {toggleCard(
-            "I don't want a full incident report — I just need notification requirements and timing.",
-            quickMode,
-            setQuickMode,
-            "Quick mode shows only the fields that drive the deadline calculation. Anything you enter is kept if you switch back to the full incident report — nothing is re-entered."
-          )}
-        </div>
-
-        {/* Live deadline result — surfaced at the top, present in both modes */}
-        <section style={{ marginBottom: "48px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "16px" }}>
-            <div className="section-mark">
-              {canCompute && deadlines.length > 0 ? "Notification deadlines" : "Deadline analysis"}
+        {/* Two-column shell (collapses to one column on narrow screens) */}
+        {isNarrow ? (
+          <div>
+            <div style={{ marginBottom: "32px" }}>{railControls()}</div>
+            {main}
+          </div>
+        ) : (
+          <div ref={shellRef} style={{ display: "grid", gridTemplateColumns: "minmax(0, 3fr) minmax(0, 1fr)" }}>
+            <div ref={mainRef} style={{ paddingRight: "40px", minWidth: 0 }}>
+              {main}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-              <button
-                onClick={handleDownloadMemo}
-                disabled={!canCompute}
-                style={{
-                  background: "transparent",
-                  border: "1px solid #1B2A3F",
-                  borderRadius: "8px",
-                  padding: "9px 14px",
-                  fontFamily: "'Inter', sans-serif",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  cursor: canCompute ? "pointer" : "not-allowed",
-                  opacity: canCompute ? 1 : 0.4,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  transition: "all 0.2s ease",
-                  color: "#1B2A3F",
-                }}
-                onMouseEnter={(e) => { if (canCompute) { e.currentTarget.style.background = "#1B2A3F"; e.currentTarget.style.color = "#FAF8F2"; } }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#1B2A3F"; }}
-              >
-                <Download size={13} /> {quickMode ? "Download analysis" : "Download report"}
-              </button>
-              {canCompute && deadlines.length > 0 && (
-                <div className="pulse section-mark" style={{ color: "#C76E3A", opacity: 1 }}>● Live</div>
+            <div style={{ position: "relative", paddingLeft: "40px", borderLeft: "1px solid rgba(27,42,63,0.18)", minWidth: 0 }}>
+              <div style={{ position: "sticky", top: "24px", zIndex: 10, background: "#FAF8F2", paddingBottom: "16px" }}>
+                {railControls()}
+              </div>
+              {!submitted && (
+                <>
+                  <div ref={noteRefs.awareness} style={{ position: "absolute", left: "40px", right: 0, top: 0 }}>{renderNote("awareness")}</div>
+                  <div ref={noteRefs.q1} style={{ position: "absolute", left: "40px", right: 0, top: 0 }}>{renderNote("q1")}</div>
+                  <div ref={noteRefs.encryption} style={{ position: "absolute", left: "40px", right: 0, top: 0 }}>{renderNote("encryption")}</div>
+                </>
               )}
             </div>
           </div>
-          {downloadError && (
-            <div
-              role="alert"
-              style={{
-                marginBottom: "16px", padding: "10px 14px", border: "1px solid #C76E3A",
-                color: "#C76E3A", background: "transparent", fontFamily: "'Inter', sans-serif",
-                fontSize: "13px", lineHeight: 1.5, borderRadius: "8px",
-              }}
-            >
-              {downloadError}
-            </div>
-          )}
-          <div className="divider-thick" style={{ marginBottom: "24px" }} />
-          {renderResultBody()}
-        </section>
-
-        {/* ───────── QUICK MODE ───────── */}
-        {quickMode && (
-          <section style={{ marginBottom: "40px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "28px" }}>
-              <h2 className="serif" style={{ fontSize: "24px", fontWeight: 400, margin: 0, color: "#1B2A3F", letterSpacing: "-0.01em" }}>
-                Notification inputs
-              </h2>
-              <div style={{ flex: 1, height: "1px", background: "rgba(27,42,63,0.18)" }} />
-            </div>
-            {renderAwarenessField()}
-            {renderJurisdictionsField()}
-            {renderQ1()}
-            {renderEncryption()}
-          </section>
         )}
-
-        {/* ───────── FULL FORM ───────── */}
-        {!quickMode && (
-          <>
-            {/* 1. General information */}
-            <section style={{ marginBottom: "56px" }}>
-              {sectionHeading("01", "General Information")}
-              {field(
-                "Incident reference / title",
-                "A descriptive title or reference number for the incident.",
-                <input
-                  className="form-input"
-                  value={record.incidentTitle}
-                  onChange={(e) => updateRecord("incidentTitle", e.target.value)}
-                  placeholder="e.g. INC-2026-014 — Misdirected payroll export"
-                  style={{ maxWidth: "560px" }}
-                />,
-                { badge: "Required" }
-              )}
-              {field(
-                "Source of incident",
-                "Did the incident involve a system controlled by your organization, or a third-party system?",
-                <select className="form-select" value={record.sourceOfIncident} onChange={(e) => updateRecord("sourceOfIncident", e.target.value)} style={{ maxWidth: "280px" }}>
-                  <option value="">Select…</option>
-                  {SOURCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-              )}
-              {field(
-                "Incident location",
-                "The geographical location of the incident, if available and applicable (e.g., where a laptop was stolen, the location of a data center, or of the individual who caused the incident).",
-                <input className="form-input" value={record.incidentLocation} onChange={(e) => updateRecord("incidentLocation", e.target.value)} style={{ maxWidth: "560px" }} />
-              )}
-              {field(
-                "Department reporting",
-                "Which organizational unit reported the incident?",
-                <input className="form-input" value={record.departmentReporting} onChange={(e) => updateRecord("departmentReporting", e.target.value)} style={{ maxWidth: "560px" }} />
-              )}
-              {field(
-                "Systems & services impacted",
-                null,
-                <textarea className="form-textarea" value={record.systemsImpacted} onChange={(e) => updateRecord("systemsImpacted", e.target.value)} />
-              )}
-              {field(
-                "Backups — existence & availability",
-                "Were the systems in question backed up in any way? Where are they located?",
-                <textarea className="form-textarea" value={record.backups} onChange={(e) => updateRecord("backups", e.target.value)} />
-              )}
-              {field(
-                "Which data security principles of the personal data were compromised?",
-                null,
-                multiSelect(DATA_PRINCIPLES, record.dataPrinciples, (id) => toggleRecordArray("dataPrinciples", id), 1)
-              )}
-              {field(
-                "Type of incident",
-                null,
-                <>
-                  {multiSelect(INCIDENT_TYPES, record.incidentTypes, (id) => toggleRecordArray("incidentTypes", id), 3)}
-                  {record.incidentTypes.includes("other") && (
-                    <input
-                      className="form-input"
-                      value={record.incidentTypeOther}
-                      onChange={(e) => updateRecord("incidentTypeOther", e.target.value)}
-                      placeholder="Specify the type of incident"
-                      style={{ marginTop: "12px", maxWidth: "560px" }}
-                    />
-                  )}
-                </>
-              )}
-            </section>
-
-            {/* 2. How & when discovered */}
-            <section style={{ marginBottom: "56px" }}>
-              {sectionHeading("02", "How & When Discovered")}
-              {field("Summary of how discovered", null, <textarea className="form-textarea" value={record.howDiscovered} onChange={(e) => updateRecord("howDiscovered", e.target.value)} />)}
-              {renderAwarenessField()}
-              {field(
-                "Did you learn about the incident from a third party?",
-                "For example, did one of your organization's vendors report a security incident to you?",
-                <select className="form-select" value={record.learnedFromThirdParty} onChange={(e) => updateRecord("learnedFromThirdParty", e.target.value)} style={{ maxWidth: "280px" }}>
-                  <option value="">Select…</option>
-                  <option value="No">No</option>
-                  <option value="Yes">Yes</option>
-                </select>
-              )}
-              {record.learnedFromThirdParty === "Yes" && (
-                <>
-                  {field(
-                    "Type of third party",
-                    null,
-                    <select className="form-select" value={record.thirdPartyType} onChange={(e) => updateRecord("thirdPartyType", e.target.value)} style={{ maxWidth: "280px" }}>
-                      <option value="">Select…</option>
-                      {THIRD_PARTY_TYPES.map((o) => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  )}
-                  {record.thirdPartyType === "Customer" && field("Customer name", null, <input className="form-input" value={record.thirdPartyCustomerName} onChange={(e) => updateRecord("thirdPartyCustomerName", e.target.value)} style={{ maxWidth: "560px" }} />)}
-                  {record.thirdPartyType === "Vendor" && field("Vendor name & services", null, <input className="form-input" value={record.thirdPartyVendorName} onChange={(e) => updateRecord("thirdPartyVendorName", e.target.value)} style={{ maxWidth: "560px" }} />)}
-                  {record.thirdPartyType === "Individual" && field("Individual name", null, <input className="form-input" value={record.thirdPartyIndividualName} onChange={(e) => updateRecord("thirdPartyIndividualName", e.target.value)} style={{ maxWidth: "560px" }} />)}
-                  {record.thirdPartyType === "Other" && field("Other", null, <input className="form-input" value={record.thirdPartyOther} onChange={(e) => updateRecord("thirdPartyOther", e.target.value)} style={{ maxWidth: "560px" }} />)}
-                </>
-              )}
-            </section>
-
-            {/* 3. When the incident occurred */}
-            <section style={{ marginBottom: "56px" }}>
-              {sectionHeading("03", "When the Incident Occurred", "The actual date and time the incident took place, as opposed to when someone in your organization became aware of it.")}
-              <div style={{ marginBottom: "20px" }}>
-                {toggleCard("Information not available", record.occurrenceNotAvailable, (v) => updateRecord("occurrenceNotAvailable", v))}
-              </div>
-              <div style={{ opacity: record.occurrenceNotAvailable ? 0.45 : 1, pointerEvents: record.occurrenceNotAvailable ? "none" : "auto" }}>
-                {field("Occurrence date", null, <input type="date" className="form-input" value={record.occurrenceDate} onChange={(e) => updateRecord("occurrenceDate", e.target.value)} disabled={record.occurrenceNotAvailable} style={{ maxWidth: "280px" }} />)}
-                {field("Exact time (incl. time zone)", null, <input className="form-input" value={record.occurrenceTime} onChange={(e) => updateRecord("occurrenceTime", e.target.value)} disabled={record.occurrenceNotAvailable} placeholder="e.g. 14:30 ET" style={{ maxWidth: "280px" }} />)}
-                {field("Additional detail", null, <textarea className="form-textarea" value={record.occurrenceDetail} onChange={(e) => updateRecord("occurrenceDetail", e.target.value)} disabled={record.occurrenceNotAvailable} />)}
-              </div>
-            </section>
-
-            {/* 4. Incident summary */}
-            <section style={{ marginBottom: "56px" }}>
-              {sectionHeading("04", "Incident Summary")}
-              {field(
-                "Summary of the incident",
-                "Write a descriptive summary in your own words. The more detail, the better.",
-                <textarea className="form-textarea" style={{ minHeight: "120px" }} value={record.incidentSummary} onChange={(e) => updateRecord("incidentSummary", e.target.value)} />
-              )}
-            </section>
-
-            {/* 5. Data affected */}
-            <section style={{ marginBottom: "56px" }}>
-              {sectionHeading("05", "Data Affected")}
-              {renderJurisdictionsField()}
-              {renderQ1()}
-
-              {/* Q1 ⇄ Q2 cross-check warning (non-blocking) */}
-              {crossCheckMissing.length > 0 && (
-                <div
-                  role="alert"
-                  style={{
-                    margin: "4px 0 24px",
-                    padding: "16px 20px",
-                    background: "#FBF5EE",
-                    borderLeft: "4px solid #C76E3A",
-                    borderRadius: "0 12px 12px 0",
-                    display: "flex",
-                    gap: "12px",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <AlertTriangle size={18} style={{ color: "#C76E3A", flexShrink: 0, marginTop: "2px" }} />
-                  <div style={{ fontSize: "14px", lineHeight: 1.6, color: "#2C2418" }}>
-                    You selected data types below that imply categories not checked in Q1 above:{" "}
-                    <strong>{crossCheckMissing.map((t) => TAG_TO_Q1_LABEL[t]).join(", ")}</strong>. If these were involved, add them in Q1 — they affect the deadline calculation.
-                  </div>
-                </div>
-              )}
-
-              {renderEncryption()}
-
-              {/* Q2 — categories of data subjects (record only) */}
-              {field(
-                "Which categories of data subjects were affected?",
-                null,
-                <div style={{ display: "grid", gap: "12px" }}>
-                  {DATA_SUBJECT_CATEGORIES.map((cat) => {
-                    const sel = record.dataSubjectCategories.includes(cat.id);
-                    return (
-                      <div key={cat.id}>
-                        <div
-                          className={`checkbox-card ${sel ? "selected" : ""}`}
-                          onClick={() => toggleRecordArray("dataSubjectCategories", cat.id)}
-                          style={{ padding: "14px 18px" }}
-                        >
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <div style={{ fontSize: "15px" }}>{cat.label}</div>
-                            {sel && <CheckCircle2 size={16} />}
-                          </div>
-                        </div>
-
-                        {sel && cat.id === "customers" && (
-                          <div className="q2-expand">
-                            {field("Approximate count", null, <input type="number" className="form-input" value={record.customersCount} onChange={(e) => updateRecord("customersCount", e.target.value)} style={{ maxWidth: "240px" }} />)}
-                            {field("Data types", null, multiSelect(CUSTOMER_DATA_TYPES, record.customersDataTypes, (id) => toggleRecordArray("customersDataTypes", id), 2))}
-                            {field("Other", null, <input className="form-input" value={record.customersOther} onChange={(e) => updateRecord("customersOther", e.target.value)} style={{ maxWidth: "560px" }} />)}
-                          </div>
-                        )}
-                        {sel && cat.id === "employees" && (
-                          <div className="q2-expand">
-                            {field("Count", null, <input type="number" className="form-input" value={record.employeesCount} onChange={(e) => updateRecord("employeesCount", e.target.value)} style={{ maxWidth: "240px" }} />)}
-                            {field("Data types", null, multiSelect(EMPLOYEE_DATA_TYPES, record.employeesDataTypes, (id) => toggleRecordArray("employeesDataTypes", id), 2))}
-                            {field("Other", null, <input className="form-input" value={record.employeesOther} onChange={(e) => updateRecord("employeesOther", e.target.value)} style={{ maxWidth: "560px" }} />)}
-                          </div>
-                        )}
-                        {sel && cat.id === "visitors" && (
-                          <div className="q2-expand">
-                            {field("Count", null, <input type="number" className="form-input" value={record.visitorsCount} onChange={(e) => updateRecord("visitorsCount", e.target.value)} style={{ maxWidth: "240px" }} />)}
-                            {field("Data types", null, multiSelect(VISITOR_DATA_TYPES, record.visitorsDataTypes, (id) => toggleRecordArray("visitorsDataTypes", id), 2))}
-                            {field("Other", null, <input className="form-input" value={record.visitorsOther} onChange={(e) => updateRecord("visitorsOther", e.target.value)} style={{ maxWidth: "560px" }} />)}
-                          </div>
-                        )}
-                        {sel && cat.id === "other" && (
-                          <div className="q2-expand">
-                            {field("Label", null, <input className="form-input" value={record.otherLabel} onChange={(e) => updateRecord("otherLabel", e.target.value)} style={{ maxWidth: "560px" }} />)}
-                            {field("Count", null, <input type="number" className="form-input" value={record.otherCount} onChange={(e) => updateRecord("otherCount", e.target.value)} style={{ maxWidth: "240px" }} />)}
-                            {field("Data affected", null, <textarea className="form-textarea" value={record.otherDataAffected} onChange={(e) => updateRecord("otherDataAffected", e.target.value)} />)}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            {/* 6. Measures */}
-            <section style={{ marginBottom: "56px" }}>
-              {sectionHeading("06", "Measures")}
-              {field(
-                "Measures taken (incl. mitigation)",
-                null,
-                <>
-                  <textarea className="form-textarea" value={record.measuresTaken} onChange={(e) => updateRecord("measuresTaken", e.target.value)} disabled={record.measuresTakenNotAvailable} style={{ opacity: record.measuresTakenNotAvailable ? 0.45 : 1 }} />
-                  <div style={{ marginTop: "12px" }}>
-                    {toggleCard("Not available", record.measuresTakenNotAvailable, (v) => updateRecord("measuresTakenNotAvailable", v))}
-                  </div>
-                </>
-              )}
-              {field(
-                "Measures proposed (incl. proposed mitigation)",
-                null,
-                <>
-                  <textarea className="form-textarea" value={record.measuresProposed} onChange={(e) => updateRecord("measuresProposed", e.target.value)} disabled={record.measuresProposedNotAvailable} style={{ opacity: record.measuresProposedNotAvailable ? 0.45 : 1 }} />
-                  <div style={{ marginTop: "12px" }}>
-                    {toggleCard("Not available", record.measuresProposedNotAvailable, (v) => updateRecord("measuresProposedNotAvailable", v))}
-                  </div>
-                </>
-              )}
-            </section>
-
-            {/* Further considerations */}
-            <div style={{ marginBottom: "16px", padding: "28px", background: "#E8DDC4", color: "#2C2418", border: "1px solid rgba(27,42,63,0.18)", borderRadius: "12px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", color: "#1B2A3F" }}>
-                <FileWarning size={18} />
-                <div className="section-mark" style={{ opacity: 1 }}>Further considerations</div>
-              </div>
-              <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "14px", lineHeight: 1.7 }}>
-                <li>Sectoral regimes (HIPAA, GLBA, NYDFS, financial services) may impose separate obligations not modeled here.</li>
-                <li>Employer, insurer, processor, and joint-controller relationships may create contractual notification duties preceding statutory ones.</li>
-                <li>Law enforcement holds may permit delay of individual notification in some US jurisdictions — document the request in writing.</li>
-                <li>Residents of US states beyond those listed above may be affected; 50-state analysis recommended for any multi-state incident.</li>
-                <li>This tool provides a preliminary timeline only and does not constitute legal advice. Confirm all conclusions with qualified counsel.</li>
-              </ul>
-            </div>
-          </>
-        )}
-
-        {/* Start over */}
-        <div style={{ marginTop: "40px" }}>
-          <button className="btn-ghost" onClick={reset}>
-            <ArrowLeft size={14} /> Start over
-          </button>
-        </div>
 
         <footer style={{ marginTop: "80px", paddingTop: "32px", borderTop: "1px solid rgba(27,42,63,0.18)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div className="section-mark" style={{ opacity: 0.5 }}>Arkidel · Breach Clock</div>
