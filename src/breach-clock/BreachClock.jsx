@@ -1229,7 +1229,7 @@ export default function BreachClock() {
             Review
           </h2>
           <div style={{ flex: 1, height: "1px", background: "rgba(27,42,63,0.18)" }} />
-          {quickMode && <span className="section-mark" style={{ opacity: 0.6 }}>Quick mode</span>}
+          {quickMode && <span className="section-mark" style={{ opacity: 0.6 }}>Breach Clock</span>}
         </div>
 
         {downloadError && (
