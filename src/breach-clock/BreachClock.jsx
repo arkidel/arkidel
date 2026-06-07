@@ -42,6 +42,32 @@ const OPERATIVE_KEYS = ["awareness", "jurisdictions", "residentCounts", "sensiti
 // project's marketing-page mobile breakpoint).
 const NARROW_QUERY = "(max-width: 768px)";
 
+// The left-gutter section index is a wide-viewport-only affordance: it lives in
+// the page's left margin (outside the 1180px content column), so it only renders
+// once the gutter is wide enough to hold it without crowding the content.
+// At 1480px the gutter is (1480-1180)/2 = 150px, comfortably more than the
+// index's ~128px footprint.
+const WIDE_QUERY = "(min-width: 1480px)";
+
+// Left-gutter section index. `id` matches the id set on each form <section>;
+// `label` is the short index-only label (the section headings keep their full
+// Title Case). The index is derived from this array so the two stay in sync.
+const FORM_SECTIONS = [
+  { id: "form-general", label: "General" }, // General Information
+  { id: "form-discovery", label: "Discovery" }, // How & When Discovered
+  { id: "form-timing", label: "Timing" }, // When the Incident Occurred
+  { id: "form-summary", label: "Summary" }, // Incident Summary
+  { id: "form-data", label: "Data" }, // Data Affected
+  { id: "form-measures", label: "Measures" }, // Measures
+];
+
+// The global top nav (src/components/Layout.jsx) is position:static — it scrolls
+// away with the page rather than staying fixed — so the sticky index only needs
+// a small breathing-room offset, not full nav-height clearance. The same value
+// is the sections' scroll-margin-top so a jumped-to heading isn't flush to the
+// viewport edge. (If that nav is ever made sticky, bump this to ~its height.)
+const NAV_CLEARANCE = 32;
+
 // Q1 personal-data categories — these ARE the engine `sensitivity` input; IDs
 // must match what engine.js treats as high-risk. location/communications are
 // kept for record completeness; the engine ignores ids outside its high-risk set.
@@ -214,6 +240,8 @@ export default function BreachClock() {
   const [submitted, setSubmitted] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false);
+  const [isWide, setIsWide] = useState(false);
+  const [activeSection, setActiveSection] = useState(FORM_SECTIONS[0].id);
 
   // ── Operative state (feeds the engine) — unchanged from the wizard ──
   const [awareness, setAwareness] = useState("");
@@ -245,6 +273,37 @@ export default function BreachClock() {
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
   }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia(WIDE_QUERY);
+    const on = () => setIsWide(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+
+  // Highlight the section currently in view. A single read-only
+  // IntersectionObserver watches the six form-section anchors and sets the
+  // active id; the narrow band near the top of the viewport (via rootMargin)
+  // means "active" tracks the section whose heading area is at the top. This is
+  // not layout positioning — it never moves anything (cf. the removed
+  // useLayoutEffect/ResizeObserver rail anchoring).
+  const showSectionIndex = isWide && !isNarrow && !submitted && !quickMode;
+  useEffect(() => {
+    if (!showSectionIndex) return;
+    const els = FORM_SECTIONS.map((s) => document.getElementById(s.id)).filter(Boolean);
+    if (!els.length) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) setActiveSection(e.target.id);
+        });
+      },
+      { rootMargin: "-12% 0px -78% 0px", threshold: 0 }
+    );
+    els.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+  }, [showSectionIndex]);
 
   // ── Record updaters ──
   const updateRecord = (key, value) => setRecord((r) => ({ ...r, [key]: value }));
@@ -671,6 +730,48 @@ export default function BreachClock() {
     </div>
   );
 
+  // Slim section index for the left page gutter. Plain CSS sticky (no
+  // JS-measured positioning); each item is a real anchor to its section id.
+  const renderSectionIndex = () => (
+    <nav
+      aria-label="Form sections"
+      style={{ position: "sticky", top: `${NAV_CLEARANCE}px`, width: "104px", marginLeft: "auto", marginRight: "24px", paddingTop: "60px" }}
+    >
+      <div
+        style={{
+          fontFamily: "'Inter', sans-serif", fontSize: "10px", fontWeight: 500,
+          letterSpacing: "0.14em", textTransform: "uppercase", color: "#2C2418",
+          opacity: 0.5, marginBottom: "12px", paddingLeft: "11px",
+        }}
+      >
+        On this page
+      </div>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+        {FORM_SECTIONS.map((s) => {
+          const active = activeSection === s.id;
+          return (
+            <li key={s.id}>
+              <a
+                href={`#${s.id}`}
+                aria-current={active ? "true" : undefined}
+                style={{
+                  display: "block", textDecoration: "none", fontFamily: "'Inter', sans-serif",
+                  fontSize: "12px", lineHeight: 1.3, padding: "5px 0 5px 8px",
+                  borderLeft: active ? "3px solid #1B2A3F" : "3px solid transparent",
+                  color: active ? "#1B2A3F" : "#2C2418",
+                  opacity: active ? 1 : 0.55,
+                  fontWeight: active ? 500 : 400,
+                }}
+              >
+                {s.label}
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+
   // ── Counsel notes (rendered in the rail on desktop, inline on narrow) ──
   const noteBody = (key) => {
     if (key === "awareness") {
@@ -1020,7 +1121,7 @@ export default function BreachClock() {
       ) : (
         <>
           {/* 1. General information */}
-          <section style={{ marginBottom: "56px" }}>
+          <section id={FORM_SECTIONS[0].id} style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
             {sectionHeading("01", "General Information")}
             {field(
               "Incident reference / title",
@@ -1070,7 +1171,7 @@ export default function BreachClock() {
           </section>
 
           {/* 2. How & when discovered */}
-          <section style={{ marginBottom: "56px" }}>
+          <section id={FORM_SECTIONS[1].id} style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
             {sectionHeading("02", "How & When Discovered")}
             {field("Summary of how discovered", null, <textarea className="form-textarea" value={record.howDiscovered} onChange={(e) => updateRecord("howDiscovered", e.target.value)} />)}
             {renderAwarenessField()}
@@ -1102,7 +1203,7 @@ export default function BreachClock() {
           </section>
 
           {/* 3. When the incident occurred */}
-          <section style={{ marginBottom: "56px" }}>
+          <section id={FORM_SECTIONS[2].id} style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
             {sectionHeading("03", "When the Incident Occurred", "The actual date and time the incident took place, as opposed to when someone in your organization became aware of it.")}
             <div style={{ marginBottom: "20px" }}>
               {checkRow(record.occurrenceNotAvailable, "Information not available", () => updateRecord("occurrenceNotAvailable", !record.occurrenceNotAvailable))}
@@ -1115,7 +1216,7 @@ export default function BreachClock() {
           </section>
 
           {/* 4. Incident summary */}
-          <section style={{ marginBottom: "56px" }}>
+          <section id={FORM_SECTIONS[3].id} style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
             {sectionHeading("04", "Incident Summary")}
             {field(
               "Summary of the incident",
@@ -1125,7 +1226,7 @@ export default function BreachClock() {
           </section>
 
           {/* 5. Data affected */}
-          <section style={{ marginBottom: "56px" }}>
+          <section id={FORM_SECTIONS[4].id} style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
             {sectionHeading("05", "Data Affected")}
             {renderJurisdictionsField()}
             {renderQ1()}
@@ -1171,7 +1272,7 @@ export default function BreachClock() {
           </section>
 
           {/* 6. Measures */}
-          <section style={{ marginBottom: "56px" }}>
+          <section id={FORM_SECTIONS[5].id} style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
             {sectionHeading("06", "Measures")}
             {field(
               "Measures taken (incl. mitigation)",
@@ -1350,6 +1451,8 @@ export default function BreachClock() {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
         * { box-sizing: border-box; }
         body { margin: 0; }
+        /* Smooth jumps for the section index's in-page anchor links. */
+        html { scroll-behavior: smooth; }
         .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
         .serif { font-family: Merriweather, Georgia, serif; }
         h1, h2, h3 { font-family: Merriweather, Georgia, serif; font-weight: 400; }
@@ -1476,6 +1579,23 @@ export default function BreachClock() {
         }
       `}</style>
 
+      {/* Three-column page grid: a 1fr left gutter holds the sticky section
+          index, the centred middle column keeps the content at its existing
+          1180px width (the index lives in the margin and never narrows it), and
+          a 1fr right gutter balances it. On narrow screens the grid collapses
+          to the single content column. */}
+      <div style={{ display: isNarrow ? "block" : "grid", gridTemplateColumns: isNarrow ? undefined : "1fr minmax(0, 1180px) 1fr" }}>
+        {/* Left track: a plain block grid item. It stretches to the full grid
+            row height (the form column), giving the sticky index a tall
+            containing block. Deliberately NOT a flex container — position:sticky
+            on a flex *item* has spotty cross-browser support; as a normal block
+            child the nav sticks reliably. The nav right-aligns itself with
+            margin-left:auto so it hugs the content's left edge. */}
+        {!isNarrow && (
+          <div>
+            {showSectionIndex && renderSectionIndex()}
+          </div>
+        )}
       <div style={{ maxWidth: "1180px", margin: "0 auto", padding: isNarrow ? "40px 20px" : "60px 40px" }}>
         {/* Header */}
         <header style={{ marginBottom: "20px" }}>
@@ -1552,6 +1672,7 @@ export default function BreachClock() {
           </button>
           <div className="section-mark" style={{ opacity: 0.5 }}>Preliminary triage only</div>
         </footer>
+      </div>
       </div>
     </div>
   );
