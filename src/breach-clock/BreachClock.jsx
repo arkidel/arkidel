@@ -84,6 +84,24 @@ const SENSITIVITY_OPTIONS = [
   { id: "communications", label: "Private communications content" },
 ];
 
+// EU/UK risk-assessment levels — the operative `riskLevel` input. The value
+// strings match what engine.js gates on (riskRequired → "risk"|"high";
+// highRiskRequired → "high"; "" = unset → pending). Shared by the on-screen
+// control (renderRiskAssessment) and the review recap.
+const RISK_OPTIONS = [
+  { value: "unlikely", label: "Unlikely to result in a risk", desc: "No notification required. Document the assessment under Art. 33(5)." },
+  { value: "risk", label: "Likely to result in a risk", desc: "Notify the supervisory authority within 72 hours. No individual notification." },
+  { value: "high", label: "Likely to result in a high risk", desc: "Notify the authority within 72 hours and affected data subjects without undue delay." },
+];
+
+// Natural-language list join ("A", "A and B", "A, B, and C") for note copy.
+const joinList = (arr) =>
+  arr.length <= 1
+    ? arr[0] || ""
+    : arr.length === 2
+    ? `${arr[0]} and ${arr[1]}`
+    : `${arr.slice(0, -1).join(", ")}, and ${arr[arr.length - 1]}`;
+
 const SOURCE_OPTIONS = ["Internal", "External"];
 
 const DATA_PRINCIPLES = [
@@ -288,10 +306,20 @@ export default function BreachClock() {
   // means "active" tracks the section whose heading area is at the top. This is
   // not layout positioning — it never moves anything (cf. the removed
   // useLayoutEffect/ResizeObserver rail anchoring).
+  // The fixed six sections plus the conditional Risk Assessment section, which
+  // appears only when an EU/UK jurisdiction is selected. Derived so the index
+  // and the IntersectionObserver stay in sync as that section comes and goes.
+  // The positional FORM_SECTIONS[n].id references on the six fixed <section>s
+  // are left untouched.
+  const indexSections = [
+    ...FORM_SECTIONS,
+    ...((jurisdictions.eu || jurisdictions.uk) ? [{ id: "form-risk", label: "Risk" }] : []),
+  ];
+
   const showSectionIndex = isWide && !isNarrow && !submitted && !quickMode;
   useEffect(() => {
     if (!showSectionIndex) return;
-    const els = FORM_SECTIONS.map((s) => document.getElementById(s.id)).filter(Boolean);
+    const els = indexSections.map((s) => document.getElementById(s.id)).filter(Boolean);
     if (!els.length) return;
     const obs = new IntersectionObserver(
       (entries) => {
@@ -303,7 +331,7 @@ export default function BreachClock() {
     );
     els.forEach((el) => obs.observe(el));
     return () => obs.disconnect();
-  }, [showSectionIndex]);
+  }, [showSectionIndex, jurisdictions.eu, jurisdictions.uk]);
 
   // ── Record updaters ──
   const updateRecord = (key, value) => setRecord((r) => ({ ...r, [key]: value }));
@@ -361,12 +389,17 @@ export default function BreachClock() {
   };
 
   // ── Deadlines — same pure engine the test harness calls ──
-  const { deadlines, suppressed } = computeDeadlines({
+  // riskLevel feeds the EU/UK risk gating; `pending` carries the GDPR
+  // obligations awaiting a risk assessment (neither fired nor suppressed). An
+  // unset assessment surfaces as a pending result, so it is deliberately NOT
+  // part of canCompute / the submit gate below.
+  const { deadlines, suppressed, pending } = computeDeadlines({
     awarenessDate,
     jurisdictions,
     residentCounts,
     sensitivity,
     encryptionApplied,
+    riskLevel,
   });
 
   // ── Minimal operative inputs required to submit (mirrors the old canAdvance) ──
@@ -518,6 +551,18 @@ export default function BreachClock() {
   const handleEdit = () => {
     setSubmitted(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // From the pending result card: return to the form and jump to the risk
+  // section. The #form-risk anchor is rendered after this returns to the form
+  // (it exists whenever an EU/UK jurisdiction is selected, which is the only
+  // way a pending result arises), so defer the scroll to the next frame.
+  const handleCompleteRiskAssessment = () => {
+    setSubmitted(false);
+    requestAnimationFrame(() => {
+      const el = document.getElementById("form-risk");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -747,7 +792,7 @@ export default function BreachClock() {
         On this page
       </div>
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
-        {FORM_SECTIONS.map((s) => {
+        {indexSections.map((s) => {
           const active = activeSection === s.id;
           return (
             <li key={s.id}>
@@ -787,6 +832,16 @@ export default function BreachClock() {
     if (key === "encryption") {
       return "Properly encrypted data with an uncompromised key may suppress some or all notification obligations. The mechanism varies by jurisdiction — most U.S. state statutes (CA, TX, CO, MA among modeled) exclude encrypted data from the breach definition itself; EU and UK GDPR provide a conditional Art. 34(3)(a) exemption from individual notification only. Specific standards vary (e.g., Massachusetts requires 128-bit or higher).";
     }
+    if (key === "risk") {
+      if (highRiskPresent) {
+        const hrLabels = sensitivity
+          .filter((s) => isHighRisk([s]))
+          .map((s) => SENSITIVITY_OPTIONS.find((o) => o.id === s)?.label)
+          .filter(Boolean);
+        return `You indicated ${joinList(hrLabels)} — categories that often meet the high-risk threshold. The determination is yours; confirm or adjust.`;
+      }
+      return "Art. 33 (authority, 72 hours) is triggered by any risk; Art. 34 (data subjects, no fixed deadline) only by a high risk.";
+    }
     return null;
   };
 
@@ -797,6 +852,7 @@ export default function BreachClock() {
     awareness: "Awareness",
     q1: "Data categories",
     encryption: "Encryption",
+    risk: "Risk assessment",
   };
 
   const renderNote = (key) => (
@@ -916,22 +972,108 @@ export default function BreachClock() {
     </div>
   );
 
+  // ── EU/UK risk assessment (operative; shown only when an EU/UK jurisdiction
+  //    is selected). Three mutually-exclusive rows behaving as radios: clicking
+  //    one sets riskLevel and clears the others (selected = riskLevel === value;
+  //    "" = none selected). When high-risk data was indicated, the "high" option
+  //    carries a quiet "Suggested" mark — a hint, never a pre-selection; the
+  //    determination is the user's. Shared by full and quick mode. ──
+  const renderRiskAssessment = () => (
+    <div style={{ marginBottom: "24px" }}>
+      <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 16px", color: "#2C2418", maxWidth: "640px" }}>
+        Your assessment of the risk to data subjects' rights and freedoms determines the EU/UK notification obligations — this is a legal judgment for you to make.
+      </p>
+      <div style={{ display: "grid", gap: "4px" }}>
+        {RISK_OPTIONS.map((o) => {
+          const suggested = o.value === "high" && highRiskPresent;
+          const label = suggested ? (
+            <span style={{ display: "inline-flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
+              {o.label}
+              <span
+                className="mono"
+                style={{
+                  fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase",
+                  color: "#1B2A3F", opacity: 0.6, background: "#E8DDC4",
+                  padding: "2px 8px", borderRadius: "999px",
+                }}
+              >
+                Suggested
+              </span>
+            </span>
+          ) : o.label;
+          return (
+            <div key={o.value}>
+              {checkRow(riskLevel === o.value, label, () => setRiskLevel(o.value), { desc: o.desc })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   // ── Deadline obligations (the analysis; shown only on the review) ──
-  const renderObligations = () => (
+  const renderObligations = () => {
+    // pending = EU/UK obligations awaiting a risk assessment. While present, the
+    // consolidated pending card speaks and BOTH zero-state banners are silenced.
+    const hasPending = pending.length > 0;
+    const pendingJurisdictions = [...new Set(pending.map((p) => p.jurisdiction))];
+    // Reason-aware green banner: distinguish risk-assessment suppression from
+    // encryption suppression (and the mixed case where both are present).
+    const riskSuppressed = suppressed.some((s) => s.suppression_type === "risk_assessment");
+    const encryptionSuppressed = suppressed.some(
+      (s) => s.suppression_type === "breach_definition" || s.suppression_type === "unintelligibility_exemption"
+    );
+    const greenBanner =
+      riskSuppressed && !encryptionSuppressed
+        ? {
+            headline: "No notification obligations fire under the risk assessment provided.",
+            body: "The breach was assessed as not meeting the notification threshold; document the assessment and the reasoning.",
+          }
+        : encryptionSuppressed && !riskSuppressed
+        ? {
+            headline: "No notification obligations fire under the facts provided.",
+            body: "Based on the encryption fact reported, every obligation that would otherwise apply has been suppressed — either because the breach falls outside the statutory definition (U.S. states) or because individual notification is exempted by an unintelligibility-of-data provision (EU/UK GDPR Art. 34(3)(a)). Confirm encryption met each jurisdiction's standard before relying on this analysis.",
+          }
+        : {
+            headline: "No notification obligations fire under the facts provided.",
+            body: "Every obligation that would otherwise apply has been suppressed — by the encryption fact reported and/or the risk assessment. See the bases below.",
+          };
+    return (
     <>
-      {deadlines.length === 0 && suppressed.length > 0 && (
+      {hasPending && (
+        <div style={{ marginBottom: "16px", padding: "24px 28px", background: "#FBF5EE", border: "1px solid rgba(199,110,58,0.4)", borderLeft: "4px solid #C76E3A", borderRadius: "0 12px 12px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", color: "#C76E3A" }}>
+            <AlertTriangle size={16} />
+            <div className="section-mark" style={{ color: "#C76E3A", opacity: 1 }}>Action needed</div>
+          </div>
+          <div className="serif" style={{ fontSize: "24px", fontWeight: 400, lineHeight: 1.2, color: "#1B2A3F", marginBottom: "12px" }}>
+            Risk assessment required
+          </div>
+          <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 14px", color: "#2C2418" }}>
+            The EU/UK notification obligations can't be determined until you assess the risk to data subjects.
+          </p>
+          <div className="mono" style={{ fontSize: "12px", color: "#2C2418", opacity: 0.75, marginBottom: "18px" }}>
+            {pendingJurisdictions.join(" · ")}
+          </div>
+          <button className="btn-primary" onClick={handleCompleteRiskAssessment}>
+            Complete risk assessment <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
+
+      {!hasPending && deadlines.length === 0 && suppressed.length > 0 && (
         <div style={{ marginBottom: "16px", padding: "24px 28px", background: "#5A6E4A", color: "#FAF8F2", borderRadius: "12px" }}>
           <div className="section-mark" style={{ color: "#FAF8F2", opacity: 0.85, marginBottom: "8px" }}>Result</div>
           <div className="serif" style={{ fontSize: "24px", fontWeight: 400, lineHeight: 1.2 }}>
-            No notification obligations fire under the facts provided.
+            {greenBanner.headline}
           </div>
           <p style={{ fontSize: "14px", marginTop: "12px", opacity: 0.9, lineHeight: 1.6 }}>
-            Based on the encryption fact reported, every obligation that would otherwise apply has been suppressed — either because the breach falls outside the statutory definition (U.S. states) or because individual notification is exempted by an unintelligibility-of-data provision (EU/UK GDPR Art. 34(3)(a)). Confirm encryption met each jurisdiction's standard before relying on this analysis.
+            {greenBanner.body}
           </p>
         </div>
       )}
 
-      {deadlines.length === 0 && suppressed.length === 0 && (
+      {!hasPending && deadlines.length === 0 && suppressed.length === 0 && (
         <div style={{ marginBottom: "16px", padding: "24px 28px", background: "#1B2A3F", color: "#FAF8F2", borderRadius: "12px" }}>
           <div className="section-mark" style={{ color: "#FAF8F2", opacity: 0.85, marginBottom: "8px" }}>No deadlines computed</div>
           <p style={{ fontSize: "14px", marginTop: "8px", opacity: 0.9, lineHeight: 1.6 }}>
@@ -1039,7 +1181,7 @@ export default function BreachClock() {
       {suppressed.length > 0 && (
         <div style={{ marginTop: "40px" }}>
           <div className="section-mark" style={{ marginBottom: "16px" }}>
-            Notification likely not required — encryption suppression
+            Notification likely not required
           </div>
           <div style={{ display: "grid", gap: "12px" }}>
             {suppressed.map((s, i) => (
@@ -1049,7 +1191,11 @@ export default function BreachClock() {
                   {s.authority}
                 </div>
                 <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>
-                  {s.original_citation} → {s.suppression_citation} ({s.suppression_type === "breach_definition" ? "no breach as defined" : "notification exempted by unintelligibility"})
+                  {s.suppression_type === "risk_assessment" ? (
+                    `${s.suppression_citation} — notification threshold not met`
+                  ) : (
+                    <>{s.original_citation} → {s.suppression_citation} ({s.suppression_type === "breach_definition" ? "no breach as defined" : "notification exempted by unintelligibility"})</>
+                  )}
                 </div>
                 <div className="rule-text">{s.suppression_description}</div>
                 {s.source_url && (
@@ -1073,7 +1219,8 @@ export default function BreachClock() {
         </div>
       )}
     </>
-  );
+    );
+  };
 
   // ── Cross-check warning (field-level + re-shown on review) ──
   const crossCheckBanner = () =>
@@ -1117,6 +1264,12 @@ export default function BreachClock() {
           {renderQ1()}
           {crossCheckBanner()}
           {renderEncryption()}
+          {(jurisdictions.eu || jurisdictions.uk) && (
+            <div id="form-risk" style={{ scrollMarginTop: `${NAV_CLEARANCE}px` }}>
+              {renderRiskAssessment()}
+              {isNarrow && renderNote("risk")}
+            </div>
+          )}
         </section>
       ) : (
         <>
@@ -1295,6 +1448,17 @@ export default function BreachClock() {
               </>
             )}
           </section>
+
+          {/* 07. Risk Assessment — appears only with an EU/UK jurisdiction
+              selected; appended at the end so the six fixed sections keep their
+              numbers (Measures stays 06). */}
+          {(jurisdictions.eu || jurisdictions.uk) && (
+            <section id="form-risk" style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
+              {sectionHeading("07", "Risk Assessment")}
+              {renderRiskAssessment()}
+              {isNarrow && renderNote("risk")}
+            </section>
+          )}
         </>
       )}
 
@@ -1373,6 +1537,11 @@ export default function BreachClock() {
             )}
             {recapRow("Data types (Q1)", sensitivity.map((s) => SENSITIVITY_OPTIONS.find((o) => o.id === s)?.label).filter(Boolean).join(" · ") || "—")}
             {recapRow("Encryption", encryptionApplied ? "Applied — suppression evaluated" : "Not reported")}
+            {(jurisdictions.eu || jurisdictions.uk) &&
+              recapRow(
+                "Risk assessment",
+                riskLevel ? RISK_OPTIONS.find((o) => o.value === riskLevel)?.label : "Not assessed"
+              )}
           </div>
         </div>
 
@@ -1649,6 +1818,7 @@ export default function BreachClock() {
                     {renderNote("awareness")}
                     {renderNote("q1")}
                     {renderNote("encryption")}
+                    {(jurisdictions.eu || jurisdictions.uk) && renderNote("risk")}
                   </div>
                 </>
               )}
