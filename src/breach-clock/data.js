@@ -28,9 +28,14 @@ const JURISDICTIONS = [
         authority: "Lead Supervisory Authority",
         deadline_hours: 72,
         deadline_trigger: "awareness",
+        gating: { riskRequired: true },
         citation: "Art. 33 GDPR",
         source_url: "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e3185-1-1",
-        condition: "Unless the breach is unlikely to result in a risk to the rights and freedoms of natural persons.",
+        condition: "Required within 72 hours of awareness unless the breach is assessed as unlikely to result in a risk to the rights and freedoms of natural persons.",
+        riskSuppression: {
+          citation: "Art. 33(5) GDPR",
+          description: "Where the breach is assessed as unlikely to result in a risk to the rights and freedoms of natural persons, notification to the supervisory authority is not required. The controller must nonetheless document the breach, its effects, and the reasoning supporting that assessment (Art. 33(5)).",
+        },
       },
       {
         kind: "individual",
@@ -40,7 +45,11 @@ const JURISDICTIONS = [
         gating: { highRiskRequired: true },
         citation: "Art. 34 GDPR",
         source_url: "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e3220-1-1",
-        condition: "Required where the breach is likely to result in a high risk. Sensitivity indicators suggest this threshold may be met.",
+        condition: "Required without undue delay where the breach is assessed as likely to result in a high risk to the rights and freedoms of data subjects.",
+        riskSuppression: {
+          citation: "Art. 34 GDPR",
+          description: "Communication to data subjects is required only where the breach is likely to result in a high risk. Where the risk is assessed as lower than high, individual notification is not required; the assessment should be documented.",
+        },
         obligationExemptedByUnintelligibility: {
           applies: true,
           citation: "Art. 34(3)(a) GDPR",
@@ -60,9 +69,14 @@ const JURISDICTIONS = [
         authority: "Information Commissioner's Office (ICO)",
         deadline_hours: 72,
         deadline_trigger: "awareness",
+        gating: { riskRequired: true },
         citation: "Art. 33 UK GDPR",
         source_url: "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/security-data-protection/personal-data-breaches/",
-        condition: "Unless unlikely to result in a risk to the rights and freedoms of natural persons.",
+        condition: "Required within 72 hours of awareness unless the breach is assessed as unlikely to result in a risk to the rights and freedoms of natural persons.",
+        riskSuppression: {
+          citation: "Art. 33(5) UK GDPR",
+          description: "Where the breach is assessed as unlikely to result in a risk to the rights and freedoms of natural persons, notification to the supervisory authority is not required. The controller must nonetheless document the breach, its effects, and the reasoning supporting that assessment (Art. 33(5) UK GDPR).",
+        },
       },
       {
         kind: "individual",
@@ -72,7 +86,11 @@ const JURISDICTIONS = [
         gating: { highRiskRequired: true },
         citation: "Art. 34 UK GDPR",
         source_url: "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/security-data-protection/personal-data-breaches/",
-        condition: "Required where the breach is likely to result in a high risk to the rights and freedoms of data subjects.",
+        condition: "Required without undue delay where the breach is assessed as likely to result in a high risk to the rights and freedoms of data subjects.",
+        riskSuppression: {
+          citation: "Art. 34 UK GDPR",
+          description: "Communication to data subjects is required only where the breach is likely to result in a high risk. Where the risk is assessed as lower than high, individual notification is not required; the assessment should be documented.",
+        },
         obligationExemptedByUnintelligibility: {
           applies: true,
           citation: "Art. 34(3)(a) UK GDPR",

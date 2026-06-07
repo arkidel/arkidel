@@ -47,11 +47,11 @@ function isHighRisk(sensitivity) {
  * dependent obligation does not fire either.
  */
 function computeDeadlines(facts) {
-  const { awarenessDate, jurisdictions = {}, residentCounts = {}, sensitivity = [], encryptionApplied = false } = facts;
+  const { awarenessDate, jurisdictions = {}, residentCounts = {}, sensitivity = [], encryptionApplied = false, riskLevel } = facts;
   const deadlines = [];
   const suppressed = [];
-  if (!awarenessDate) return { deadlines, suppressed };
-  const highRiskPresent = isHighRisk(sensitivity);
+  const pending = [];
+  if (!awarenessDate) return { deadlines, suppressed, pending };
 
   // Two-pass build:
   //   Pass 1 — collect obligations that fire, computing deadlines that anchor
@@ -71,7 +71,50 @@ function computeDeadlines(facts) {
       : (typeof residentCountRaw === "number" ? residentCountRaw : parseInt(residentCountRaw, 10));
 
     jur.obligations.forEach((ob) => {
-      if (ob.gating?.highRiskRequired && !highRiskPresent) return;
+      // Risk-assessment gating — engages only for obligations that declare
+      // gating.riskRequired or gating.highRiskRequired (the GDPR authority and
+      // individual notifications). US obligations gate on residentThreshold and
+      // are left untouched here, which is what permits mixed states: a US state
+      // can fire while EU/UK sit pending awaiting a risk assessment.
+      //
+      // Threshold:
+      //   riskRequired     → met when riskLevel is "risk" or "high"
+      //   highRiskRequired → met when riskLevel is "high"
+      // Outcomes:
+      //   riskLevel unset       → pending (the assessment hasn't been made yet)
+      //   set but not met       → suppressed (risk_assessment mechanism)
+      //   met                   → fall through to encryption check + deadline push
+      // This runs BEFORE the encryption block, so a not-"high" individual
+      // obligation is risk-suppressed, never encryption-suppressed.
+      if (ob.gating?.riskRequired || ob.gating?.highRiskRequired) {
+        if (riskLevel === undefined || riskLevel === null || riskLevel === "") {
+          pending.push({
+            jurisdiction: jur.short,
+            authority: ob.authority,
+            citation: ob.citation,
+            source_url: ob.source_url,
+            statute: jur.statute,
+            _jurId: jur.id,
+          });
+          return;
+        }
+        const thresholdMet = ob.gating.highRiskRequired
+          ? riskLevel === "high"
+          : riskLevel === "risk" || riskLevel === "high";
+        if (!thresholdMet) {
+          suppressed.push({
+            jurisdiction: jur.short,
+            authority: ob.authority,
+            original_citation: ob.citation,
+            suppression_type: "risk_assessment",
+            suppression_citation: ob.riskSuppression.citation,
+            suppression_description: ob.riskSuppression.description,
+            source_url: ob.source_url,
+            statute: jur.statute,
+          });
+          return;
+        }
+      }
       if (ob.gating?.residentThreshold !== undefined) {
         const threshold = ob.gating.residentThreshold;
         const comparator = ob.gating.comparator || "gte";
@@ -207,7 +250,7 @@ function computeDeadlines(facts) {
     return rest;
   });
 
-  return { deadlines: cleaned, suppressed };
+  return { deadlines: cleaned, suppressed, pending };
 }
 
 
@@ -252,9 +295,9 @@ const expectCount = (n) => (deadlines) =>
     ? { pass: true }
     : { pass: false, message: `Expected ${n} deadlines; got ${deadlines.length}` };
 
-const expectAll = (...checks) => (deadlines, suppressed) => {
+const expectAll = (...checks) => (deadlines, suppressed, pending) => {
   const failures = checks
-    .map((c) => c(deadlines, suppressed))
+    .map((c) => c(deadlines, suppressed, pending))
     .filter((r) => !r.pass)
     .map((r) => r.message);
   return failures.length === 0
@@ -272,13 +315,26 @@ const expectDeadlineHoursFromAwareness = (jurisdiction, authoritySubstring, expe
     : { pass: false, message: `Expected ${expectedHours}h deadline; got ${actualHours.toFixed(2)}h` };
 };
 
-const expectSuppressed = (jurisdiction, authoritySubstring) => (deadlines, suppressed = []) => {
+const expectSuppressed = (jurisdiction, authoritySubstring, suppressionType) => (deadlines, suppressed = []) => {
   const found = suppressed.find(
     (s) => s.jurisdiction === jurisdiction && s.authority.toLowerCase().includes(authoritySubstring.toLowerCase())
   );
+  if (!found) {
+    return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" to be suppressed; got ${suppressed.length} suppressions: ${suppressed.map((s) => `${s.jurisdiction}/${s.authority}`).join(" | ")}` };
+  }
+  if (suppressionType !== undefined && found.suppression_type !== suppressionType) {
+    return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" suppression_type "${suppressionType}"; got "${found.suppression_type}"` };
+  }
+  return { pass: true };
+};
+
+const expectPending = (jurisdiction, authoritySubstring) => (deadlines, suppressed = [], pending = []) => {
+  const found = pending.find(
+    (p) => p.jurisdiction === jurisdiction && p.authority.toLowerCase().includes(authoritySubstring.toLowerCase())
+  );
   return found
     ? { pass: true }
-    : { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" to be suppressed; got ${suppressed.length} suppressions: ${suppressed.map((s) => `${s.jurisdiction}/${s.authority}`).join(" | ")}` };
+    : { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" to be pending; got ${pending.length} pending: ${pending.map((p) => `${p.jurisdiction}/${p.authority}`).join(" | ")}` };
 };
 
 const expectNotSuppressed = (jurisdiction, authoritySubstring) => (deadlines, suppressed = []) => {
@@ -300,53 +356,156 @@ const expectSuppressedCount = (n) => (deadlines, suppressed = []) =>
 // --- Test cases --------------------------------------------------------------
 
 const TEST_CASES = [
-  // === EU GDPR ===
+  // === EU GDPR — risk-assessment gating ===
+  // The Art. 33 SA notification gates on riskRequired ("risk" or "high"); the
+  // Art. 34 individual notification gates on highRiskRequired ("high" only).
+  // With no risk assessment provided, both sit pending (not fired, not
+  // suppressed) — the engine is waiting on the controller's assessment.
   {
-    name: "EU GDPR fires SA notification at 72h regardless of risk level",
+    name: "EU GDPR: no risk assessment → SA and Data Subjects both pending, no deadlines",
     category: "EU GDPR",
-    facts: { jurisdictions: { eu: true }, sensitivity: ["identifiers"] },
+    facts: { jurisdictions: { eu: true } },
     expect: expectAll(
-      expectCount(1),
-      expectFires("EU GDPR", "Supervisory Authority"),
-      expectDeadlineHoursFromAwareness("EU GDPR", "Supervisory Authority", 72)
+      expectCount(0),
+      expectPending("EU GDPR", "Supervisory Authority"),
+      expectPending("EU GDPR", "Data Subjects")
     ),
   },
   {
-    name: "EU GDPR Art. 34 individual notice fires when high-risk data present",
+    name: "EU GDPR: risk 'unlikely' → SA suppressed (Art. 33(5)); Data Subjects suppressed (high-risk threshold not met)",
     category: "EU GDPR",
-    facts: { jurisdictions: { eu: true }, sensitivity: ["health", "financial"] },
+    facts: { jurisdictions: { eu: true }, riskLevel: "unlikely" },
     expect: expectAll(
+      expectCount(0),
+      expectSuppressed("EU GDPR", "Supervisory Authority", "risk_assessment"),
+      expectSuppressed("EU GDPR", "Data Subjects", "risk_assessment")
+    ),
+  },
+  {
+    name: "EU GDPR: risk 'risk' → SA fires at 72h; Data Subjects suppressed (not high risk)",
+    category: "EU GDPR",
+    facts: { jurisdictions: { eu: true }, riskLevel: "risk" },
+    expect: expectAll(
+      expectCount(1),
       expectFires("EU GDPR", "Supervisory Authority"),
+      expectDeadlineHoursFromAwareness("EU GDPR", "Supervisory Authority", 72),
+      expectSuppressed("EU GDPR", "Data Subjects", "risk_assessment")
+    ),
+  },
+  {
+    name: "EU GDPR: risk 'high' → SA fires at 72h; Data Subjects fires (no fixed deadline)",
+    category: "EU GDPR",
+    facts: { jurisdictions: { eu: true }, riskLevel: "high" },
+    expect: expectAll(
+      expectCount(2),
+      expectFires("EU GDPR", "Supervisory Authority"),
+      expectDeadlineHoursFromAwareness("EU GDPR", "Supervisory Authority", 72),
       expectFires("EU GDPR", "Data Subjects")
     ),
   },
   {
-    name: "EU GDPR Art. 34 does not fire for low-risk data only",
+    name: "EU GDPR: risk 'high' + encryption → SA fires; Data Subjects suppressed by unintelligibility (Art. 34(3)(a))",
     category: "EU GDPR",
-    facts: { jurisdictions: { eu: true }, sensitivity: ["identifiers"] },
-    expect: expectDoesNotFire("EU GDPR", "Data Subjects"),
+    facts: { jurisdictions: { eu: true }, riskLevel: "high", encryptionApplied: true },
+    expect: expectAll(
+      expectFires("EU GDPR", "Supervisory Authority"),
+      expectDoesNotFire("EU GDPR", "Data Subjects"),
+      expectSuppressed("EU GDPR", "Data Subjects", "unintelligibility_exemption")
+    ),
+  },
+  {
+    name: "EU GDPR: risk 'risk' + encryption → SA fires; Data Subjects risk-suppressed (risk gating precedes encryption)",
+    category: "EU GDPR",
+    facts: { jurisdictions: { eu: true }, riskLevel: "risk", encryptionApplied: true },
+    expect: expectAll(
+      expectFires("EU GDPR", "Supervisory Authority"),
+      expectSuppressed("EU GDPR", "Data Subjects", "risk_assessment")
+    ),
   },
 
-  // === UK GDPR ===
+  // === UK GDPR — risk-assessment gating (mirrors EU) ===
   {
-    name: "UK GDPR fires ICO notification at 72h",
+    name: "UK GDPR: no risk assessment → ICO and Data Subjects both pending, no deadlines",
     category: "UK GDPR",
-    facts: { jurisdictions: { uk: true }, sensitivity: ["identifiers"] },
+    facts: { jurisdictions: { uk: true } },
+    expect: expectAll(
+      expectCount(0),
+      expectPending("UK GDPR", "ICO"),
+      expectPending("UK GDPR", "Data Subjects")
+    ),
+  },
+  {
+    name: "UK GDPR: risk 'unlikely' → ICO suppressed (Art. 33(5) UK GDPR); Data Subjects suppressed (not high risk)",
+    category: "UK GDPR",
+    facts: { jurisdictions: { uk: true }, riskLevel: "unlikely" },
+    expect: expectAll(
+      expectCount(0),
+      expectSuppressed("UK GDPR", "ICO", "risk_assessment"),
+      expectSuppressed("UK GDPR", "Data Subjects", "risk_assessment")
+    ),
+  },
+  {
+    name: "UK GDPR: risk 'risk' → ICO fires at 72h; Data Subjects suppressed (not high risk)",
+    category: "UK GDPR",
+    facts: { jurisdictions: { uk: true }, riskLevel: "risk" },
+    expect: expectAll(
+      expectCount(1),
+      expectFires("UK GDPR", "ICO"),
+      expectDeadlineHoursFromAwareness("UK GDPR", "ICO", 72),
+      expectSuppressed("UK GDPR", "Data Subjects", "risk_assessment")
+    ),
+  },
+  {
+    name: "UK GDPR: risk 'high' → ICO fires at 72h; Data Subjects fires (no fixed deadline)",
+    category: "UK GDPR",
+    facts: { jurisdictions: { uk: true }, riskLevel: "high" },
+    expect: expectAll(
+      expectCount(2),
+      expectFires("UK GDPR", "ICO"),
+      expectDeadlineHoursFromAwareness("UK GDPR", "ICO", 72),
+      expectFires("UK GDPR", "Data Subjects")
+    ),
+  },
+  {
+    name: "UK GDPR: risk 'high' + encryption → ICO fires; Data Subjects suppressed by unintelligibility (Art. 34(3)(a) UK GDPR)",
+    category: "UK GDPR",
+    facts: { jurisdictions: { uk: true }, riskLevel: "high", encryptionApplied: true },
     expect: expectAll(
       expectFires("UK GDPR", "ICO"),
-      expectDeadlineHoursFromAwareness("UK GDPR", "ICO", 72)
+      expectDoesNotFire("UK GDPR", "Data Subjects"),
+      expectSuppressed("UK GDPR", "Data Subjects", "unintelligibility_exemption")
+    ),
+  },
+  {
+    name: "UK GDPR: risk 'risk' + encryption → ICO fires; Data Subjects risk-suppressed (risk gating precedes encryption)",
+    category: "UK GDPR",
+    facts: { jurisdictions: { uk: true }, riskLevel: "risk", encryptionApplied: true },
+    expect: expectAll(
+      expectFires("UK GDPR", "ICO"),
+      expectSuppressed("UK GDPR", "Data Subjects", "risk_assessment")
     ),
   },
   {
     name: "EU and UK can fire independently and simultaneously",
     category: "Multi-jurisdiction",
-    facts: { jurisdictions: { eu: true, uk: true }, sensitivity: ["children"] },
+    facts: { jurisdictions: { eu: true, uk: true }, riskLevel: "high" },
     expect: expectAll(
       expectFires("EU GDPR", "Supervisory Authority"),
       expectFires("EU GDPR", "Data Subjects"),
       expectFires("UK GDPR", "ICO"),
       expectFires("UK GDPR", "Data Subjects"),
       expectCount(4)
+    ),
+  },
+  {
+    name: "Mixed state: CA fires while EU sits pending (no risk assessment yet)",
+    category: "Risk-assessment gating",
+    facts: { jurisdictions: { ca: true, eu: true }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectFires("California", "California Residents"),
+      expectPending("EU GDPR", "Supervisory Authority"),
+      expectPending("EU GDPR", "Data Subjects"),
+      expectCount(1)
     ),
   },
 
@@ -649,6 +808,7 @@ const TEST_CASES = [
       jurisdictions: { eu: true, uk: true, ca: true, tx: true, co: true, ma: true, ny: true, va: true },
       residentCounts: { ca: 5000, tx: 5000, co: 5000, ny: 5000, va: 5000 },
       sensitivity: ["health", "financial", "gov_id"],
+      riskLevel: "high",
     },
     expect: expectAll(
       expectFires("EU GDPR", "Supervisory Authority"),
@@ -753,6 +913,7 @@ const TEST_CASES = [
     facts: {
       jurisdictions: { eu: true },
       sensitivity: ["health"],
+      riskLevel: "high",
       encryptionApplied: true,
     },
     expect: expectAll(
@@ -768,6 +929,7 @@ const TEST_CASES = [
     facts: {
       jurisdictions: { uk: true },
       sensitivity: ["health"],
+      riskLevel: "high",
       encryptionApplied: true,
     },
     expect: expectAll(
@@ -872,6 +1034,7 @@ const TEST_CASES = [
     facts: {
       jurisdictions: { ma: true, eu: true },
       sensitivity: ["financial"],
+      riskLevel: "high",
       encryptionApplied: true,
     },
     expect: expectAll(
@@ -899,8 +1062,8 @@ function runTests() {
         ...t.facts,
         awarenessDate: t.facts._skipAwareness ? undefined : TEST_AWARENESS,
       };
-      const { deadlines, suppressed } = computeDeadlines(facts);
-      const result = t.expect(deadlines, suppressed);
+      const { deadlines, suppressed, pending } = computeDeadlines(facts);
+      const result = t.expect(deadlines, suppressed, pending);
       return {
         name: t.name,
         category: t.category,
