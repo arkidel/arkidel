@@ -1,7 +1,7 @@
 # Arkidel — Jurisdiction Intake Forms
 
 **Purpose.** This file documents every jurisdiction currently modeled in the
-Arkidel Breach Clock rules engine. Each form records the rules as encoded, the
+Arkidel Respond rules engine. Each form records the rules as encoded, the
 sources relied on, and any model-fit considerations that arose. These forms are
 the audit trail — when a law is amended, the existing form is the starting point
 for the revision.
@@ -84,7 +84,7 @@ source of truth for U.S. state rules going forward).
 - **Citation:** Art. 34 GDPR
 - **Source URL:** `https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e3220-1-1`
 - **Conditional / exception language:** Required where the breach is likely to
-  result in a high risk. The Breach Clock currently uses certain sensitivity
+  result in a high risk. Respond currently uses certain sensitivity
   categories (gov_id, financial, health, biometric, children, special, credentials)
   as a proxy for the high-risk threshold via the `highRiskRequired` gating flag.
 
@@ -105,7 +105,7 @@ source of truth for U.S. state rules going forward).
 
 ## 1.5 Article 34(3)(a) exemption — unintelligibility of data
 
-**Note on terminology.** The Breach Clock previously labelled this an
+**Note on terminology.** Respond previously labelled this an
 "encryption safe harbor." That language has been retired for EU/UK GDPR
 because it is misleading. GDPR does not contain a per-se rule that encrypted
 data is outside the breach definition or that encryption automatically
@@ -117,7 +117,7 @@ require notification anyway.
 The deeper question of whether encrypted data is "personal data" within the
 meaning of Art. 4(1) at all remains unsettled in EU case law (see *Breyer*,
 C-582/14; the *SRB* line of cases including *EDPS v SRB*, C-413/23 P, 2025).
-The Breach Clock does not take a position on that question; it treats the
+Respond does not take a position on that question; it treats the
 data as personal data and applies Art. 34(3)(a) as an obligation-level
 exemption.
 
@@ -153,7 +153,7 @@ make the Art. 33(1) risk assessment themselves.
 ## 1.6 Other Article 34 exemptions (not modelled)
 
 Article 34(3) actually contains **three exemptions**, not just the encryption
-one. The Breach Clock currently models only (a):
+one. Respond currently models only (a):
 
 - **(a) Encryption / unintelligibility** — modelled.
 - **(b) Subsequent measures eliminating the high risk** — the controller has
@@ -328,7 +328,7 @@ Data (Use and Access) Act 2025 factsheet at gov.uk.
 
 - **Art. 33(5) documentation requirement** — same as EU.
 - **Section 67A DPA 2018** — the ICO has additional powers and procedures for
-  PECR breaches, which are out of scope for the Breach Clock.
+  PECR breaches, which are out of scope for Respond.
 
 ## 2.9 Trigger nuances
 
@@ -437,8 +437,8 @@ UK in parallel).
 ## 3.6 Other obligations not modelled
 
 - **Notice content & format requirements** (§ 1798.82(d)) — five mandatory
-  headings, plain language, 10-point type minimum. Out of scope for the
-  Breach Clock.
+  headings, plain language, 10-point type minimum. Out of scope for
+  Respond.
 - **Identity-theft mitigation services** — for breaches involving SSN/driver's
   license/CA ID number, the entity must offer at least 12 months of free
   identity theft prevention and mitigation services. Not modelled.
@@ -457,7 +457,7 @@ UK in parallel).
 ## 3.7 Trigger nuances
 
 - **"Discovery or notification"**: this is the trigger for both the individual
-  and (cascading) AG deadlines. The Breach Clock's user input is awareness;
+  and (cascading) AG deadlines. Respond's user input is awareness;
   for CA purposes, "discovery" maps cleanly to that. "Notification" applies to
   data maintainers receiving notice from owners — out of scope.
 - **Law-enforcement delay**: explicit in the statute. Permits delay until
@@ -597,15 +597,15 @@ UK in parallel).
   resident of a state with its own breach-notification law, the entity may
   comply with that state's law in lieu of the Texas notice. Not modelled.
 - **Owner-licensee notification (§ 521.053(c))** — entities that maintain but
-  do not own the data must notify the owner immediately. Out of scope for the
-  Breach Clock (this is a B2B obligation, not a notification to individuals or
+  do not own the data must notify the owner immediately. Out of scope for
+  Respond (this is a B2B obligation, not a notification to individuals or
   regulators).
 
 ## 4.8 Trigger nuances
 
 - **"Determination" trigger** — § 521.053 uses "determines that the breach
-  occurred" rather than awareness. In practice these are similar moments; the
-  Breach Clock collects awareness as input.
+  occurred" rather than awareness. In practice these are similar moments;
+  Respond collects awareness as input.
 - **Different deadlines for AG vs. residents (30 vs. 60 days).** Already
   supported by the existing model (each obligation has its own deadline).
 
@@ -738,7 +738,7 @@ UK in parallel).
   time at which there is sufficient evidence to conclude that a security breach
   has taken place." Conceptually similar to GDPR awareness.
 - **Substitute notice provisions** — available where cost > $250,000 or affected
-  class > 250,000 residents. Out of scope for the Breach Clock.
+  class > 250,000 residents. Out of scope for Respond.
 
 ## 5.9 Model fit
 
@@ -750,7 +750,7 @@ UK in parallel).
 ## 5.10 Counsel notes
 
 - The "misuse" gate is meaningful: in close cases, an entity may conclude after
-  prompt investigation that misuse is not reasonably likely. The Breach Clock
+  prompt investigation that misuse is not reasonably likely. Respond
   does not model this — its outputs assume notification is required. Surface
   in a Counsel's Note.
 - Breach-definition exclusion for encrypted data was not modelled in earlier versions; now added.
@@ -872,7 +872,7 @@ the model to support an `authorities[]` array on a single obligation.
   identifying the relevant CRAs/agencies. Not deterministic from input facts;
   not modelled.
 - **201 CMR 17.00 WISP requirement** — proactive data-security obligation, not
-  breach-triggered. Out of scope for the Breach Clock.
+  breach-triggered. Out of scope for Respond.
 
 ## 6.7 Trigger nuances
 
@@ -889,7 +889,7 @@ the model to support an `authorities[]` array on a single obligation.
   controller could conclude "no breach of security under § 1 — no substantial
   risk" or "encrypted with uncompromised key, so outside § 1" yet still owe
   notification under the second trigger. Surfaced as an in-app counsel note
-  (id: `ma-dual-trigger-section-3b`). The Breach Clock's encryption-suppression
+  (id: `ma-dual-trigger-section-3b`). Respond's encryption-suppression
   flag operates at the § 1 level only, so the suppressed-obligation cards may
   understate exposure when the second trigger could fire.
 - **"Substantial risk of identity theft or fraud"** — part of the breach
@@ -1063,7 +1063,7 @@ multi-authority array.
   cybersecurity event. Surfaced as counsel note (id:
   `ny-dfs-sectoral-overlay`). The February 14, 2025 chapter amendment (S804)
   clarified that the § 899-aa(8)(a)(ii) DFS-notification carve-out applies
-  only to NYDFS-regulated entities; the Breach Clock follows that
+  only to NYDFS-regulated entities; Respond follows that
   interpretation. Not modelled as a discrete obligation because it depends on
   entity-type characteristics outside the breach facts.
 - **HIPAA / HITECH cross-link** under § 899-aa(9) — HIPAA-regulated entities
@@ -1083,8 +1083,8 @@ multi-authority array.
   content elements for the notice to residents. Out of scope for the Breach
   Clock.
 - **Maintainer-to-owner notification** under § 899-aa(3) — third-party data
-  processors must notify the data owner of any breach. Out of scope for the
-  Breach Clock (B2B obligation).
+  processors must notify the data owner of any breach. Out of scope for
+  Respond (B2B obligation).
 
 ## 7.8 Trigger nuances
 
@@ -1094,8 +1094,8 @@ multi-authority array.
   to determine scope or restore integrity — only law-enforcement delay
   remains under § 899-aa(4).
 - **Multi-authority parallel notification.** The AG portal serves as a
-  one-stop submission for AG / Department of State / State Police; the
-  Breach Clock represents these as three separate obligations to make the
+  one-stop submission for AG / Department of State / State Police;
+  Respond represents these as three separate obligations to make the
   obligations visible in the deadline display, but practitioners should
   understand that a single portal submission satisfies all three.
 - **Expanded definition of private information** (effective March 21, 2025)
