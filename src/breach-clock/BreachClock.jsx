@@ -1397,6 +1397,44 @@ export default function BreachClock() {
           background-position: right 13px center;
           background-size: 12px;
         }
+        /* ── Progressive enhancement: appearance:base-select where supported
+           (Chrome/Edge today; Safari/Firefox when they ship). Non-supporting
+           browsers skip this whole @supports block and keep the fallback above
+           — the styled closed box (appearance:none + custom chevron) plus the
+           native pane. Every value below is pulled from the form's existing
+           input / hover tokens so the pane reads as part of the same form. ── */
+        @supports (appearance: base-select) {
+          .form-select, .form-select::picker(select) { appearance: base-select; }
+          /* base-select draws its own caret via ::picker-icon, so drop the
+             fallback background chevron and restore the inputs' 13px right pad —
+             the closed box then shows exactly one caret, sitting where the
+             fallback chevron did. */
+          .form-select { background-image: none; padding-right: 13px; }
+          .form-select::picker-icon {
+            content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%232C2418' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            transition: transform 0.15s ease;
+          }
+          .form-select:open::picker-icon { transform: rotate(180deg); }
+          /* The pane: the inputs' white surface, the text inputs' hairline
+             border + 8px radius, the brand's popover shadow (as used by the
+             tooltip), and a small inner pad. */
+          .form-select::picker(select) {
+            background: #fff;
+            border: 1px solid rgba(27,42,63,0.25);
+            border-radius: 8px;
+            box-shadow: 0 6px 18px rgba(27,42,63,0.22);
+            padding: 4px;
+          }
+          .form-select option {
+            display: flex; align-items: center; gap: 8px;
+            font-family: 'Inter', sans-serif; font-size: 15px; color: #2C2418;
+            padding: 11px 13px; border-radius: 4px;
+          }
+          .form-select option:hover { background: rgba(27,42,63,0.05); }
+          .form-select option:checked { background: rgba(27,42,63,0.10); }
+          /* Quiet, on-brand check — Midnight, not the heavy native glyph. */
+          .form-select option::checkmark { color: #1B2A3F; font-size: 13px; }
+        }
         .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #C76E3A; }
         .form-input:disabled, .form-select:disabled, .form-textarea:disabled {
           opacity: 0.45; cursor: not-allowed; background: #FAF8F2;
