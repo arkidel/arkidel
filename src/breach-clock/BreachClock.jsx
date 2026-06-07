@@ -710,6 +710,23 @@ export default function BreachClock() {
     </aside>
   );
 
+  // Standalone rail note (not field-anchored): the "incident vs. breach"
+  // distinction, relocated from a full-width top-of-page banner into the rail.
+  // Body text is substantive legal copy — preserve it verbatim.
+  const renderIncidentVsBreachNote = () => (
+    <aside className="counsel-note">
+      <div style={{ display: "flex", alignItems: "center", gap: "9px", marginBottom: "10px", color: "#1B2A3F" }}>
+        <Info size={14} />
+        <span className="serif" style={{ fontSize: "16px", lineHeight: 1.3, color: "#1B2A3F" }}>
+          Incident vs. Breach
+        </span>
+      </div>
+      <p style={{ fontSize: "13px", lineHeight: 1.6, margin: 0 }}>
+        This form uses the term "incident" rather than "personal data breach" in most cases. While all security incidents are not personal data breaches, all personal data breaches are security incidents. The question of whether a security incident constitutes a personal data breach under applicable law is a legal question that must be determined by qualified privacy counsel.
+      </p>
+    </aside>
+  );
+
   // ── Operative field renderers (shared by full + quick mode) ──
   // On narrow screens each annotated field renders its note inline beneath
   // itself; on desktop the notes flow in the rail (see the shell below).
@@ -1318,6 +1335,7 @@ export default function BreachClock() {
         () => setQuickMode(!quickMode),
         { desc: "Check this box if you don't need a full incident report." }
       )}
+      <div style={{ marginTop: "20px" }}>{renderIncidentVsBreachNote()}</div>
     </div>
   );
 
@@ -1460,51 +1478,34 @@ export default function BreachClock() {
 
       <div style={{ maxWidth: "1180px", margin: "0 auto", padding: isNarrow ? "40px 20px" : "60px 40px" }}>
         {/* Header */}
-        <header style={{ marginBottom: "28px" }}>
-          <h1 className="serif" style={{ fontSize: "36px", margin: 0, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.15, color: "#1B2A3F" }}>
-            Respond
-          </h1>
+        <header style={{ marginBottom: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "16px" }}>
+            <h1
+              className="serif"
+              style={{
+                margin: 0,
+                fontWeight: 400,
+                fontSize: "18px",
+                background: "#1B2A3F",
+                color: "#E8DDC4",
+                padding: "7px 20px",
+                borderRadius: "999px",
+                letterSpacing: "0.01em",
+                display: "inline-block",
+              }}
+            >
+              Respond
+            </h1>
+            <span className="section-mark">Preliminary — Not Legal Advice</span>
+          </div>
           <p style={{ fontSize: "15px", marginTop: "12px", maxWidth: "640px", lineHeight: 1.6, fontWeight: 400, color: "#2C2418" }}>
-            A triage tool for calculating breach-notification deadlines from the moment of awareness. Currently covers {JURISDICTIONS.map((j) => j.short).join(", ").replace(/, ([^,]*)$/, ", and $1")}.
+            A triage tool that helps you record incident details, calculate deadlines, and produce an audit-ready memo
           </p>
         </header>
 
-        {/* On-ramp disclaimer */}
-        <div
-          role="note"
-          style={{
-            borderTop: "1px solid rgba(27,42,63,0.18)",
-            borderBottom: "1px solid rgba(27,42,63,0.18)",
-            padding: "14px 0",
-            marginBottom: "32px",
-            fontSize: "14px",
-            lineHeight: 1.55,
-            color: "#1B2A3F",
-            fontFamily: "'Inter', sans-serif",
-          }}
-        >
-          For preliminary triage purposes only. Respond does not provide legal advice. Results must be confirmed by qualified counsel.
-        </div>
-
-        {/* Form intro note — standout, not a field */}
-        <div
-          role="note"
-          style={{
-            background: "#E8DDC4",
-            border: "1px solid rgba(27,42,63,0.18)",
-            borderRadius: "12px",
-            padding: "20px 24px",
-            marginBottom: "36px",
-            display: "flex",
-            gap: "14px",
-            alignItems: "flex-start",
-          }}
-        >
-          <Info size={18} style={{ color: "#1B2A3F", flexShrink: 0, marginTop: "2px" }} />
-          <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.6, color: "#2C2418" }}>
-            This form uses the term "incident" rather than "personal data breach" in most cases. While all security incidents are not personal data breaches, all personal data breaches are security incidents. The question of whether a security incident constitutes a personal data breach under applicable law is a legal question that must be determined by qualified privacy counsel.
-          </p>
-        </div>
+        {/* Single hairline between the masthead and the form. The
+            "incident vs. breach" note moved into the rail (renderIncidentVsBreachNote). */}
+        <div style={{ borderTop: "1px solid rgba(27,42,63,0.18)", marginBottom: "36px" }} />
 
         {/* Two-column shell (collapses to one column on narrow screens).
             Nothing is pinned: the whole page scrolls as one. On desktop the
