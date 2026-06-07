@@ -122,7 +122,36 @@ information, (2) how & when discovered, (3) when the incident occurred,
   checklists, and the boolean toggles (quick mode, encryption, "not available")
   — uses one `.check-row`: a prominent always-visible square checkbox + a
   clickable, hover-lit, keyboard-operable (`role="checkbox"`, space/enter) row.
-  Dropdowns, text, textarea, and number inputs keep their plain styling.
+  Dropdowns, text, textarea, and number inputs keep their plain styling (for
+  the select, that is its closed box; its open pane is themed separately via
+  base-select — see the next bullet).
+- **Select dropdown theming (`appearance: base-select`, progressive
+  enhancement).** `.form-select` is built in **two deliberate layers — do not
+  collapse them**. (1) **Fallback baseline** — every browser's closed box, and
+  the complete control in browsers without base-select (stable Safari and
+  Firefox as of mid-2026): `appearance: none` with all three vendor prefixes
+  (`-webkit-`, `-moz-`, standard) plus the custom CSS chevron
+  (`background-image`). Do **not** remove this as redundant — it *is* the
+  fallback; the three prefixes have been present since `06cc7ec`, which resolved
+  the Safari double-caret concern. (2) **Enhancement**, wrapped in `@supports
+  (appearance: base-select)` so non-supporting browsers skip it entirely:
+  `appearance: base-select` on `.form-select` and `::picker(select)`, then
+  themed `::picker(select)` (the pane), `option` (with `:hover` + `:checked`),
+  `::checkmark`, and `::picker-icon`. Two details inside the `@supports` block
+  are **intentional, not bugs to "fix"**: the fallback `background-image`
+  chevron is removed and `padding-right` restored, with `::picker-icon` taking
+  over the caret — that is what prevents a *double* caret in base-select mode;
+  and there is **no** `<button>`/`<selectedcontent>` markup — a plain
+  `<select>`/`<option>` is used because no custom closed-state content is needed
+  (don't add it unless rich closed-state content is actually required). Every
+  pane/option value is pulled from existing form tokens (the input `#fff`
+  surface, the inputs' `rgba(27,42,63,0.25)` hairline, `8px` radius, the
+  tooltip-popover shadow, Inter, ink `#2C2418`, the `.check-row` hover tint
+  `0.05`, a stronger `:checked` `0.10`, a Midnight `#1B2A3F` checkmark) — keep
+  any future values token-derived, don't invent. Why progressive enhancement:
+  base-select is stable in Chrome/Edge, but Safari has it only in Technology
+  Preview and Firefox behind a flag (mid-2026), so supporting browsers get the
+  themed pane and the rest fall back to the native one.
 - **Submit-gated review (no live result).** Nothing computes on screen during
   entry. A Submit button validates the minimal operative inputs (awareness + ≥1
   jurisdiction + ≥1 Q1 type — the old `canAdvance` conditions) and, if any are
