@@ -461,20 +461,6 @@ export default function BreachClock() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const reset = () => {
-    setQuickMode(false);
-    setSubmitted(false);
-    setAttemptedSubmit(false);
-    setAwareness("");
-    setJurisdictions(Object.fromEntries(JURISDICTIONS.map((j) => [j.id, false])));
-    setResidentCounts(Object.fromEntries(JURISDICTIONS.filter((j) => j.residentField).map((j) => [j.id, ""])));
-    setSensitivity([]);
-    setEncryptionApplied(false);
-    setRecord({ ...EMPTY_RECORD, dataSubjectBlocks: [makeBlock()] });
-    setRiskLevel("");
-    setDownloadError("");
-  };
-
   // ─────────────────────────────────────────────────────────────────────────
   // Tests view (unchanged) — pure rules-engine pass/fail across engine.js cases.
   // ─────────────────────────────────────────────────────────────────────────
@@ -1206,10 +1192,7 @@ export default function BreachClock() {
           </ul>
         </div>
       )}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
-        <button className="btn-ghost" onClick={reset}>
-          <ArrowLeft size={14} /> Start over
-        </button>
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
         <button className="btn-primary" onClick={handleSubmit}>
           Submit &amp; compute deadlines <ArrowRight size={14} />
         </button>
@@ -1328,12 +1311,12 @@ export default function BreachClock() {
   //    post-submit Download/Edit controls live at the top of the review. ──
   const railControls = () => (
     <div>
-      <div className="section-mark" style={{ marginBottom: "10px", opacity: 0.6 }}>Mode</div>
+      <div className="section-mark" style={{ marginBottom: "10px", opacity: 0.6 }}>Breach Clock</div>
       {checkRow(
         quickMode,
-        "Just notification requirements & timing",
+        "Notification requirements and deadlines only",
         () => setQuickMode(!quickMode),
-        { desc: "Show only the fields that drive the deadline calculation. Entered data is kept either way." }
+        { desc: "Check this box if you don't need a full incident report." }
       )}
     </div>
   );
