@@ -1,8 +1,23 @@
 # Arkidel — Claude Code project instructions
 
 **Project:** Arkidel is a compliance suite for small businesses. The first
-module is the Breach Clock, a multi-jurisdiction breach notification deadline
-calculator. Future modules include a DPIA/PIA workflow.
+module is **Respond**, an incident-response workspace whose core is a
+multi-jurisdiction breach-notification deadline calculator. Future modules
+include a DPIA/PIA workflow.
+
+**Respond / Breach Clock naming.** "Respond" is the user-facing name of the
+module — one of the planned single-word module names (Assess, Map, Share,
+Respond). "Breach Clock" is **not** retired: it survives as the name of the
+deadlines-only **mode** within Respond (the original deadline calculator). The
+mode is invoked by the form's first-screen checkbox ("Notification requirements
+and deadlines only"): checked = deadlines-only output, unchecked (the default) =
+full incident report; the control label and the review badge both render
+"BREACH CLOCK". Because of this, the internal `breach-clock` routes, file names
+(`BreachClock.jsx`), and CSS classes now **match a live concept** — do not
+rename them to "respond"; there is no naming lag to clean up. In substantive
+jurisdictional-note copy (`data.js`, `intake-forms.md`) the product is referred
+to as "Respond" (the product, not the engine or the mode); the PDF disclaimer
+uses "Arkidel Respond" as a standalone document name.
 
 The audience is the small or solo privacy and compliance function inside
 startups and growing companies — typically a CIPP-certified privacy lead, an
@@ -89,17 +104,19 @@ information, (2) how & when discovered, (3) when the incident occurred,
   the engine. The engine wiring is unchanged: `computeDeadlines` /`isHighRisk`
   and the input shape are exactly as before; the wizard's state and handlers
   were relocated, not rebuilt.
-- **Two-column layout + anchored counsel-note rail.** The form fills a wide
-  main column (~3 parts); a right rail (~1 part) carries the parchment counsel
-  notes (awareness, Q1, encryption). Each note is anchored by a measured offset
-  (`useLayoutEffect` + `ResizeObserver`, recomputed on resize) to the top of the
-  field it annotates and flows with scroll — deliberately **not** sticky. The
-  mode/artifact controls ARE pinned (sticky) at the top of the rail. A hairline
-  vertical rule divides the columns. Below the `md` (768px) breakpoint the layout
-  collapses to one column: notes render inline beneath their fields, controls
-  stack at the top. (The anchoring is JS-measured because the two columns flow
-  independently — pure CSS can't align a rail note to an arbitrary main-column
-  field while also giving the controls a full-height sticky region.)
+- **Two-column layout + document-order counsel-note rail.** The form fills a
+  wide main column (~3 parts); a right rail (~1 part) carries the parchment
+  counsel notes (awareness, Q1, encryption). The notes **flow in normal document
+  order** — nothing pinned, nothing sticky, and no JS-measured anchoring (the
+  earlier `useLayoutEffect` + `ResizeObserver` positioning was removed). This is
+  by design: do not re-pin or re-anchor the rail. Each note is titled with a bare
+  **topical header naming its field** — "Awareness", "Data categories",
+  "Encryption" — in sentence case; the visible title deliberately carries **no**
+  "counsel" / "counsel's note" wording, which can imply legal advice is being
+  given (the internal `.counsel-note` class and `counselNotes` identifiers may
+  stay). A hairline vertical rule divides the columns. Below the `md` (768px)
+  breakpoint the layout collapses to one column: notes render inline beneath
+  their fields.
 - **Checkbox-row selection idiom.** Every selection control — jurisdictions, Q1,
   type-of-incident, the CIA data-security principles, the data-element
   checklists, and the boolean toggles (quick mode, encryption, "not available")
@@ -111,10 +128,11 @@ information, (2) how & when discovered, (3) when the incident occurred,
   jurisdiction + ≥1 Q1 type — the old `canAdvance` conditions) and, if any are
   missing, lists them instead of proceeding. On a valid submit the main column
   switches to a read-only **review**: an analysis-inputs recap plus the computed
-  deadline obligations. Only there do the rail controls become **Download memo**
-  + **Edit answers**; Edit returns to the form with all values intact. Quick
-  mode's review shows the operative answers + obligations only (no incident-
-  report recap, no further-considerations); full mode includes both.
+  deadline obligations. Only there do the **Download memo** and **Edit answers**
+  controls appear, at the top of the review content (nothing is pinned); Edit
+  returns to the form with all values intact. Quick mode's review shows the
+  operative answers + obligations only (no incident-report recap, no
+  further-considerations); full mode includes both.
 - **Quick mode** is a focusing view over one shared state, not a separate
   workflow — it shows only the operative fields; entered record data persists
   across toggles.
@@ -472,6 +490,14 @@ through untouched and are never auto-capitalized — e.g. the category name afte
 the em dash in "Data Subjects — {name}". The incident-report group titles are a
 single shared source (`buildIncidentReportSections`) consumed by both the PDF
 and the on-screen review, so fixing a literal once corrects both surfaces.
+
+**Two slots are deliberately NOT Title Case.** Rail labels render all-caps
+through the `.section-mark` idiom — "AWARENESS", the "Breach Clock" control
+label, the footer "ARKIDEL · RESPOND", and the deadlines-only review-state badge
+— which is intentional and consistent, not a casing slip. And checkbox-row
+option labels are sentence case ("Notification requirements and deadlines
+only"). Neither is a structural header, so the Title-Case rule above does not
+apply; do not "correct" them.
 
 ### Voice
 

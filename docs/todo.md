@@ -212,17 +212,29 @@ Neither item is `[substance]`.
 - No localStorage persistence for in-progress Breach Clock entries.
   Deliberate v1 decision per CLAUDE.md; revisit post-launch if user
   feedback supports it.
-- "Mode" control language — revisit the label/wording of the mode control
-  in the form's rail controls (the "Mode" toggle for quick mode). Exact
-  change TBD. Surfaced 2026-06-06.
-- Remove the "Start over" button from the first page of the form — the
-  control that resets the form back to the start. Confirm exact scope
-  (which view/state the button appears in) before removing it. Surfaced
-  2026-06-06.
 
 ---
 
 ## Completed
+
+### 2026-06-07
+
+- breach-clock form controls: close the two to-dos queued in `4cb226e`.
+  - "Mode" control wording — resolved by the Respond rename. The rail's "Mode"
+    label became "Breach Clock", and the quick-mode toggle became a checkbox in
+    the standard check-row idiom labelled "Notification requirements and
+    deadlines only", with helper text "Check this box if you don't need a full
+    incident report." Behavior unchanged (checked = deadlines-only output;
+    unchecked, the default, = full incident report). The leftover deadlines-only
+    review badge was relabelled "Quick mode" → "Breach Clock" so the control and
+    the review agree (`fa6da51`, `404ec4b`).
+  - "Start over" button — removed from the form's first screen along with its
+    sole `reset()` handler; the remaining Submit button is now right-aligned. It
+    was a pure form reset, wired nowhere else (`fa6da51`).
+  Verified in the dev preview: new control renders (label + checkbox + helper),
+  default unchecked, no "Start over" in the DOM, the deadlines-only path works
+  end to end, no console errors. No `data.js` / `engine.js` / `intake-forms.md`
+  change. Files: `src/breach-clock/BreachClock.jsx`.
 
 ### 2026-05-30
 
