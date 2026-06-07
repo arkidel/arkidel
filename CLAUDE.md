@@ -116,7 +116,20 @@ information, (2) how & when discovered, (3) when the incident occurred,
   given (the internal `.counsel-note` class and `counselNotes` identifiers may
   stay). A hairline vertical rule divides the columns. Below the `md` (768px)
   breakpoint the layout collapses to one column: notes render inline beneath
-  their fields.
+  their fields. **One rail note is not field-anchored:** the "Incident vs.
+  Breach" note (`renderIncidentVsBreachNote`) is rendered inside `railControls`,
+  directly below the "Breach Clock" deadlines-only toggle and above the
+  field-anchored notes — so on narrow screens it stays with the controls rather
+  than flowing inline. It was relocated there from a former full-width
+  top-of-page parchment banner; its body is substantive legal copy (the
+  incident-vs-personal-data-breach distinction) and must be preserved verbatim.
+  Its header is deliberately **Title Case** ("Incident vs. Breach"), unlike the
+  sentence-case field headers above — it names a legal distinction, not a field,
+  so the sentence-case rail-title convention does not apply; do not "correct" it.
+  The masthead above the form ends in a **single hairline rule** (the former
+  on-ramp disclaimer sentence — "For preliminary triage purposes only…" — was
+  removed; the "PRELIMINARY — NOT LEGAL ADVICE" eyebrow on the lozenge row and
+  the global footer disclaimer in `Layout.jsx` now carry that function).
 - **Checkbox-row selection idiom.** Every selection control — jurisdictions, Q1,
   type-of-incident, the CIA data-security principles, the data-element
   checklists, and the boolean toggles (quick mode, encryption, "not available")
@@ -388,6 +401,13 @@ categorization stripe runs straight full-height, while the top-right and
 bottom-right corners round to 12px. (This was "Option B" in the rounding
 review; the symmetric alternative, where the stripe curves with the corners,
 was "Option A" and was not chosen.)
+
+**Pill (999px) — one deliberate exception.** The Respond module masthead's `<h1>`
+lozenge in `BreachClock.jsx` uses a fully-rounded `border-radius: 999px` pill
+(Midnight chip, Parchment serif text). This is a new radius value, distinct from
+the 8px button/input and 12px card tokens above, and is intentional: a compact
+brand chip rather than a boxed control or surface. Confined to that lozenge — do
+not generalize the 999px pill to buttons, inputs, or cards.
 
 ### Landing page composition
 
