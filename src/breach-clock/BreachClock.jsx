@@ -718,7 +718,7 @@ export default function BreachClock() {
   // ─────────────────────────────────────────────────────────────────────────
   const labelRow = (text, tooltip, badge) => (
     <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "8px" }}>
-      <span className="section-mark">{text}</span>
+      <span className="field-mark">{text}</span>
       {tooltip && <InfoTip text={tooltip} />}
       {badge && (
         <span className="mono" style={{ fontSize: "10px", letterSpacing: "0.08em", color: "#C76E3A", textTransform: "uppercase" }}>
@@ -920,7 +920,7 @@ export default function BreachClock() {
                 const thresholdObligations = jur.obligations.filter((o) => o.gating?.residentThreshold !== undefined);
                 return (
                   <div key={jur.id}>
-                    <label className="section-mark" style={{ display: "block", marginBottom: "8px" }}>{jur.residentField.stateLabel}</label>
+                    <label className="field-mark" style={{ display: "block", marginBottom: "8px" }}>{jur.residentField.stateLabel}</label>
                     <input
                       type="number"
                       className="form-input"
@@ -1489,7 +1489,7 @@ export default function BreachClock() {
     const reportSections = quickMode ? [] : buildIncidentReportSections();
     const recapRow = (label, value) => (
       <React.Fragment key={label}>
-        <div className="section-mark" style={{ paddingTop: "2px" }}>{label}</div>
+        <div className="field-mark" style={{ paddingTop: "2px" }}>{label}</div>
         <div style={{ fontSize: "15px", lineHeight: 1.55 }}>{value}</div>
       </React.Fragment>
     );
@@ -1745,6 +1745,13 @@ export default function BreachClock() {
         .section-mark {
           font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500;
           letter-spacing: 0.18em; text-transform: uppercase; color: #1B2A3F; opacity: 0.7;
+        }
+        /* Firmer small-caps for functional labels (form fields + the review's
+           Analysis-inputs recap rows). Distinct from the quieter .section-mark,
+           which stays on decorative marks and group headers. */
+        .field-mark {
+          font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+          letter-spacing: 0.12em; text-transform: uppercase; color: #1B2A3F; opacity: 0.85;
         }
       `}</style>
 
