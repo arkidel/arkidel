@@ -215,6 +215,30 @@ Neither item is `[substance]`.
 
 ---
 
+## Risk-assessment follow-ups (queued 2026-06-08)
+
+Surfaced after the EU/UK risk-assessment feature shipped (`be2f252` engine/data,
+`cdcd93d` UI). None block launch.
+
+- Special-category data taxonomy reconciliation. Reconcile the Q1 `sensitivity`
+  taxonomy with the Section-5 data-element repeater: resolve the overlap where
+  health / biometric / genetic data sit beside a separate "Special category"
+  option, account for `children` (which is not an Art. 9 special category), and
+  review the category descriptions for accuracy. This changes the categories the
+  engine and UI reason about, so it is a design exercise **plus** formal sign-off
+  through the intake process before any `data.js` touch. `[substance]`
+- Review-page artifact controls in a rail. Move **Download memo** / **Edit
+  answers** off the top of the review content into a right rail on the review
+  page. There is no rail on the review today — the entry-form rail renders only
+  pre-submit — so this likely means a new right column; decide whether it is
+  pinned/sticky or flows with the page.
+- "SUGGESTED" tag treatment. Revisit the non-selecting hint on the risk
+  section's "high" option — placement, wording, visual weight, and colour (today
+  a parchment mono chip). Purely presentational; the hint logic
+  (`isHighRisk(sensitivity)`) is settled.
+
+---
+
 ## Completed
 
 ### 2026-06-07
