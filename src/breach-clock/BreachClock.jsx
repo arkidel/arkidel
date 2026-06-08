@@ -78,7 +78,7 @@ const SENSITIVITY_OPTIONS = [
   { id: "health", label: "Health or medical information" },
   { id: "biometric", label: "Biometric or genetic data" },
   { id: "children", label: "Data concerning children" },
-  { id: "special", label: "Special category (race, religion, sexuality, politics, union)" },
+  { id: "special", label: "Other sensitive / special-category data", desc: "e.g., racial or ethnic origin, political opinions, religious or philosophical beliefs, trade-union membership, sex life or sexual orientation" },
   { id: "credentials", label: "Authentication credentials (passwords, tokens)" },
   { id: "location", label: "Precise geolocation" },
   { id: "communications", label: "Private communications content" },
@@ -142,7 +142,7 @@ const DATA_ELEMENTS = [
   { id: "photo", label: "Photo(s)" },
   { id: "fingerprint", label: "Fingerprint", tag: "biometric" },
   { id: "health", label: "Health or medical information", tag: "health" },
-  { id: "special", label: "Sensitive/Special-category data (e.g., information about health, race, ethnicity, religion, sexual orientation or sexual life, political or philosophical opinions, trade union membership)", tag: "special" },
+  { id: "special", label: "Other sensitive / special-category data", desc: "e.g., racial or ethnic origin, political opinions, religious or philosophical beliefs, trade-union membership, sex life or sexual orientation", tag: "special" },
 ];
 
 // Q1 category label for each cross-check tag — used in the warning text.
@@ -150,7 +150,7 @@ const TAG_TO_Q1_LABEL = {
   gov_id: "Government IDs",
   financial: "Financial",
   health: "Health or medical information",
-  special: "Special category",
+  special: "Other sensitive / special-category data",
   credentials: "Authentication credentials",
   biometric: "Biometric or genetic data",
 };
