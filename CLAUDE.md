@@ -59,22 +59,53 @@ post-SB-446 verification") rather than generic messages.
 ### `src/breach-clock/engine.js` — rules engine
 
 Pure JavaScript, no React. Contains `computeDeadlines(facts)`, `isHighRisk`,
-`runTests`, and 51 test cases as of the latest coverage addition. After
-any engine change, the test harness must pass — check the in-app Tests view
-(footer link in the rendered component) or run programmatically.
+`runTests`, and 60 test cases as of the risk-assessment addition (every EU/UK
+case now carries an explicit `riskLevel`). After any engine change, the test
+harness must pass — check the in-app Tests view (footer link in the rendered
+component) or run programmatically.
 
 The engine is the correctness instrument for the substantive layer. If a
 test fails after a `data.js` edit, the substantive change is wrong, not the
 test.
 
+**Risk assessment gates the EU/UK obligations (live as of `cdcd93d`).** Risk is
+an explicit *user* input — `riskLevel`, one of `"unlikely" | "risk" | "high"`,
+default unset (`""`) — **not** inferred from the data categories.
+`isHighRisk(sensitivity)` **no longer gates anything**; it survives only to drive
+the UI's non-binding "Suggested" hint on the high-risk option (see the UI
+section). In `data.js`, the EU/UK Art. 33 authority notification declares
+`gating.riskRequired` and the Art. 34 individual notification declares
+`gating.highRiskRequired` (now satisfied by `riskLevel === "high"`), each paired
+with a `riskSuppression` field. `computeDeadlines` evaluates risk gating
+**before** the encryption check and returns a **third bucket, `pending`**,
+alongside `deadlines` and `suppressed`. The three states, per `riskLevel`:
+
+- **unset (`""`)** → both GDPR obligations are **pending** — neither fired nor
+  suppressed; the engine is waiting on the controller's assessment.
+- **`"unlikely"`** → Art. 33 suppressed (basis Art. 33(5)) and Art. 34 suppressed
+  (high-risk threshold not met), both via the new `suppression_type:
+  "risk_assessment"`.
+- **`"risk"`** → Art. 33 fires (72h from awareness); Art. 34 risk-suppressed.
+- **`"high"`** → both fire (Art. 34 has no fixed-hour deadline). Because risk
+  gating runs first, a not-`"high"` Art. 34 is risk-suppressed, never
+  encryption-suppressed; an Art. 34 that *does* fire is still subject to the
+  Art. 34(3)(a) unintelligibility (encryption) exemption.
+
+US-state obligations gate on `residentThreshold` only and are untouched by risk
+— which is exactly what makes mixed results correct (next paragraph).
+
 Encryption is a *global* incident fact, not a per-jurisdiction one. When
-encryption is reported, the engine evaluates suppression across every
-selected jurisdiction at once, so on a single results page you get either
-firing deadline cards or encryption-suppressed cards — never both together.
-(With encryption applied, all modeled jurisdictions' obligations are
-suppressed; without it, none are.) This is a structural property worth
-knowing when working on the results-page layout: do not design for a mixed
-state that the engine cannot produce.
+encryption is reported, the engine evaluates suppression across every selected
+jurisdiction at once, so **for the encryption switch alone** a results page is
+uniform: with encryption applied, all modeled jurisdictions' obligations are
+suppressed; without it, none are. That uniformity is a property of the
+encryption switch only — **do not generalize it.** Risk assessment deliberately
+*does* produce mixed results: a US state can fire while the EU/UK obligations sit
+pending (no assessment yet) or risk-suppressed, all on the same results page. The
+earlier "do not design for a mixed state the engine cannot produce" guidance was
+the encryption-switch carve-out only; the results-page layout must now handle
+mixed firing / pending / suppressed cards together (the pending state surfaces as
+one consolidated card — see the UI section).
 
 ### `src/breach-clock/BreachClock.jsx` — React UI
 
@@ -106,12 +137,13 @@ information, (2) how & when discovered, (3) when the incident occurred,
   were relocated, not rebuilt.
 - **Two-column layout + document-order counsel-note rail.** The form fills a
   wide main column (~3 parts); a right rail (~1 part) carries the parchment
-  counsel notes (awareness, Q1, encryption). The notes **flow in normal document
+  counsel notes (awareness, Q1, encryption, and — when an EU/UK jurisdiction is
+  selected — risk assessment). The notes **flow in normal document
   order** — nothing pinned, nothing sticky, and no JS-measured anchoring (the
   earlier `useLayoutEffect` + `ResizeObserver` positioning was removed). This is
   by design: do not re-pin or re-anchor the rail. Each note is titled with a bare
   **topical header naming its field** — "Awareness", "Data categories",
-  "Encryption" — in sentence case; the visible title deliberately carries **no**
+  "Encryption", "Risk assessment" — in sentence case; the visible title deliberately carries **no**
   "counsel" / "counsel's note" wording, which can imply legal advice is being
   given (the internal `.counsel-note` class and `counselNotes` identifiers may
   stay). A hairline vertical rule divides the columns. Below the `md` (768px)
@@ -179,10 +211,37 @@ information, (2) how & when discovered, (3) when the incident occurred,
   workflow — it shows only the operative fields; entered record data persists
   across toggles.
 - **Q1 retains all ten sensitivity options with their exact IDs.** `location`
-  and `communications` are kept (they are not high-risk, so the engine ignores
-  them) rather than dropped — removing user-facing data categories would be a
-  substantive reduction, and the IDs must match what the engine treats as
-  high-risk.
+  and `communications` are kept (they are not high-risk, so `isHighRisk`
+  classifies them out and they never raise the "Suggested" hint) rather than
+  dropped — removing user-facing data categories would be a substantive
+  reduction, and the IDs must match the set `isHighRisk` treats as high-risk.
+  Note Q1/`sensitivity` no longer feeds any deadline gating directly — the EU/UK
+  obligations gate on the explicit `riskLevel` input, not on the categories (see
+  the engine section); `sensitivity` drives only the UI hint and the
+  element→Q1 cross-check.
+- **EU/UK risk-assessment section (conditional, `renderRiskAssessment`).** A "07
+  Risk Assessment" section renders **only when an EU/UK jurisdiction is
+  selected** — appended at the end in full mode (after Measures, so the six fixed
+  sections keep their numbers; Measures stays 06) and placed right after the
+  encryption question in quick mode. Both anchor `#form-risk`. The control is
+  three **mutually-exclusive `checkRow`s used as radios** (there is no separate
+  radio idiom in this form): clicking one sets `riskLevel` and clears the others;
+  selected = `riskLevel === value`; `""` = none selected, and an unset assessment
+  deliberately does **not** block Submit (it surfaces post-submit as the pending
+  card). When `isHighRisk(sensitivity)` is true, the "high" option carries a
+  quiet, non-selecting "SUGGESTED" mono tag (parchment chip) and the rail/inline
+  risk note names the triggering categories — a hint only; the determination is
+  the user's. The conditional section is wired into the left section index and
+  the IntersectionObserver via a **derived `indexSections`** (the six fixed
+  `FORM_SECTIONS` plus the "Risk" entry when eu/uk is selected); the positional
+  `FORM_SECTIONS[n].id` references on the fixed sections are left untouched.
+  Result side: the `pending` bucket renders as **one consolidated "Risk
+  assessment required" action card** at the top of the obligations (not one per
+  obligation), with a "Complete risk assessment" button that returns to the form
+  and scrolls to `#form-risk`; while pending, both zero-state banners are
+  suppressed. The green "no obligations fire" banner and the suppressed-card
+  copy are reason-aware (risk-assessment vs. encryption vs. mixed), and the
+  review's Analysis-inputs recap gains a "Risk assessment" row.
 - **Dynamic, user-named data-subject categories.** Section 5's "categories of
   data subjects" is a repeater of removable blocks (start with one): each block
   is a user-entered name + approximate count + a **shared** 14-element checklist
