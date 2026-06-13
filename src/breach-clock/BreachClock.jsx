@@ -28,7 +28,7 @@
 // =============================================================================
 
 import React, { useState, useEffect } from "react";
-import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, X } from "lucide-react";
+import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, X, ChevronDown } from "lucide-react";
 import { JURISDICTIONS } from "./data.js";
 import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine.js";
 import { generateMemoPdf } from "./memo-pdf.js";
@@ -60,6 +60,11 @@ const FORM_SECTIONS = [
   { id: "form-data", label: "Data" }, // Data Affected
   { id: "form-measures", label: "Measures" }, // Measures
 ];
+
+// Every collapsible section id, including the conditional Risk section (which
+// only renders for an EU/UK jurisdiction). Drives Expand all / Collapse all;
+// setting form-risk open while it isn't rendered is harmless.
+const ALL_SECTION_IDS = [...FORM_SECTIONS.map((s) => s.id), "form-risk"];
 
 // The global top nav (src/components/Layout.jsx) is position:static — it scrolls
 // away with the page rather than staying fixed — so the sticky index only needs
@@ -280,6 +285,16 @@ export default function BreachClock() {
   const [isNarrow, setIsNarrow] = useState(false);
   const [isWide, setIsWide] = useState(false);
   const [activeSection, setActiveSection] = useState(FORM_SECTIONS[0].id);
+  // Per-section collapse state. On load only General is expanded; every other
+  // section (including the conditional Risk section) is collapsed. Lives in
+  // component state, so it survives the form → review → "Edit answers" round
+  // trip — returning to edit does not reset it.
+  const [openSections, setOpenSections] = useState({ [FORM_SECTIONS[0].id]: true });
+  // A section id to scroll to once the next render has committed (so the target
+  // is scrolled in its final, post-expand position). Driven through state + an
+  // effect rather than requestAnimationFrame, which the browser throttles when
+  // the tab isn't visible.
+  const [pendingScroll, setPendingScroll] = useState(null);
 
   // ── Operative state (feeds the engine) — unchanged from the wizard ──
   const [awareness, setAwareness] = useState("");
@@ -319,6 +334,16 @@ export default function BreachClock() {
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
   }, []);
+
+  // Perform a pending section scroll after the commit that expanded it, so the
+  // target is in its final laid-out position (a synchronous scroll in the click
+  // handler would aim at the pre-expand position and overshoot on a tall page).
+  useEffect(() => {
+    if (!pendingScroll) return;
+    const el = document.getElementById(pendingScroll);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    setPendingScroll(null);
+  }, [pendingScroll]);
 
   // Highlight the section currently in view. A single read-only
   // IntersectionObserver watches the six form-section anchors and sets the
@@ -563,7 +588,21 @@ export default function BreachClock() {
 
   const handleSubmit = () => {
     setAttemptedSubmit(true);
-    if (!canCompute) return;
+    if (!canCompute) {
+      // A collapsed required field must never be a dead-end error: expand the
+      // sections that hold a missing required input and scroll to the first
+      // offending one (awareness lives in Discovery; jurisdiction + data type in
+      // Data — Discovery precedes Data in document order). The validation
+      // message itself renders below. No-ops harmlessly in quick mode, where
+      // these section ids aren't in the DOM.
+      const toOpen = {};
+      if (!hasAwareness) toOpen["form-discovery"] = true;
+      if (!hasJurisdiction || !hasSensitivity) toOpen["form-data"] = true;
+      setOpenSections((s) => ({ ...s, ...toOpen }));
+      const firstId = !hasAwareness ? "form-discovery" : "form-data";
+      scrollToSection(firstId);
+      return;
+    }
     setSubmitted(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -794,16 +833,131 @@ export default function BreachClock() {
     </div>
   );
 
-  const sectionHeading = (num, title, tooltip) => (
-    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "28px" }}>
-      <span className="mono" style={{ fontSize: "13px", color: "#1B2A3F", opacity: 0.55 }}>{num}</span>
-      <h2 className="serif" style={{ fontSize: "24px", fontWeight: 400, margin: 0, color: "#1B2A3F", letterSpacing: "-0.01em" }}>
-        {title}
-      </h2>
-      {tooltip && <InfoTip text={tooltip} size={15} />}
-      <div style={{ flex: 1, height: "1px", background: "rgba(27,42,63,0.18)" }} />
-    </div>
-  );
+  // ── Collapsible sections ──────────────────────────────────────────────────
+  const isSectionOpen = (id) => !!openSections[id];
+  const toggleSection = (id) => setOpenSections((s) => ({ ...s, [id]: !s[id] }));
+  const expandAll = () => setOpenSections(Object.fromEntries(ALL_SECTION_IDS.map((id) => [id, true])));
+  const collapseAll = () => setOpenSections({});
+  // Request a scroll to a section; the effect above performs it after the next
+  // commit (so the target sits in its final, post-expand position).
+  const scrollToSection = (id) => setPendingScroll(id);
+  // Expand a section (if collapsed) and scroll its header into view. Shared by
+  // the left index and the post-submit validation jump.
+  const openAndScrollTo = (id) => {
+    setOpenSections((s) => ({ ...s, [id]: true }));
+    scrollToSection(id);
+  };
+
+  // Header is the toggle. A div role="button" (not a real <button>) so the
+  // section-03 InfoTip — itself a <button> — can nest without invalid markup;
+  // InfoTip stops click propagation, and the keydown guard (target ===
+  // currentTarget) keeps Enter/Space on the InfoTip from also toggling.
+  const headerKeyDown = (id) => (e) => {
+    if ((e.key === " " || e.key === "Enter") && e.target === e.currentTarget) {
+      e.preventDefault();
+      toggleSection(id);
+    }
+  };
+
+  // Does a section hold any user input? Drives the quiet completion indicator so
+  // a collapsed header never hides that a (required) section is still blank. The
+  // three required operative inputs map here: awareness → Discovery; jurisdiction
+  // + data type → Data. Empty is neutral (not an error) before submit.
+  const sectionHasInput = (id) => {
+    switch (id) {
+      case "form-general":
+        return !!(record.incidentTitle || record.sourceOfIncident || record.incidentLocation ||
+          record.departmentReporting || record.systemsImpacted || record.backups ||
+          record.dataPrinciples.length || record.incidentTypes.length);
+      case "form-discovery":
+        return !!(record.howDiscovered || awareness || record.learnedFromThirdParty);
+      case "form-timing":
+        return !!(record.occurrenceNotAvailable || record.occurrenceDate ||
+          record.occurrenceTime || record.occurrenceDetail);
+      case "form-summary":
+        return !!record.incidentSummary;
+      case "form-data":
+        return anyJurisdiction || sensitivity.length > 0 || encryptionApplied ||
+          record.dataSubjectBlocks.some((b) => b.name || b.count || b.elements.length || b.others.some((o) => o.trim()));
+      case "form-measures":
+        return !!(record.measuresTaken || record.measuresProposed ||
+          record.measuresTakenNotAvailable || record.measuresProposedNotAvailable);
+      case "form-risk":
+        return !!riskLevel;
+      default:
+        return false;
+    }
+  };
+
+  // Quiet completion indicator: a small Moss check when the section has input, a
+  // neutral hollow dot when empty. Never Ember/red for empty before submit.
+  const completionDot = (filled) =>
+    filled ? (
+      <span
+        aria-label="Section has input"
+        title="This section has input"
+        style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: "18px", height: "18px", borderRadius: "50%", background: "#5A6E4A",
+          color: "#FAF8F2", flexShrink: 0,
+        }}
+      >
+        <Check size={11} strokeWidth={3} />
+      </span>
+    ) : (
+      <span
+        aria-label="Section empty"
+        title="No input yet"
+        style={{
+          display: "inline-block", width: "10px", height: "10px", borderRadius: "50%",
+          border: "1.5px solid rgba(27,42,63,0.28)", flexShrink: 0,
+        }}
+      />
+    );
+
+  // A collapsible form section: an on-brand clickable header (eyebrow number +
+  // serif heading, the prior sectionHeading treatment) carrying a completion dot
+  // and a chevron, over a body that mounts only when open. The body wrapper is
+  // always present so aria-controls resolves; its children mount on open (so
+  // collapsed content is out of layout and the tab order) and fade in.
+  const collapsibleSection = (id, num, title, tooltip, body) => {
+    const open = isSectionOpen(id);
+    const bodyId = `${id}-body`;
+    return (
+      <section id={id} style={{ marginBottom: open ? "48px" : "12px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          className="section-toggle"
+          onClick={() => toggleSection(id)}
+          onKeyDown={headerKeyDown(id)}
+          style={{ marginBottom: open ? "20px" : 0 }}
+        >
+          <span className="mono" style={{ fontSize: "13px", color: "#1B2A3F", opacity: 0.55 }}>{num}</span>
+          <h2 className="serif" style={{ fontSize: "24px", fontWeight: 400, margin: 0, color: "#1B2A3F", letterSpacing: "-0.01em" }}>
+            {title}
+          </h2>
+          {tooltip && <InfoTip text={tooltip} size={15} />}
+          <div style={{ flex: 1, height: "1px", background: "rgba(27,42,63,0.18)" }} />
+          {completionDot(sectionHasInput(id))}
+          <ChevronDown
+            size={18}
+            aria-hidden="true"
+            style={{
+              color: "#1B2A3F", opacity: 0.6, flexShrink: 0,
+              transition: "transform 0.2s ease",
+              transform: open ? "rotate(0deg)" : "rotate(-90deg)",
+            }}
+          />
+        </div>
+        <div id={bodyId} aria-hidden={!open}>
+          {open && <div className="section-body-anim">{body}</div>}
+        </div>
+      </section>
+    );
+  };
 
   // Slim section index for the left page gutter. Plain CSS sticky (no
   // JS-measured positioning); each item is a real anchor to its section id.
@@ -829,6 +983,7 @@ export default function BreachClock() {
               <a
                 href={`#${s.id}`}
                 aria-current={active ? "true" : undefined}
+                onClick={(e) => { e.preventDefault(); openAndScrollTo(s.id); }}
                 style={{
                   display: "block", textDecoration: "none", fontFamily: "'Inter', sans-serif",
                   fontSize: "12px", lineHeight: 1.3, padding: "5px 0 5px 8px",
@@ -1322,192 +1477,205 @@ export default function BreachClock() {
         </section>
       ) : (
         <>
+          {/* Quiet, understated expand/collapse-all control above the section
+              list. Always visible (the left index only renders on wide screens),
+              so it's the reliable global control on every width. */}
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+            <button type="button" className="btn-link" onClick={expandAll}>Expand all</button>
+            <span style={{ opacity: 0.3, color: "#1B2A3F", userSelect: "none" }}>·</span>
+            <button type="button" className="btn-link" onClick={collapseAll}>Collapse all</button>
+          </div>
+
           {/* 1. General information */}
-          <section id={FORM_SECTIONS[0].id} style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
-            {sectionHeading("01", "General Information")}
-            {field(
-              "Incident reference / title",
-              "A descriptive title or reference number for the incident.",
-              <input className="form-input" value={record.incidentTitle} onChange={(e) => updateRecord("incidentTitle", e.target.value)} placeholder="e.g. INC-2026-014 — Misdirected payroll export" style={{ maxWidth: "560px" }} />,
-              { badge: "Required" }
-            )}
-            {field(
-              "Source of incident",
-              "Did the incident involve a system controlled by your organization, or a third-party system?",
-              <select className="form-select" value={record.sourceOfIncident} onChange={(e) => updateRecord("sourceOfIncident", e.target.value)} style={{ maxWidth: "280px" }}>
-                <option value="">Select…</option>
-                {SOURCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            )}
-            {field(
-              "Incident location",
-              "The geographical location of the incident, if available and applicable (e.g., where a laptop was stolen, the location of a data center, or of the individual who caused the incident).",
-              <input className="form-input" value={record.incidentLocation} onChange={(e) => updateRecord("incidentLocation", e.target.value)} style={{ maxWidth: "560px" }} />
-            )}
-            {field(
-              "Department reporting",
-              "Which organizational unit reported the incident?",
-              <input className="form-input" value={record.departmentReporting} onChange={(e) => updateRecord("departmentReporting", e.target.value)} style={{ maxWidth: "560px" }} />
-            )}
-            {field("Systems & services impacted", null, <textarea className="form-textarea" value={record.systemsImpacted} onChange={(e) => updateRecord("systemsImpacted", e.target.value)} />)}
-            {field(
-              "Backups — existence & availability",
-              "Were the systems in question backed up in any way? Where are they located?",
-              <textarea className="form-textarea" value={record.backups} onChange={(e) => updateRecord("backups", e.target.value)} />
-            )}
-            {field(
-              "Which data security principles of the personal data were compromised?",
-              null,
-              multiCheck(DATA_PRINCIPLES, record.dataPrinciples, (id) => toggleRecordArray("dataPrinciples", id), 1)
-            )}
-            {field(
-              "Type of incident",
-              null,
-              <>
-                {multiCheck(INCIDENT_TYPES, record.incidentTypes, (id) => toggleRecordArray("incidentTypes", id), 3)}
-                {record.incidentTypes.includes("other") && (
-                  <input className="form-input" value={record.incidentTypeOther} onChange={(e) => updateRecord("incidentTypeOther", e.target.value)} placeholder="Specify the type of incident" style={{ marginTop: "12px", maxWidth: "560px" }} />
-                )}
-              </>
-            )}
-          </section>
+          {collapsibleSection(FORM_SECTIONS[0].id, "01", "General Information", null,
+            <>
+              {field(
+                "Incident reference / title",
+                "A descriptive title or reference number for the incident.",
+                <input className="form-input" value={record.incidentTitle} onChange={(e) => updateRecord("incidentTitle", e.target.value)} placeholder="e.g. INC-2026-014 — Misdirected payroll export" style={{ maxWidth: "560px" }} />,
+                { badge: "Required" }
+              )}
+              {field(
+                "Source of incident",
+                "Did the incident involve a system controlled by your organization, or a third-party system?",
+                <select className="form-select" value={record.sourceOfIncident} onChange={(e) => updateRecord("sourceOfIncident", e.target.value)} style={{ maxWidth: "280px" }}>
+                  <option value="">Select…</option>
+                  {SOURCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              )}
+              {field(
+                "Incident location",
+                "The geographical location of the incident, if available and applicable (e.g., where a laptop was stolen, the location of a data center, or of the individual who caused the incident).",
+                <input className="form-input" value={record.incidentLocation} onChange={(e) => updateRecord("incidentLocation", e.target.value)} style={{ maxWidth: "560px" }} />
+              )}
+              {field(
+                "Department reporting",
+                "Which organizational unit reported the incident?",
+                <input className="form-input" value={record.departmentReporting} onChange={(e) => updateRecord("departmentReporting", e.target.value)} style={{ maxWidth: "560px" }} />
+              )}
+              {field("Systems & services impacted", null, <textarea className="form-textarea" value={record.systemsImpacted} onChange={(e) => updateRecord("systemsImpacted", e.target.value)} />)}
+              {field(
+                "Backups — existence & availability",
+                "Were the systems in question backed up in any way? Where are they located?",
+                <textarea className="form-textarea" value={record.backups} onChange={(e) => updateRecord("backups", e.target.value)} />
+              )}
+              {field(
+                "Which data security principles of the personal data were compromised?",
+                null,
+                multiCheck(DATA_PRINCIPLES, record.dataPrinciples, (id) => toggleRecordArray("dataPrinciples", id), 1)
+              )}
+              {field(
+                "Type of incident",
+                null,
+                <>
+                  {multiCheck(INCIDENT_TYPES, record.incidentTypes, (id) => toggleRecordArray("incidentTypes", id), 3)}
+                  {record.incidentTypes.includes("other") && (
+                    <input className="form-input" value={record.incidentTypeOther} onChange={(e) => updateRecord("incidentTypeOther", e.target.value)} placeholder="Specify the type of incident" style={{ marginTop: "12px", maxWidth: "560px" }} />
+                  )}
+                </>
+              )}
+            </>
+          )}
 
           {/* 2. How & when discovered */}
-          <section id={FORM_SECTIONS[1].id} style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
-            {sectionHeading("02", "How & When Discovered")}
-            {field("Summary of how discovered", null, <textarea className="form-textarea" value={record.howDiscovered} onChange={(e) => updateRecord("howDiscovered", e.target.value)} />)}
-            {renderAwarenessField()}
-            {field(
-              "Did you learn about the incident from a third party?",
-              "For example, did one of your organization's vendors report a security incident to you?",
-              <select className="form-select" value={record.learnedFromThirdParty} onChange={(e) => updateRecord("learnedFromThirdParty", e.target.value)} style={{ maxWidth: "280px" }}>
-                <option value="">Select…</option>
-                <option value="No">No</option>
-                <option value="Yes">Yes</option>
-              </select>
-            )}
-            {record.learnedFromThirdParty === "Yes" && (
-              <>
-                {field(
-                  "Type of third party",
-                  null,
-                  <select className="form-select" value={record.thirdPartyType} onChange={(e) => updateRecord("thirdPartyType", e.target.value)} style={{ maxWidth: "280px" }}>
-                    <option value="">Select…</option>
-                    {THIRD_PARTY_TYPES.map((o) => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                )}
-                {record.thirdPartyType === "Customer" && field("Customer name", null, <input className="form-input" value={record.thirdPartyCustomerName} onChange={(e) => updateRecord("thirdPartyCustomerName", e.target.value)} style={{ maxWidth: "560px" }} />)}
-                {record.thirdPartyType === "Vendor" && field("Vendor name & services", null, <input className="form-input" value={record.thirdPartyVendorName} onChange={(e) => updateRecord("thirdPartyVendorName", e.target.value)} style={{ maxWidth: "560px" }} />)}
-                {record.thirdPartyType === "Individual" && field("Individual name", null, <input className="form-input" value={record.thirdPartyIndividualName} onChange={(e) => updateRecord("thirdPartyIndividualName", e.target.value)} style={{ maxWidth: "560px" }} />)}
-                {record.thirdPartyType === "Other" && field("Other", null, <input className="form-input" value={record.thirdPartyOther} onChange={(e) => updateRecord("thirdPartyOther", e.target.value)} style={{ maxWidth: "560px" }} />)}
-              </>
-            )}
-          </section>
+          {collapsibleSection(FORM_SECTIONS[1].id, "02", "How & When Discovered", null,
+            <>
+              {field("Summary of how discovered", null, <textarea className="form-textarea" value={record.howDiscovered} onChange={(e) => updateRecord("howDiscovered", e.target.value)} />)}
+              {renderAwarenessField()}
+              {field(
+                "Did you learn about the incident from a third party?",
+                "For example, did one of your organization's vendors report a security incident to you?",
+                <select className="form-select" value={record.learnedFromThirdParty} onChange={(e) => updateRecord("learnedFromThirdParty", e.target.value)} style={{ maxWidth: "280px" }}>
+                  <option value="">Select…</option>
+                  <option value="No">No</option>
+                  <option value="Yes">Yes</option>
+                </select>
+              )}
+              {record.learnedFromThirdParty === "Yes" && (
+                <>
+                  {field(
+                    "Type of third party",
+                    null,
+                    <select className="form-select" value={record.thirdPartyType} onChange={(e) => updateRecord("thirdPartyType", e.target.value)} style={{ maxWidth: "280px" }}>
+                      <option value="">Select…</option>
+                      {THIRD_PARTY_TYPES.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  )}
+                  {record.thirdPartyType === "Customer" && field("Customer name", null, <input className="form-input" value={record.thirdPartyCustomerName} onChange={(e) => updateRecord("thirdPartyCustomerName", e.target.value)} style={{ maxWidth: "560px" }} />)}
+                  {record.thirdPartyType === "Vendor" && field("Vendor name & services", null, <input className="form-input" value={record.thirdPartyVendorName} onChange={(e) => updateRecord("thirdPartyVendorName", e.target.value)} style={{ maxWidth: "560px" }} />)}
+                  {record.thirdPartyType === "Individual" && field("Individual name", null, <input className="form-input" value={record.thirdPartyIndividualName} onChange={(e) => updateRecord("thirdPartyIndividualName", e.target.value)} style={{ maxWidth: "560px" }} />)}
+                  {record.thirdPartyType === "Other" && field("Other", null, <input className="form-input" value={record.thirdPartyOther} onChange={(e) => updateRecord("thirdPartyOther", e.target.value)} style={{ maxWidth: "560px" }} />)}
+                </>
+              )}
+            </>
+          )}
 
           {/* 3. When the incident occurred */}
-          <section id={FORM_SECTIONS[2].id} style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
-            {sectionHeading("03", "When the Incident Occurred", "The actual date and time the incident took place, as opposed to when someone in your organization became aware of it.")}
-            <div style={{ marginBottom: "20px" }}>
-              {checkRow(record.occurrenceNotAvailable, "Information not available", () => updateRecord("occurrenceNotAvailable", !record.occurrenceNotAvailable))}
-            </div>
-            <div style={{ opacity: record.occurrenceNotAvailable ? 0.45 : 1, pointerEvents: record.occurrenceNotAvailable ? "none" : "auto" }}>
-              {field("Occurrence date", null, <input type="date" className="form-input" value={record.occurrenceDate} onChange={(e) => updateRecord("occurrenceDate", e.target.value)} disabled={record.occurrenceNotAvailable} style={{ maxWidth: "280px" }} />)}
-              {field("Exact time (incl. time zone)", null, <input className="form-input" value={record.occurrenceTime} onChange={(e) => updateRecord("occurrenceTime", e.target.value)} disabled={record.occurrenceNotAvailable} placeholder="e.g. 14:30 ET" style={{ maxWidth: "280px" }} />)}
-              {field("Additional detail", null, <textarea className="form-textarea" value={record.occurrenceDetail} onChange={(e) => updateRecord("occurrenceDetail", e.target.value)} disabled={record.occurrenceNotAvailable} />)}
-            </div>
-          </section>
+          {collapsibleSection(FORM_SECTIONS[2].id, "03", "When the Incident Occurred", "The actual date and time the incident took place, as opposed to when someone in your organization became aware of it.",
+            <>
+              <div style={{ marginBottom: "20px" }}>
+                {checkRow(record.occurrenceNotAvailable, "Information not available", () => updateRecord("occurrenceNotAvailable", !record.occurrenceNotAvailable))}
+              </div>
+              <div style={{ opacity: record.occurrenceNotAvailable ? 0.45 : 1, pointerEvents: record.occurrenceNotAvailable ? "none" : "auto" }}>
+                {field("Occurrence date", null, <input type="date" className="form-input" value={record.occurrenceDate} onChange={(e) => updateRecord("occurrenceDate", e.target.value)} disabled={record.occurrenceNotAvailable} style={{ maxWidth: "280px" }} />)}
+                {field("Exact time (incl. time zone)", null, <input className="form-input" value={record.occurrenceTime} onChange={(e) => updateRecord("occurrenceTime", e.target.value)} disabled={record.occurrenceNotAvailable} placeholder="e.g. 14:30 ET" style={{ maxWidth: "280px" }} />)}
+                {field("Additional detail", null, <textarea className="form-textarea" value={record.occurrenceDetail} onChange={(e) => updateRecord("occurrenceDetail", e.target.value)} disabled={record.occurrenceNotAvailable} />)}
+              </div>
+            </>
+          )}
 
           {/* 4. Incident summary */}
-          <section id={FORM_SECTIONS[3].id} style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
-            {sectionHeading("04", "Incident Summary")}
-            {field(
+          {collapsibleSection(FORM_SECTIONS[3].id, "04", "Incident Summary", null,
+            field(
               "Summary of the incident",
               "Write a descriptive summary in your own words. The more detail, the better.",
               <textarea className="form-textarea" style={{ minHeight: "120px" }} value={record.incidentSummary} onChange={(e) => updateRecord("incidentSummary", e.target.value)} />
-            )}
-          </section>
+            )
+          )}
 
           {/* 5. Data affected */}
-          <section id={FORM_SECTIONS[4].id} style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
-            {sectionHeading("05", "Data Affected")}
-            {renderJurisdictionsField()}
-            {renderQ1()}
-            {crossCheckBanner()}
-            {renderEncryption()}
+          {collapsibleSection(FORM_SECTIONS[4].id, "05", "Data Affected", null,
+            <>
+              {renderJurisdictionsField()}
+              {renderQ1()}
+              {crossCheckBanner()}
+              {renderEncryption()}
 
-            {/* Dynamic data-subject category repeater (record only) */}
-            <div style={{ marginTop: "8px" }}>
-              {labelRow("Which categories of data subjects were affected?")}
-              {record.dataSubjectBlocks.map((b, i) => (
-                <div key={b.id} style={{ border: "1px solid rgba(27,42,63,0.18)", borderRadius: "12px", padding: "20px 22px", marginBottom: "16px", background: "#fff" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                    <span className="section-mark">Category {i + 1}</span>
-                    {record.dataSubjectBlocks.length > 1 && (
-                      <button type="button" onClick={() => removeBlock(b.id)} className="btn-inline-remove">
-                        <X size={13} /> Remove
-                      </button>
-                    )}
-                  </div>
-                  {field("Category name", "Name this group of affected people (e.g., Customers, Employees, Newsletter subscribers).", <input className="form-input" value={b.name} onChange={(e) => updateBlock(b.id, { name: e.target.value })} placeholder="e.g. Customers" style={{ maxWidth: "420px" }} />)}
-                  {field("Approximate count", null, <input type="number" className="form-input" value={b.count} onChange={(e) => updateBlock(b.id, { count: e.target.value })} style={{ maxWidth: "240px" }} />)}
-                  {field("Which data elements were affected?", null, multiCheck(DATA_ELEMENTS, b.elements, (elId) => toggleBlockElement(b.id, elId), 2))}
-                  <div>
-                    {labelRow("Other elements (not listed)")}
-                    {b.others.map((o, oi) => (
-                      <div key={oi} style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "center" }}>
-                        <input className="form-input" value={o} onChange={(e) => updateBlockOther(b.id, oi, e.target.value)} placeholder="Describe another data element" style={{ maxWidth: "420px" }} />
-                        <button type="button" onClick={() => removeBlockOther(b.id, oi)} className="btn-inline-remove" aria-label="Remove element">
-                          <X size={13} />
+              {/* Dynamic data-subject category repeater (record only) */}
+              <div style={{ marginTop: "8px" }}>
+                {labelRow("Which categories of data subjects were affected?")}
+                {record.dataSubjectBlocks.map((b, i) => (
+                  <div key={b.id} style={{ border: "1px solid rgba(27,42,63,0.18)", borderRadius: "12px", padding: "20px 22px", marginBottom: "16px", background: "#fff" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                      <span className="section-mark">Category {i + 1}</span>
+                      {record.dataSubjectBlocks.length > 1 && (
+                        <button type="button" onClick={() => removeBlock(b.id)} className="btn-inline-remove">
+                          <X size={13} /> Remove
                         </button>
-                      </div>
-                    ))}
-                    <button type="button" onClick={() => addBlockOther(b.id)} className="btn-link">
-                      <Plus size={13} /> add another
-                    </button>
+                      )}
+                    </div>
+                    {field("Category name", "Name this group of affected people (e.g., Customers, Employees, Newsletter subscribers).", <input className="form-input" value={b.name} onChange={(e) => updateBlock(b.id, { name: e.target.value })} placeholder="e.g. Customers" style={{ maxWidth: "420px" }} />)}
+                    {field("Approximate count", null, <input type="number" className="form-input" value={b.count} onChange={(e) => updateBlock(b.id, { count: e.target.value })} style={{ maxWidth: "240px" }} />)}
+                    {field("Which data elements were affected?", null, multiCheck(DATA_ELEMENTS, b.elements, (elId) => toggleBlockElement(b.id, elId), 2))}
+                    <div>
+                      {labelRow("Other elements (not listed)")}
+                      {b.others.map((o, oi) => (
+                        <div key={oi} style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "center" }}>
+                          <input className="form-input" value={o} onChange={(e) => updateBlockOther(b.id, oi, e.target.value)} placeholder="Describe another data element" style={{ maxWidth: "420px" }} />
+                          <button type="button" onClick={() => removeBlockOther(b.id, oi)} className="btn-inline-remove" aria-label="Remove element">
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ))}
+                      <button type="button" onClick={() => addBlockOther(b.id)} className="btn-link">
+                        <Plus size={13} /> add another
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-              <button type="button" onClick={addBlock} className="btn-ghost" style={{ marginTop: "4px" }}>
-                <Plus size={14} /> Add another category of data subjects
-              </button>
-            </div>
-          </section>
+                ))}
+                <button type="button" onClick={addBlock} className="btn-ghost" style={{ marginTop: "4px" }}>
+                  <Plus size={14} /> Add another category of data subjects
+                </button>
+              </div>
+            </>
+          )}
 
           {/* 6. Measures */}
-          <section id={FORM_SECTIONS[5].id} style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
-            {sectionHeading("06", "Measures")}
-            {field(
-              "Measures taken (incl. mitigation)",
-              null,
-              <>
-                <textarea className="form-textarea" value={record.measuresTaken} onChange={(e) => updateRecord("measuresTaken", e.target.value)} disabled={record.measuresTakenNotAvailable} style={{ opacity: record.measuresTakenNotAvailable ? 0.45 : 1 }} />
-                <div style={{ marginTop: "12px" }}>
-                  {checkRow(record.measuresTakenNotAvailable, "Not available", () => updateRecord("measuresTakenNotAvailable", !record.measuresTakenNotAvailable))}
-                </div>
-              </>
-            )}
-            {field(
-              "Measures proposed (incl. proposed mitigation)",
-              null,
-              <>
-                <textarea className="form-textarea" value={record.measuresProposed} onChange={(e) => updateRecord("measuresProposed", e.target.value)} disabled={record.measuresProposedNotAvailable} style={{ opacity: record.measuresProposedNotAvailable ? 0.45 : 1 }} />
-                <div style={{ marginTop: "12px" }}>
-                  {checkRow(record.measuresProposedNotAvailable, "Not available", () => updateRecord("measuresProposedNotAvailable", !record.measuresProposedNotAvailable))}
-                </div>
-              </>
-            )}
-          </section>
+          {collapsibleSection(FORM_SECTIONS[5].id, "06", "Measures", null,
+            <>
+              {field(
+                "Measures taken (incl. mitigation)",
+                null,
+                <>
+                  <textarea className="form-textarea" value={record.measuresTaken} onChange={(e) => updateRecord("measuresTaken", e.target.value)} disabled={record.measuresTakenNotAvailable} style={{ opacity: record.measuresTakenNotAvailable ? 0.45 : 1 }} />
+                  <div style={{ marginTop: "12px" }}>
+                    {checkRow(record.measuresTakenNotAvailable, "Not available", () => updateRecord("measuresTakenNotAvailable", !record.measuresTakenNotAvailable))}
+                  </div>
+                </>
+              )}
+              {field(
+                "Measures proposed (incl. proposed mitigation)",
+                null,
+                <>
+                  <textarea className="form-textarea" value={record.measuresProposed} onChange={(e) => updateRecord("measuresProposed", e.target.value)} disabled={record.measuresProposedNotAvailable} style={{ opacity: record.measuresProposedNotAvailable ? 0.45 : 1 }} />
+                  <div style={{ marginTop: "12px" }}>
+                    {checkRow(record.measuresProposedNotAvailable, "Not available", () => updateRecord("measuresProposedNotAvailable", !record.measuresProposedNotAvailable))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
 
           {/* 07. Risk Assessment — appears only with an EU/UK jurisdiction
               selected; appended at the end so the six fixed sections keep their
-              numbers (Measures stays 06). */}
-          {(jurisdictions.eu || jurisdictions.uk) && (
-            <section id="form-risk" style={{ marginBottom: "56px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
-              {sectionHeading("07", "Risk Assessment")}
-              {renderRiskAssessment()}
-              {isNarrow && renderNote("risk")}
-            </section>
-          )}
+              numbers (Measures stays 06). Collapsed by default like the rest. */}
+          {(jurisdictions.eu || jurisdictions.uk) &&
+            collapsibleSection("form-risk", "07", "Risk Assessment", null,
+              <>
+                {renderRiskAssessment()}
+                {isNarrow && renderNote("risk")}
+              </>
+            )}
         </>
       )}
 
@@ -1849,6 +2017,27 @@ export default function BreachClock() {
         .field-mark {
           font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
           letter-spacing: 0.12em; text-transform: uppercase; color: #1B2A3F; opacity: 0.85;
+        }
+        /* Collapsible-section header: the whole row is the toggle. Negative
+           horizontal margin + padding lets the hover tint extend past the
+           content edges while the number/heading still align with the body. */
+        .section-toggle {
+          display: flex; align-items: center; gap: 12px;
+          cursor: pointer; user-select: none; outline: none;
+          padding: 10px 12px; margin-left: -12px; margin-right: -12px;
+          border-radius: 8px; transition: background 0.15s ease;
+        }
+        .section-toggle:hover { background: rgba(27,42,63,0.035); }
+        .section-toggle:focus-visible { box-shadow: 0 0 0 2px #C76E3A; }
+        /* Body fades/slides in on expand; collapse is instant (the children
+           unmount). No overflow clipping, so field tooltips/popovers show. */
+        @keyframes sectionBodyIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .section-body-anim { animation: sectionBodyIn 0.2s ease; }
+        @media (prefers-reduced-motion: reduce) {
+          .section-body-anim { animation: none; }
         }
       `}</style>
 
