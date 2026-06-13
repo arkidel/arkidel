@@ -1514,16 +1514,24 @@ export default function BreachClock() {
     );
     return (
       <>
-        {/* Artifact controls — top of the review content so they're visible on
-            submit without scrolling; nothing is pinned, so they scroll away. */}
-        <div style={{ display: "flex", gap: "12px", marginBottom: "28px", flexWrap: "wrap" }}>
-          <button className="btn-primary" onClick={handleDownloadMemo} style={{ justifyContent: "center" }}>
-            <Download size={14} /> Download memo
-          </button>
-          <button className="btn-ghost" onClick={handleEdit} style={{ justifyContent: "center" }}>
-            <ArrowLeft size={14} /> Edit answers
-          </button>
-        </div>
+        {/* Artifact controls. On the wide layout these live in the sticky
+            right-hand actions rail (renderReviewActionsRail) and the heading
+            below rises to the top of this column. Below the wide breakpoint
+            there's no rail, so we restore them here as a row at the top of the
+            content, with the same INCIDENT / title header above them. */}
+        {isNarrow && (
+          <div style={{ marginBottom: "28px" }}>
+            {renderIncidentHeader()}
+            <div style={{ display: "flex", gap: "12px", marginTop: "16px", flexWrap: "wrap" }}>
+              <button className="btn-primary" onClick={handleDownloadMemo} style={{ justifyContent: "center" }}>
+                <Download size={14} /> Download memo
+              </button>
+              <button className="btn-ghost" onClick={handleEdit} style={{ justifyContent: "center" }}>
+                <ArrowLeft size={14} /> Edit answers
+              </button>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
           <h2 className="serif" style={{ fontSize: "28px", fontWeight: 400, margin: 0, color: "#1B2A3F", letterSpacing: "-0.01em" }}>
@@ -1625,6 +1633,46 @@ export default function BreachClock() {
         { desc: "Check this box if you don't need a full incident report." }
       )}
       <div style={{ marginTop: "20px" }}>{renderIncidentVsBreachNote()}</div>
+    </div>
+  );
+
+  // Incident header for the review — a quiet "INCIDENT" kicker (.section-mark,
+  // CSS-uppercased) over the incident reference/title in READABLE case (serif,
+  // normal weight, not the letter-spaced mark). The title field is NOT required
+  // to submit (handleSubmit gates only on the three operative inputs), so the
+  // empty case is real: render the kicker alone, no name line. A long title
+  // wraps (break-word) rather than truncating or overflowing the rail.
+  const renderIncidentHeader = () => (
+    <div>
+      <div className="section-mark">Incident</div>
+      {record.incidentTitle && (
+        <div
+          className="serif"
+          style={{ fontSize: "18px", lineHeight: 1.3, color: "#1B2A3F", marginTop: "8px", overflowWrap: "break-word" }}
+        >
+          {record.incidentTitle}
+        </div>
+      )}
+    </div>
+  );
+
+  // Review actions rail (wide layout only). Pinned via position:sticky +
+  // top:NAV_CLEARANCE INSIDE the plain block grid item that forms the right
+  // column — the same proven pattern as the form's section index. (Sticky on a
+  // flex *item* is the bug we hit on the index; this column is a grid/block
+  // child, so the rail pins reliably.) Full-width Download (primary) over Edit
+  // (ghost).
+  const renderReviewActionsRail = () => (
+    <div style={{ position: "sticky", top: `${NAV_CLEARANCE}px` }}>
+      {renderIncidentHeader()}
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "20px" }}>
+        <button className="btn-primary" onClick={handleDownloadMemo} style={{ width: "100%", justifyContent: "center" }}>
+          <Download size={14} /> Download memo
+        </button>
+        <button className="btn-ghost" onClick={handleEdit} style={{ width: "100%", justifyContent: "center" }}>
+          <ArrowLeft size={14} /> Edit answers
+        </button>
+      </div>
     </div>
   );
 
@@ -1837,6 +1885,7 @@ export default function BreachClock() {
               {main}
             </div>
             <div style={{ paddingLeft: "40px", borderLeft: "1px solid rgba(27,42,63,0.18)", minWidth: 0 }}>
+              {submitted && renderReviewActionsRail()}
               {!submitted && (
                 <>
                   {railControls()}
