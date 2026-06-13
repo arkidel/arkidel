@@ -17,6 +17,13 @@ import { JURISDICTIONS } from "./data.js";
 
 const HIGH_RISK_CATEGORIES = ["gov_id", "financial", "health", "biometric", "children", "special", "credentials"];
 
+// The only valid riskLevel inputs. The UI emits exactly one of these three or
+// "" (unset). Anything else reaching the engine — undefined/null/"" or an
+// invalid value from a serialization round-trip (0, false, "High", " risk ") —
+// is NOT a valid assessment and must fail SAFE to pending, never to
+// suppression. See the risk-gating block in computeDeadlines.
+const VALID_RISK_LEVELS = ["unlikely", "risk", "high"];
+
 function isHighRisk(sensitivity) {
   if (!Array.isArray(sensitivity)) return false;
   return sensitivity.some((s) => HIGH_RISK_CATEGORIES.includes(s));
@@ -81,13 +88,18 @@ function computeDeadlines(facts) {
       //   riskRequired     → met when riskLevel is "risk" or "high"
       //   highRiskRequired → met when riskLevel is "high"
       // Outcomes:
-      //   riskLevel unset       → pending (the assessment hasn't been made yet)
-      //   set but not met       → suppressed (risk_assessment mechanism)
-      //   met                   → fall through to encryption check + deadline push
+      //   unset OR invalid value → pending (no valid assessment yet; fails safe)
+      //   valid but not met      → suppressed (risk_assessment mechanism)
+      //   valid and met          → fall through to encryption check + deadline push
       // This runs BEFORE the encryption block, so a not-"high" individual
       // obligation is risk-suppressed, never encryption-suppressed.
+      //
+      // Only the exact sentinels in VALID_RISK_LEVELS engage the risk logic.
+      // Any other value routes to pending, identical to unset — suppression
+      // (which tells the user no notification is required) must never rest on an
+      // unrecognized riskLevel.
       if (ob.gating?.riskRequired || ob.gating?.highRiskRequired) {
-        if (riskLevel === undefined || riskLevel === null || riskLevel === "") {
+        if (!VALID_RISK_LEVELS.includes(riskLevel)) {
           pending.push({
             jurisdiction: jur.short,
             authority: ob.authority,

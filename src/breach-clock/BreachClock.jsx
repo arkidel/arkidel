@@ -1087,6 +1087,20 @@ export default function BreachClock() {
           const timeRemaining = d.deadline ? d.deadline.getTime() - now.getTime() : null;
           const isMissed = timeRemaining !== null && timeRemaining < 0;
           const isUrgent = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 3600 * 1000;
+          // Dependent ("cascading") deadline — read straight from the engine's
+          // basis string, no engine change. A dependent obligation's basis reads
+          // "<citation> — <N units> from notification of <parent authority>"; we
+          // confirm the named parent actually fired in the same jurisdiction
+          // before labeling. The computed date is left exactly as the engine set
+          // it; this only makes the chain legible (today only California's AG
+          // 15-day clock matches, but the detection is general).
+          const depMatch = d.basis && d.basis.match(/—\s*(.+?)\s+from notification of\s+(.+?)\s*$/);
+          const depParent = depMatch
+            ? deadlines.find((p) => p !== d && p.jurisdiction === d.jurisdiction && p.authority === depMatch[2])
+            : null;
+          const depLabel = depParent
+            ? `${depMatch[1]} after notifying residents`
+            : null;
           return (
             <div key={i} className={`deadline-card ${isMissed ? "missed" : isUrgent ? "urgent" : ""}`}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
@@ -1125,6 +1139,11 @@ export default function BreachClock() {
                       <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "6px" }}>
                         Due {d.deadline.toLocaleString()}
                       </div>
+                      {depLabel && (
+                        <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "4px", maxWidth: "200px", marginLeft: "auto" }}>
+                          ({depLabel}; date assumes they're notified on their deadline)
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 14px", border: "1px solid currentColor" }}>

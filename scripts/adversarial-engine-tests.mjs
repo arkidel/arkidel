@@ -313,7 +313,15 @@ T("D. Time", "Cascade across month boundary: CA AG = awareness + 45d", (a) => {
 });
 
 // =============================================================================
-// E. riskLevel EDGE VALUES — pending sentinels vs falsy coercion
+// E. riskLevel EDGE VALUES — only the three valid sentinels engage the risk
+//    logic; anything else fails SAFE to pending, never suppressed.
+//
+//    Suppression of a GDPR obligation tells the user no notification is
+//    required. That determination must rest on a real assessment — exactly
+//    "unlikely" / "risk" / "high". The UI emits only those three or "" today,
+//    but a serialization round-trip (e.g. Supabase) could feed 0, false,
+//    "High", or " risk "; those must land in PENDING (engine waiting on the
+//    assessment), not SUPPRESSED. These cases pin that fail-safe behavior.
 // =============================================================================
 
 T("E. riskLevel", "missing key == explicit undefined == null == '' (all pending, identical output)", (a) => {
@@ -328,27 +336,52 @@ T("E. riskLevel", "missing key == explicit undefined == null == '' (all pending,
   a.eq(J(empty), J(missing), "'' identical to missing");
 });
 
-T("E. riskLevel", "Falsy non-sentinels do NOT coerce to pending: 0 -> suppressed", (a) => {
-  // 0 is not in {undefined,null,''}; thresholdMet false -> risk-suppressed, NOT pending.
+// Fail-safe hardening: an invalid riskLevel must route to PENDING (identical to
+// unset), NOT to suppression. One case per required round-trip artifact.
+T("E. riskLevel", "Invalid 0 fails safe to pending (not suppressed), identical to unset", (a) => {
+  const unset = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true } });
   const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: 0 });
-  a.eq(r.pending.length, 0, "0 is not pending");
-  a.eq(r.suppressed.length, 2, "0 -> both suppressed");
-  a.eq(S(r, "EU GDPR", "Supervisory Authority")?.suppression_type, "risk_assessment", "SA risk-suppressed");
+  a.eq(r.pending.length, 2, "0 -> both GDPR pending");
+  a.eq(r.suppressed.length, 0, "0 -> nothing suppressed");
+  a.eq(J(r), J(unset), "0 output identical to unset");
 });
 
-T("E. riskLevel", "Boolean false does NOT coerce to pending -> suppressed", (a) => {
+T("E. riskLevel", "Invalid false fails safe to pending (not suppressed), identical to unset", (a) => {
+  const unset = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true } });
   const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: false });
-  a.eq(r.pending.length, 0, "false is not pending");
-  a.eq(r.suppressed.length, 2, "false -> both suppressed");
+  a.eq(r.pending.length, 2, "false -> both GDPR pending");
+  a.eq(r.suppressed.length, 0, "false -> nothing suppressed");
+  a.eq(J(r), J(unset), "false output identical to unset");
 });
 
-T("E. riskLevel", "Matching is exact/case-sensitive: 'High' and ' risk ' suppress (do not fire)", (a) => {
-  const cap = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: "High" });
-  const pad = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: " risk " });
-  a.eq(cap.deadlines.length, 0, "'High' fires nothing");
-  a.eq(cap.suppressed.length, 2, "'High' -> suppressed");
-  a.eq(pad.deadlines.length, 0, "' risk ' fires nothing");
-  a.eq(pad.suppressed.length, 2, "' risk ' -> suppressed");
+T("E. riskLevel", "Invalid 'High' (wrong case) fails safe to pending (not suppressed)", (a) => {
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: "High" });
+  a.eq(r.pending.length, 2, "'High' -> both GDPR pending");
+  a.eq(r.suppressed.length, 0, "'High' -> nothing suppressed");
+  a.eq(r.deadlines.length, 0, "'High' fires nothing");
+  a.eq(P(r, "EU GDPR", "Supervisory Authority")?.citation, "Art. 33 GDPR", "SA pending carries Art.33 citation");
+});
+
+T("E. riskLevel", "Invalid ' risk ' (padded) fails safe to pending (not suppressed)", (a) => {
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: " risk " });
+  a.eq(r.pending.length, 2, "' risk ' -> both GDPR pending");
+  a.eq(r.suppressed.length, 0, "' risk ' -> nothing suppressed");
+  a.eq(r.deadlines.length, 0, "' risk ' fires nothing");
+});
+
+T("E. riskLevel", "Unknown string fails safe to pending; valid sentinels still behave", (a) => {
+  // Guards against the inverse regression: the hardening must not also break
+  // the three valid values.
+  const junk = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: "maybe" });
+  a.eq(junk.pending.length, 2, "'maybe' -> pending");
+  a.eq(junk.suppressed.length, 0, "'maybe' -> nothing suppressed");
+  const unlikely = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: "unlikely" });
+  a.eq(unlikely.suppressed.length, 2, "'unlikely' still suppresses both");
+  const risk = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: "risk" });
+  a.eq(risk.deadlines.length, 1, "'risk' still fires Art.33");
+  a.eq(risk.suppressed.length, 1, "'risk' still risk-suppresses Art.34");
+  const high = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: "high" });
+  a.eq(high.deadlines.length, 2, "'high' still fires both");
 });
 
 T("E. riskLevel", "High-risk sensitivity does NOT auto-fire GDPR; riskLevel still governs", (a) => {

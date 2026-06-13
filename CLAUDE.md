@@ -107,6 +107,46 @@ the encryption-switch carve-out only; the results-page layout must now handle
 mixed firing / pending / suppressed cards together (the pending state surfaces as
 one consolidated card — see the UI section).
 
+**`riskLevel` fails safe to pending (live as of the riskLevel-hardening
+commit).** The engine treats `riskLevel` as valid only when it is exactly one of
+`VALID_RISK_LEVELS` (`"unlikely" | "risk" | "high"`). Anything else — unset
+(`""`), or an invalid value that could survive a serialization round-trip
+(`undefined`, `null`, `0`, `false`, `"High"`, `" risk "`, any unknown string) —
+routes to **pending**, identical to unset, never to suppression. This is a
+deliberate fail-safe: suppressing a GDPR obligation tells the user no
+notification is required, and that determination must never rest on an
+unrecognized value. The UI only ever emits the three sentinels or `""`, but the
+engine does not assume that. Do not "tidy" the gate back to an unset-only check
+(`riskLevel === ""`) — the `VALID_RISK_LEVELS.includes(...)` form is the
+safety property. Covered by the `E. riskLevel` group in
+`scripts/adversarial-engine-tests.mjs`.
+
+**Three deliberate engine assumptions — durable decisions, do not "fix".**
+
+- **Awareness-anchor for determination-states.** Texas and Colorado statutes run
+  their notification clocks from "determination that a breach occurred," but the
+  engine anchors *all* deadlines to `awarenessDate`. This is a deliberate
+  conservative choice — awareness is at-or-before determination, so the computed
+  deadline is never later than the statute allows. The per-obligation
+  `deadline_trigger` strings (e.g. "determination of breach", "discovery of
+  breach") are descriptive labels only; they do **not** feed the date math. The
+  one structural exception is California's AG obligation, which is a dependent
+  deadline (`deadline_relative_to`) resolving to awareness + 45d — still
+  transitively awareness-anchored.
+- **Millisecond-arithmetic conservatism.** Deadlines are computed as
+  epoch-millisecond offsets (`awarenessDate.getTime() + hours * 3600 * 1000`),
+  which is DST-, leap-year-, and month-boundary-proof and lands at-or-before the
+  end of the statutory final day — conservative versus calendar-day counting.
+  Deliberate; the adversarial harness's `D. Time` group pins this (spring-forward,
+  fall-back, end-of-month, leap February, sub-second).
+- **Unreachable tri-state invariant.** Because encryption and `riskLevel` are
+  both *global* incident facts, the three result buckets firing + pending +
+  suppressed can never co-occur in a single result. Pending requires `riskLevel`
+  unset/invalid, which means GDPR cannot be risk-suppressed; the only other
+  suppressor is global encryption, which also kills US firing. So the results
+  page never needs to render all three blocks at once — but per the mixed-results
+  note above it must still handle firing-with-pending and firing-with-suppressed.
+
 ### `src/breach-clock/BreachClock.jsx` — React UI
 
 UI/UX changes go here. Layout, copy, styling, form interactions, the in-app
