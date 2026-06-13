@@ -68,6 +68,26 @@ const FORM_SECTIONS = [
 // viewport edge. (If that nav is ever made sticky, bump this to ~its height.)
 const NAV_CLEARANCE = 32;
 
+// The Respond masthead lozenge — a Midnight (#1B2A3F) pill with Parchment
+// (#E8DDC4) Merriweather text and a 999px radius (the one deliberate pill in the
+// UI; see CLAUDE.md). Defined once and reused by both the masthead and the
+// Tests-page header so the treatment can't drift. Relies on the `.serif` class,
+// which is present in every view's <style> block.
+const BRAND_PILL_STYLE = {
+  margin: 0,
+  fontWeight: 400,
+  fontSize: "18px",
+  background: "#1B2A3F",
+  color: "#E8DDC4",
+  padding: "7px 20px",
+  borderRadius: "999px",
+  letterSpacing: "0.01em",
+  display: "inline-block",
+};
+const BrandPill = ({ children }) => (
+  <h1 className="serif" style={BRAND_PILL_STYLE}>{children}</h1>
+);
+
 // Q1 personal-data categories — these ARE the engine `sensitivity` input; IDs
 // must match what engine.js treats as high-risk. location/communications are
 // kept for record completeness; the engine ignores ids outside its high-risk set.
@@ -590,9 +610,21 @@ export default function BreachClock() {
             letter-spacing: 0.18em; text-transform: uppercase; color: #1B2A3F; opacity: 0.7;
           }
         `}</style>
-        <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "60px 40px" }}>
+        <div style={{ maxWidth: "1100px", margin: "0 auto", padding: isNarrow ? "40px 20px" : "60px 40px" }}>
           <header style={{ marginBottom: "48px", borderBottom: "1px solid rgba(27,42,63,0.18)", paddingBottom: "32px" }}>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "32px" }}>
+            {/* Pill + eyebrow + back button share one row so the pill sits at
+                the top of the header, at the same height as the main Respond
+                masthead pill (which likewise leads its header row). The pill
+                reads only "Respond" — identical to the masthead lozenge — with
+                "Rules Engine Tests" beside it as a .section-mark eyebrow, the
+                same treatment as the masthead's "Preliminary" eyebrow, so the
+                pill itself never wraps. flexWrap keeps the row from overflowing
+                at narrow widths (the button drops below if cramped). */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
+                <BrandPill>Respond</BrandPill>
+                <span className="section-mark">Rules Engine Tests</span>
+              </div>
               <button
                 onClick={() => setShowTests(false)}
                 style={{
@@ -605,14 +637,12 @@ export default function BreachClock() {
                   fontWeight: 500,
                   cursor: "pointer",
                   color: "#1B2A3F",
+                  flexShrink: 0,
                 }}
               >
                 ← Back to Respond
               </button>
             </div>
-            <h1 className="serif" style={{ fontSize: "36px", margin: 0, fontWeight: 400, letterSpacing: "-0.02em", lineHeight: 1.15, color: "#1B2A3F" }}>
-              Rules Engine Tests
-            </h1>
             <p style={{ fontSize: "17px", marginTop: "20px", maxWidth: "640px", lineHeight: 1.6, color: "#2C2418" }}>
               Each case feeds a fact pattern to the deadline engine and asserts what should or should not fire. Run automatically every time this page loads.
             </p>
@@ -1843,22 +1873,7 @@ export default function BreachClock() {
         {/* Header */}
         <header style={{ marginBottom: "20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "16px" }}>
-            <h1
-              className="serif"
-              style={{
-                margin: 0,
-                fontWeight: 400,
-                fontSize: "18px",
-                background: "#1B2A3F",
-                color: "#E8DDC4",
-                padding: "7px 20px",
-                borderRadius: "999px",
-                letterSpacing: "0.01em",
-                display: "inline-block",
-              }}
-            >
-              Respond
-            </h1>
+            <BrandPill>Respond</BrandPill>
             <span className="section-mark">Preliminary — Not Legal Advice</span>
           </div>
           <p style={{ fontSize: "15px", marginTop: "12px", maxWidth: "640px", lineHeight: 1.6, fontWeight: 400, color: "#2C2418" }}>
