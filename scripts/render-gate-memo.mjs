@@ -24,7 +24,6 @@ const facts = {
   residentCounts: { va: 5000 },
   sensitivity: ["health"],
   sensitivityLabels: ["Health or medical information"],
-  encryptionApplied: false,
 };
 
 const { deadlines, suppressed } = computeDeadlines(facts);

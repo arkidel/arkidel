@@ -267,9 +267,7 @@ function drawIncidentSummary(state, facts) {
     ...(facts.sensitivityLabels && facts.sensitivityLabels.length
       ? [["Data categories", facts.sensitivityLabels.join(", ")]]
       : []),
-    ["Encryption", facts.encryptionApplied
-      ? "Reported as applied — see analysis below for which obligations are suppressed"
-      : "Not reported"],
+    ["Encryption", facts.encryptionSummary || "Not reported"],
   ];
 
   // Keep-with-next: don't strand the heading without its first row.
@@ -819,7 +817,7 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
     awarenessDate: facts.awarenessDate,
     jurisdictionList: buildJurisdictionList(facts),
     sensitivityLabels: facts.sensitivityLabels || [],
-    encryptionApplied: facts.encryptionApplied,
+    encryptionSummary: facts.encryptionSummary,
   });
 
   if (deadlines && deadlines.length > 0) {

@@ -318,15 +318,16 @@ export default function BreachClock() {
     () => Object.fromEntries(JURISDICTIONS.filter((j) => j.residentField).map((j) => [j.id, ""]))
   );
   const [sensitivity, setSensitivity] = useState([]);
-  // Encryption cluster (S3b) — five tri-state inputs, each defaulting to unset
-  // (""). They feed the per-obligation safeHarbor gates in the engine; the GDPR
-  // Art. 34 path is driven by a boolean derived from them (see encryptionApplied
-  // below) until S5 gives GDPR its own input.
+  // US encryption cluster (S3b) — five tri-state inputs, each defaulting to unset
+  // (""). They feed the US per-obligation safeHarbor gates in the engine.
   const [encrypted, setEncrypted] = useState("");
   const [encryptionStrength, setEncryptionStrength] = useState("");
   const [redacted, setRedacted] = useState("");
   const [keyAcquired, setKeyAcquired] = useState("");
   const [reidentificationAcquired, setReidentificationAcquired] = useState("");
+  // GDPR Art. 34(3)(a) unintelligibility (S5) — the dedicated EU/UK input that
+  // replaced the derived encryptionApplied boolean. Tri-state, default unset.
+  const [gdprUnintelligibility, setGdprUnintelligibility] = useState("");
 
   // ── Record state (incident report only; never seen by the engine) ──
   const [record, setRecord] = useState(() => ({ ...EMPTY_RECORD, dataSubjectBlocks: [makeBlock()] }));
@@ -429,13 +430,10 @@ export default function BreachClock() {
     sensitivity.includes(id) ? setSensitivity(sensitivity.filter((s) => s !== id)) : setSensitivity([...sensitivity, id]);
 
   const anyJurisdiction = Object.values(jurisdictions).some(Boolean);
+  // Any U.S. state selected (everything except EU/UK). Gates the US encryption
+  // cluster's visibility — EU/UK have their own gdprUnintelligibility input.
+  const anyUSJurisdiction = Object.entries(jurisdictions).some(([id, on]) => on && id !== "eu" && id !== "uk");
   const highRiskPresent = isHighRisk(sensitivity);
-
-  // GDPR path (until S5): the EU/UK Art. 34 gate still reads `encryptionApplied`.
-  // Derive it from the cluster — data encrypted with an uncompromised key is
-  // unintelligible under Art. 34(3)(a). S5 replaces this with a dedicated
-  // gdprUnintelligibility input shown near the risk section.
-  const encryptionApplied = encrypted === "yes" && keyAcquired === "no";
 
   // Human-readable cluster summary for the review-page Analysis-inputs recap.
   const encryptionRecap = (() => {
@@ -494,12 +492,12 @@ export default function BreachClock() {
     jurisdictions,
     residentCounts,
     sensitivity,
-    encryptionApplied,
     encrypted,
     encryptionStrength,
     redacted,
     keyAcquired,
     reidentificationAcquired,
+    gdprUnintelligibility,
     riskLevel,
   });
 
@@ -618,7 +616,7 @@ export default function BreachClock() {
         residentCounts,
         sensitivity,
         sensitivityLabels: sensitivityLabelsForMemo,
-        encryptionApplied,
+        encryptionSummary: encryptionRecap,
         riskLevel,
         incidentReport: quickMode ? null : buildIncidentReportSections(),
       };
@@ -1214,14 +1212,13 @@ export default function BreachClock() {
     </div>
   );
 
-  // Encryption cluster (S3b). Five tri-state inputs in the field-mark idiom, with
-  // nested reveals: strength + keyAcquired appear only when encrypted=Yes;
-  // reidentificationAcquired only when redacted=Yes. The cluster is US-facing but
-  // also drives the GDPR path (via the derived encryptionApplied) until S5, so it
-  // renders whenever any jurisdiction is selected — gating it US-only would strand
-  // EU-only GDPR encryption, the only encryption control until S5.
+  // US encryption cluster (S3b). Five tri-state inputs in the field-mark idiom,
+  // with nested reveals: strength + keyAcquired appear only when encrypted=Yes;
+  // reidentificationAcquired only when redacted=Yes. US-facing — shown only when a
+  // US jurisdiction is selected (S5: EU/UK now have their own gdprUnintelligibility
+  // input, so the cluster no longer needs to render for EU-only incidents).
   const renderEncryption = () => {
-    if (!anyJurisdiction) return null;
+    if (!anyUSJurisdiction) return null;
     const helperStyle = { fontSize: "13px", lineHeight: 1.5, margin: "0 0 10px", color: "#2C2418", opacity: 0.7, maxWidth: "640px" };
     return (
       <div style={{ marginBottom: "24px" }}>
@@ -1296,6 +1293,19 @@ export default function BreachClock() {
           );
         })}
       </div>
+    </div>
+  );
+
+  // ── GDPR Art. 34(3)(a) unintelligibility (S5; EU/UK only, near the risk
+  //    section). Dedicated tri-state input that replaced the derived
+  //    encryptionApplied. No 128-bit floor — a qualitative standard. ──
+  const renderGdprUnintelligibility = () => (
+    <div style={{ marginBottom: "24px" }}>
+      {labelRow("Were appropriate technical measures (e.g. encryption) applied that render the data unintelligible to unauthorised persons?")}
+      <p style={{ fontSize: "13px", lineHeight: 1.5, margin: "0 0 10px", color: "#2C2418", opacity: 0.7, maxWidth: "640px" }}>
+        Under Art. 34(3)(a), individual notification may be exempt where such measures rendered the data unintelligible. Does NOT affect Art. 33 authority notification.
+      </p>
+      {triStateRow(gdprUnintelligibility, setGdprUnintelligibility, YES_NO)}
     </div>
   );
 
@@ -1621,6 +1631,7 @@ export default function BreachClock() {
           {(jurisdictions.eu || jurisdictions.uk) && (
             <div id="form-risk" style={{ scrollMarginTop: `${NAV_CLEARANCE}px` }}>
               {renderRiskAssessment()}
+              {renderGdprUnintelligibility()}
               {isNarrow && renderNote("risk")}
             </div>
           )}
@@ -1823,6 +1834,7 @@ export default function BreachClock() {
             collapsibleSection("form-risk", "07", "Risk Assessment", null,
               <>
                 {renderRiskAssessment()}
+                {renderGdprUnintelligibility()}
                 {isNarrow && renderNote("risk")}
               </>
             )}
@@ -1911,11 +1923,18 @@ export default function BreachClock() {
               }).join(" · ") || "—"
             )}
             {recapRow("Data types (Q1)", sensitivity.map((s) => SENSITIVITY_OPTIONS.find((o) => o.id === s)?.label).filter(Boolean).join(" · ") || "—")}
-            {recapRow("Encryption", encryptionRecap)}
+            {anyUSJurisdiction && recapRow("Encryption", encryptionRecap)}
             {(jurisdictions.eu || jurisdictions.uk) &&
               recapRow(
                 "Risk assessment",
                 riskLevel ? RISK_OPTIONS.find((o) => o.value === riskLevel)?.label : "Not assessed"
+              )}
+            {(jurisdictions.eu || jurisdictions.uk) &&
+              recapRow(
+                "Unintelligibility (Art. 34(3)(a))",
+                gdprUnintelligibility === "yes" ? "Measures applied — data rendered unintelligible"
+                  : gdprUnintelligibility === "no" ? "Not applied"
+                  : "Not reported"
               )}
             {review.length > 0 &&
               recapRow(

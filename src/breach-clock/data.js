@@ -53,8 +53,8 @@ const JURISDICTIONS = [
         conditionalGates: [
           {
             role: "safeHarbor",
-            input: "encryptionApplied",
-            equals: true,
+            input: "gdprUnintelligibility",
+            equals: "yes",
             onSatisfied: "suppress",
             whenUnset: "fires",
             suppressionType: "unintelligibility_exemption",
@@ -101,8 +101,8 @@ const JURISDICTIONS = [
         conditionalGates: [
           {
             role: "safeHarbor",
-            input: "encryptionApplied",
-            equals: true,
+            input: "gdprUnintelligibility",
+            equals: "yes",
             onSatisfied: "suppress",
             whenUnset: "fires",
             suppressionType: "unintelligibility_exemption",

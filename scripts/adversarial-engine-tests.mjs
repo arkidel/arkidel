@@ -111,11 +111,11 @@ T("A. Mixed", "All EIGHT jurisdictions, riskLevel unset, mixed counts", (a) => {
 });
 
 T("A. Mixed", "All EIGHT, riskLevel high + encryption (per-obligation safeHarbor gates)", (a) => {
-  // S3a: encryption is per-obligation safeHarbor gates, not a global switch. US
-  // states read encrypted/keyAcquired; GDPR Art.34 still reads encryptionApplied
-  // (until S5). Order is risk(fireCondition) -> threshold -> encryption(safeHarbor).
+  // Encryption is per-obligation safeHarbor gates, not a global switch. US states
+  // read encrypted/keyAcquired; GDPR Art.34 reads gdprUnintelligibility (S5).
+  // Order is risk(fireCondition) -> threshold -> encryption(safeHarbor).
   //   GDPR Art.33 has no encryption gate -> fires (EU SA + UK ICO) = 2 deadlines.
-  //   GDPR Art.34 (high meets risk, then encryption) -> unintelligibility-suppressed x2.
+  //   GDPR Art.34 (high meets risk, then gdprUnintelligibility) -> suppressed x2.
   //   Every US obligation whose threshold is met -> breach_definition-suppressed,
   //   EXCEPT MA: S4 routes MA's harbor (encrypted + 128-bit + key-not-acquired) to
   //   REVIEW (the § 3(b) second trigger), so strength ge_128 is supplied here.
@@ -127,7 +127,7 @@ T("A. Mixed", "All EIGHT, riskLevel high + encryption (per-obligation safeHarbor
     jurisdictions: { eu: true, uk: true, ca: true, tx: true, co: true, ma: true, ny: true, va: true },
     residentCounts: { ca: 1000, tx: 20000, co: 5000, ny: 6000, va: 2000 },
     riskLevel: "high",
-    encryptionApplied: true,
+    gdprUnintelligibility: "yes",
     encrypted: "yes",
     encryptionStrength: "ge_128",
     keyAcquired: "no",
@@ -153,7 +153,7 @@ T("B. Ordering", "Art.34 'unlikely' risk + encryption -> RISK wins (citation Art
   // Both could apply to Art.34: risk ('unlikely' fails high) AND encryption (unintelligibility).
   // Engine runs risk BEFORE encryption, returns at risk -> suppression_type risk_assessment,
   // suppression_citation = riskSuppression.citation = "Art. 34 GDPR".
-  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: "unlikely", encryptionApplied: true });
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: "unlikely", gdprUnintelligibility: "yes" });
   a.eq(r.deadlines.length, 0, "deadlines count");
   a.eq(r.suppressed.length, 2, "suppressed count (SA + DS)");
   const ds = S(r, "EU GDPR", "Data Subjects");
@@ -166,7 +166,7 @@ T("B. Ordering", "Art.34 'unlikely' risk + encryption -> RISK wins (citation Art
 
 T("B. Ordering", "Art.34 'risk' (not high) + encryption -> RISK wins over encryption", (a) => {
   // riskLevel 'risk': Art.33 fires (72h). Art.34 needs high -> risk-suppressed BEFORE encryption.
-  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: "risk", encryptionApplied: true });
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: "risk", gdprUnintelligibility: "yes" });
   a.ok(D(r, "EU GDPR", "Supervisory Authority"), "EU SA fires (72h, no encryption mechanism)");
   const ds = S(r, "EU GDPR", "Data Subjects");
   a.eq(ds?.suppression_type, "risk_assessment", "DS suppression type");
@@ -176,7 +176,7 @@ T("B. Ordering", "Art.34 'risk' (not high) + encryption -> RISK wins over encryp
 T("B. Ordering", "Art.34 'high' + encryption -> ENCRYPTION wins (risk satisfied, citation 34(3)(a))", (a) => {
   // riskLevel high satisfies Art.34's risk gate, so it falls through to the encryption
   // block; encryption then suppresses via unintelligibility with citation Art.34(3)(a) GDPR.
-  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: "high", encryptionApplied: true });
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true }, riskLevel: "high", gdprUnintelligibility: "yes" });
   a.ok(D(r, "EU GDPR", "Supervisory Authority"), "EU SA fires");
   const ds = S(r, "EU GDPR", "Data Subjects");
   a.eq(ds?.suppression_type, "unintelligibility_exemption", "DS suppression type");
@@ -184,7 +184,7 @@ T("B. Ordering", "Art.34 'high' + encryption -> ENCRYPTION wins (risk satisfied,
 });
 
 T("B. Ordering", "UK Art.34 'unlikely' + encryption -> RISK wins (citation Art.34 UK GDPR)", (a) => {
-  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { uk: true }, riskLevel: "unlikely", encryptionApplied: true });
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { uk: true }, riskLevel: "unlikely", gdprUnintelligibility: "yes" });
   a.eq(S(r, "UK GDPR", "Data Subjects")?.suppression_type, "risk_assessment", "UK DS suppression type");
   a.eq(S(r, "UK GDPR", "Data Subjects")?.suppression_citation, "Art. 34 UK GDPR", "UK DS citation");
   a.eq(S(r, "UK GDPR", "ICO")?.suppression_citation, "Art. 33(5) UK GDPR", "UK ICO citation");
@@ -415,7 +415,7 @@ T("F. Parity", "Operative-only facts == operative + record noise (identical engi
     jurisdictions: { ca: true, eu: true },
     residentCounts: { ca: 1000 },
     sensitivity: ["health", "financial"],
-    encryptionApplied: false,
+    gdprUnintelligibility: "no",
     riskLevel: "risk",
   };
   // Full mode passes the same operative keys plus a pile of record-only fields.

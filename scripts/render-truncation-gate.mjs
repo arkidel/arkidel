@@ -39,31 +39,35 @@ const fontBytes = {
 const logoBytes = await readBytes(path.join(ROOT, "src/assets/logo-arkidel.png"));
 
 async function render(label, facts, outName) {
-  const { deadlines, suppressed } = computeDeadlines(facts);
+  const { deadlines, suppressed, review } = computeDeadlines(facts);
   const bytes = await renderMemoPdfBytes(facts, deadlines, suppressed, {
     fontBytes,
     logoBytes,
     generatedAt: new Date("2026-05-23T12:00:00Z"),
-  });
+  }, review);
   const outPath = path.join("/tmp", outName);
   await fs.writeFile(outPath, bytes);
-  console.log(`[${label}] ${outPath} (${bytes.length} bytes) — deadlines: ${deadlines.length}, suppressed: ${suppressed.length}`);
+  console.log(`[${label}] ${outPath} (${bytes.length} bytes) — deadlines: ${deadlines.length}, suppressed: ${suppressed.length}, review: ${review.length}`);
 }
 
-// (a) Suppressed-card path — encryption applied, MA selected.
-//     Expect three suppressed cards (Residents, AG, OCABR); the OCABR
-//     heading should wrap onto a second line and render in full.
+// (a) Review-card path — MA harbor met (encrypted, 128-bit, key not acquired), so
+//     all three MA obligations route to REVIEW (the § 3(b) second trigger).
+//     Expect three review cards (Residents, AG, OCABR); the OCABR heading should
+//     wrap onto a second line and render in full. (Pre-S5 this was the
+//     "suppressed" path via the global encryption switch; that switch is gone.)
 await render(
-  "suppressed",
+  "review",
   {
     awarenessDate: new Date("2026-05-22T15:00:00Z"),
     jurisdictions: { ma: true },
     residentCounts: {},
     sensitivity: ["identifiers"],
     sensitivityLabels: ["Government identifiers (SSN, driver's license, etc.)"],
-    encryptionApplied: true,
+    encrypted: "yes",
+    encryptionStrength: "ge_128",
+    keyAcquired: "no",
   },
-  "gate-truncation-suppressed.pdf"
+  "gate-truncation-review.pdf"
 );
 
 // (c) Deadline-card path — encryption off, MA selected.
@@ -79,7 +83,6 @@ await render(
     residentCounts: {},
     sensitivity: ["identifiers"],
     sensitivityLabels: ["Government identifiers (SSN, driver's license, etc.)"],
-    encryptionApplied: false,
   },
   "gate-truncation-deadline.pdf"
 );

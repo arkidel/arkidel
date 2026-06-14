@@ -53,16 +53,15 @@ function isHighRisk(sensitivity) {
 // chain leaves the harbor unsatisfied, so the obligation fires rather than being
 // silently excused.
 //
-// Consumers (as of Stage 3a): the EU/UK risk fireCondition (derived from the
+// Consumers (as of Stage 5): the EU/UK risk fireCondition (derived from the
 // legacy gating.* fields by `deriveGates`) and the per-obligation encryption /
-// redaction safeHarbors declared as `ob.conditionalGates` in data.js. The former
-// global `encryptionApplied` switch is GONE — every state's encryption harbor is
-// now a safeHarbor gate. US states' gates read the cluster inputs (encrypted /
+// redaction / unintelligibility safeHarbors declared as `ob.conditionalGates` in
+// data.js. The former global `encryptionApplied` switch is GONE — every harbor is
+// a safeHarbor gate. US states' gates read the cluster inputs (encrypted /
 // keyAcquired / redacted / reidentificationAcquired); the GDPR Art. 34
-// unintelligibility gate still reads the `encryptionApplied` fact until Stage 5
-// swaps it for a dedicated `gdprUnintelligibility` input. The resident-threshold
-// block in computeDeadlines stays legacy (US-only). fireConditions are evaluated
-// before that threshold; safeHarbors after it.
+// unintelligibility gate reads its own `gdprUnintelligibility` input. The
+// resident-threshold block in computeDeadlines stays legacy (US-only).
+// fireConditions are evaluated before that threshold; safeHarbors after it.
 // =============================================================================
 
 function fireConditionMet(gate, value) {
@@ -160,7 +159,8 @@ function deriveGates(ob) {
  * @param {Object} facts.jurisdictions       - { [id]: boolean } map of selected jurisdictions.
  * @param {Object} [facts.residentCounts]    - { [id]: number|string } resident counts per jurisdiction.
  * @param {string[]} [facts.sensitivity]     - Array of sensitivity category ids.
- * @param {boolean} [facts.encryptionApplied] - Whether the data was encrypted with industry-standard encryption AND the key was not compromised.
+ * @param {string} [facts.encrypted] - US encryption-cluster inputs ("yes"|"no"|unset): encrypted, plus encryptionStrength ("ge_128"|"below_128"|"unknown"), redacted, keyAcquired, reidentificationAcquired.
+ * @param {string} [facts.gdprUnintelligibility] - GDPR Art. 34(3)(a) input ("yes"|"no"|unset): measures rendering the data unintelligible.
  * @returns {{deadlines: Array, suppressed: Array}}
  *   deadlines  — obligations that fire under the facts.
  *   suppressed — obligations that would have fired but were suppressed because
@@ -181,19 +181,21 @@ function computeDeadlines(facts) {
     jurisdictions = {},
     residentCounts = {},
     sensitivity = [],
-    encryptionApplied = false,
     riskLevel,
     encrypted,
     encryptionStrength,
     redacted,
     keyAcquired,
     reidentificationAcquired,
+    gdprUnintelligibility,
   } = facts;
   // Conditional-gate inputs — incident-global facts the gates read. Anything
   // unset stays undefined and (per the safeHarbor rule) leaves a harbor
-  // unsatisfied, so the obligation fires. `encryptionApplied` is the lone legacy
-  // boolean still consumed (GDPR Art. 34(3)(a) until Stage 5).
-  const gateInputs = { riskLevel, encrypted, encryptionStrength, redacted, keyAcquired, reidentificationAcquired, encryptionApplied };
+  // unsatisfied, so the obligation fires. The US states read the encryption
+  // cluster (encrypted/strength/key, redacted/reidentification); GDPR Art. 34
+  // reads gdprUnintelligibility (Art. 34(3)(a)). The former global
+  // encryptionApplied boolean is fully retired as of Stage 5.
+  const gateInputs = { riskLevel, encrypted, encryptionStrength, redacted, keyAcquired, reidentificationAcquired, gdprUnintelligibility };
   const deadlines = [];
   const suppressed = [];
   const pending = [];
@@ -271,8 +273,8 @@ function computeDeadlines(facts) {
       // data.js — the former global `encryptionApplied` switch is gone. Two legal
       // mechanisms, distinguished by the gate's suppressionType for the card / memo
       // text: US "breach_definition" (statutory breach excludes encrypted/redacted
-      // data) and GDPR "unintelligibility_exemption" (Art. 34(3)(a), still reading
-      // the encryptionApplied fact until Stage 5). A harbor that turns on counsel
+      // data) and GDPR "unintelligibility_exemption" (Art. 34(3)(a), reading the
+      // gdprUnintelligibility input). A harbor that turns on counsel
       // judgment routes to `review` instead (Stage 4: MA second trigger);
       // `review` outranks `suppress`.
       const harborVerdict = evaluateSafeHarbors(gates, gateInputs);
@@ -555,7 +557,7 @@ const TEST_CASES = [
   {
     name: "EU GDPR: risk 'high' + encryption → SA fires; Data Subjects suppressed by unintelligibility (Art. 34(3)(a))",
     category: "EU GDPR",
-    facts: { jurisdictions: { eu: true }, riskLevel: "high", encryptionApplied: true },
+    facts: { jurisdictions: { eu: true }, riskLevel: "high", gdprUnintelligibility: "yes" },
     expect: expectAll(
       expectFires("EU GDPR", "Supervisory Authority"),
       expectDoesNotFire("EU GDPR", "Data Subjects"),
@@ -565,7 +567,7 @@ const TEST_CASES = [
   {
     name: "EU GDPR: risk 'risk' + encryption → SA fires; Data Subjects risk-suppressed (risk gating precedes encryption)",
     category: "EU GDPR",
-    facts: { jurisdictions: { eu: true }, riskLevel: "risk", encryptionApplied: true },
+    facts: { jurisdictions: { eu: true }, riskLevel: "risk", gdprUnintelligibility: "yes" },
     expect: expectAll(
       expectFires("EU GDPR", "Supervisory Authority"),
       expectSuppressed("EU GDPR", "Data Subjects", "risk_assessment")
@@ -618,7 +620,7 @@ const TEST_CASES = [
   {
     name: "UK GDPR: risk 'high' + encryption → ICO fires; Data Subjects suppressed by unintelligibility (Art. 34(3)(a) UK GDPR)",
     category: "UK GDPR",
-    facts: { jurisdictions: { uk: true }, riskLevel: "high", encryptionApplied: true },
+    facts: { jurisdictions: { uk: true }, riskLevel: "high", gdprUnintelligibility: "yes" },
     expect: expectAll(
       expectFires("UK GDPR", "ICO"),
       expectDoesNotFire("UK GDPR", "Data Subjects"),
@@ -628,7 +630,7 @@ const TEST_CASES = [
   {
     name: "UK GDPR: risk 'risk' + encryption → ICO fires; Data Subjects risk-suppressed (risk gating precedes encryption)",
     category: "UK GDPR",
-    facts: { jurisdictions: { uk: true }, riskLevel: "risk", encryptionApplied: true },
+    facts: { jurisdictions: { uk: true }, riskLevel: "risk", gdprUnintelligibility: "yes" },
     expect: expectAll(
       expectFires("UK GDPR", "ICO"),
       expectSuppressed("UK GDPR", "Data Subjects", "risk_assessment")
@@ -1072,7 +1074,7 @@ const TEST_CASES = [
       jurisdictions: { eu: true },
       sensitivity: ["health"],
       riskLevel: "high",
-      encryptionApplied: true,
+      gdprUnintelligibility: "yes",
     },
     expect: expectAll(
       expectFires("EU GDPR", "Supervisory Authority"),
@@ -1088,7 +1090,7 @@ const TEST_CASES = [
       jurisdictions: { uk: true },
       sensitivity: ["health"],
       riskLevel: "high",
-      encryptionApplied: true,
+      gdprUnintelligibility: "yes",
     },
     expect: expectAll(
       expectFires("UK GDPR", "ICO"),
@@ -1290,7 +1292,7 @@ const TEST_CASES = [
       jurisdictions: { ma: true, eu: true },
       sensitivity: ["financial"],
       riskLevel: "high",
-      encryptionApplied: true,
+      gdprUnintelligibility: "yes",
       encrypted: "yes",
       encryptionStrength: "ge_128",
       keyAcquired: "no",

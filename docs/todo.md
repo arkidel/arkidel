@@ -454,10 +454,29 @@ disclosure gate will also produce `review`.
   from S1–S3a); engine.js edited for TEST_CASES only. In-file 70/70 (was 66; +4
   new MA edges), adversarial 57/57, quad-state invariant holds with review
   populated, build green.
-- **S1 + S2 + S3a + S3b + S4 complete. S5 next:** GDPR Art. 34(3)(a) — add a
-  dedicated `gdprUnintelligibility` input + UI control near the risk section,
-  swap the EU/UK Art. 34 gate's `input` from `encryptionApplied` to it, and
-  retire the derived `encryptionApplied`.
+- **S5 — done (2026-06-14):** GDPR Art. 34(3)(a) gets a dedicated
+  `gdprUnintelligibility` tri-state input (wording/helper verbatim from ADDENDUM
+  §A #5), rendered near the risk section for EU/UK in both quick and full mode.
+  The EU/UK Art. 34 gate's `input` switched from `encryptionApplied` to
+  `gdprUnintelligibility` (`equals: true` → `equals: "yes"`). The derived
+  `encryptionApplied` boolean is **fully retired** — no code reads or writes it
+  anywhere (grep-clean; only explanatory comments remain). Engine `gateInputs`
+  now supplies `gdprUnintelligibility`; the US cluster reverts to **US-only
+  visibility** (`anyUSJurisdiction`) now that EU/UK has its own control. The
+  PDF-memo orphan was fixed: `memo-pdf-core.js` reads a new `encryptionSummary`
+  string (the same cluster summary shown on screen) instead of the retired
+  boolean. EU/UK Art. 34 exemption test cases re-pointed (`encryptionApplied:
+  true` → `gdprUnintelligibility: "yes"`) — facts only, no `expect` moved.
+  Verified: in-file 70/70, adversarial 57/57 (identical outcomes), render gates
+  green, build green. **File-list note:** beyond the named four (data.js,
+  BreachClock.jsx, engine.js, docs/todo.md) the cleanup necessarily touched
+  `memo-pdf-core.js` (production orphan) and the `adversarial`/`render-gate-memo`/
+  `render-truncation-gate` harnesses (re-pointed dead `encryptionApplied`); the
+  truncation gate's old "suppressed" scenario — silently neutered back at S3a when
+  MA moved off the global switch — is re-pointed to the MA **review** path.
+- **S1–S5 complete (engine/data done). S6 next (docs only):** update the "no
+  mixed states" carve-out + the tri→quad-state invariant passage in CLAUDE.md,
+  and the CA/TX/CO/NY/VA + EU/UK intake-form sign-offs in `docs/intake-forms.md`.
 
 ---
 
