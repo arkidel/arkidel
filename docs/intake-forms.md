@@ -367,6 +367,14 @@ UK in parallel).
   to legislation.gov.uk for the primary statutory text. DUAA 2025 amendments
   reviewed and confirmed not to affect Arts. 33/34. Art. 34(3)(b) and (c)
   exemptions flagged (parallel to EU).
+- **Source-URL refresh (2026-06-14):** The Art. 33 and Art. 34 obligation
+  `source_url`s in `data.js` — formerly the ICO "Personal data breaches: a
+  guide" page, which now returns 404 — were repointed to the current canonical
+  ICO breach-reporting page,
+  `https://ico.org.uk/for-organisations/report-a-breach/personal-data-breach/`.
+  Non-substantive link update only: no change to any rule, threshold, citation,
+  deadline, or prose. All three target URLs in this refresh (UK ICO, TX AG, NY
+  DFS) verified live (HTTP 200) on 2026-06-14. (Commit 9143531.)
 - **Reviewer:** *(pending)*
 
 ---
@@ -653,6 +661,15 @@ UK in parallel).
   60-day individual / 30-day AG / 10,000+ CRA structure.
 - **Sources confirmed via project knowledge base:** IAPP US State Breach
   Notification Chart, February 2026 update.
+- **Source-URL refresh (2026-06-14):** The § 521.053(i) AG-notification
+  obligation `source_url` in `data.js` — formerly
+  `…/consumer-protection/file-consumer-complaint/report-data-breach`, which now
+  returns 404 — was repointed to the current canonical Texas AG data-breach
+  reporting page,
+  `https://www.texasattorneygeneral.gov/consumer-protection/data-breach-reporting`.
+  Non-substantive link update only: no change to any rule, threshold, citation,
+  deadline, or prose. All three target URLs in this refresh (UK ICO, TX AG, NY
+  DFS) verified live (HTTP 200) on 2026-06-14. (Commit 9143531.)
 - **Reviewer:** *(pending)*
 
 ---
@@ -1157,6 +1174,13 @@ multi-authority array.
 - **Sources confirmed via project knowledge base:** IAPP US State Breach
   Notification Chart, February 2026 update.
 - **Material change since prior draft:** First draft.
+- **Source-URL refresh (2026-06-14):** The NYDFS sectoral-overlay counsel note's
+  `source_url` in `data.js` — formerly `…/industry_guidance/cyber_filings`,
+  which now returns 404 — was repointed to the current canonical NYDFS
+  cybersecurity page, `https://www.dfs.ny.gov/industry_guidance/cybersecurity`.
+  Non-substantive link update only: no change to any rule, threshold, citation,
+  deadline, or prose. All three target URLs in this refresh (UK ICO, TX AG, NY
+  DFS) verified live (HTTP 200) on 2026-06-14. (Commit 9143531.)
 - **Reviewer:** *(pending)*
 
 ---
