@@ -119,6 +119,19 @@ const RISK_OPTIONS = [
   { value: "high", label: "Likely to result in a high risk", desc: "Notify the authority within 72 hours and affected data subjects without undue delay." },
 ];
 
+// Encryption-cluster option sets (S3b). The values match what engine.js gates on:
+// encrypted/redacted/keyAcquired/reidentificationAcquired are "yes"|"no"; strength
+// is "ge_128"|"below_128"|"unknown". Each is tri-state ("" = unset → fires).
+const YES_NO = [
+  { value: "yes", label: "Yes" },
+  { value: "no", label: "No" },
+];
+const ENCRYPTION_STRENGTH_OPTIONS = [
+  { value: "ge_128", label: "Yes — 128-bit or higher" },
+  { value: "below_128", label: "No — below 128-bit" },
+  { value: "unknown", label: "Unknown" },
+];
+
 // Natural-language list join ("A", "A and B", "A, B, and C") for note copy.
 const joinList = (arr) =>
   arr.length <= 1
@@ -305,7 +318,15 @@ export default function BreachClock() {
     () => Object.fromEntries(JURISDICTIONS.filter((j) => j.residentField).map((j) => [j.id, ""]))
   );
   const [sensitivity, setSensitivity] = useState([]);
-  const [encryptionApplied, setEncryptionApplied] = useState(false);
+  // Encryption cluster (S3b) — five tri-state inputs, each defaulting to unset
+  // (""). They feed the per-obligation safeHarbor gates in the engine; the GDPR
+  // Art. 34 path is driven by a boolean derived from them (see encryptionApplied
+  // below) until S5 gives GDPR its own input.
+  const [encrypted, setEncrypted] = useState("");
+  const [encryptionStrength, setEncryptionStrength] = useState("");
+  const [redacted, setRedacted] = useState("");
+  const [keyAcquired, setKeyAcquired] = useState("");
+  const [reidentificationAcquired, setReidentificationAcquired] = useState("");
 
   // ── Record state (incident report only; never seen by the engine) ──
   const [record, setRecord] = useState(() => ({ ...EMPTY_RECORD, dataSubjectBlocks: [makeBlock()] }));
@@ -410,6 +431,33 @@ export default function BreachClock() {
   const anyJurisdiction = Object.values(jurisdictions).some(Boolean);
   const highRiskPresent = isHighRisk(sensitivity);
 
+  // GDPR path (until S5): the EU/UK Art. 34 gate still reads `encryptionApplied`.
+  // Derive it from the cluster — data encrypted with an uncompromised key is
+  // unintelligible under Art. 34(3)(a). S5 replaces this with a dedicated
+  // gdprUnintelligibility input shown near the risk section.
+  const encryptionApplied = encrypted === "yes" && keyAcquired === "no";
+
+  // Human-readable cluster summary for the review-page Analysis-inputs recap.
+  const encryptionRecap = (() => {
+    const parts = [];
+    if (encrypted === "yes") {
+      let s = "Encrypted";
+      if (encryptionStrength === "ge_128") s += " (128-bit+)";
+      else if (encryptionStrength === "below_128") s += " (below 128-bit)";
+      else if (encryptionStrength === "unknown") s += " (strength unknown)";
+      if (keyAcquired === "yes") s += ", key/credential acquired";
+      else if (keyAcquired === "no") s += ", key not acquired";
+      parts.push(s);
+    } else if (encrypted === "no") parts.push("Not encrypted");
+    if (redacted === "yes") {
+      let s = "Redacted";
+      if (reidentificationAcquired === "yes") s += ", re-identification info acquired";
+      else if (reidentificationAcquired === "no") s += ", re-identification info not acquired";
+      parts.push(s);
+    } else if (redacted === "no") parts.push("Not redacted");
+    return parts.length ? parts.join(" · ") : "Not reported";
+  })();
+
   const parseAwareness = () => {
     if (!awareness) return null;
     const d = new Date(awareness);
@@ -447,6 +495,11 @@ export default function BreachClock() {
     residentCounts,
     sensitivity,
     encryptionApplied,
+    encrypted,
+    encryptionStrength,
+    redacted,
+    keyAcquired,
+    reidentificationAcquired,
     riskLevel,
   });
 
@@ -836,6 +889,19 @@ export default function BreachClock() {
     </div>
   );
 
+  // Tri-state Yes/No[/extra] selector — check-rows behaving as radios (same idiom
+  // as the risk section): clicking a row sets the value; unset ("") is the
+  // pre-interaction default. Used by the encryption cluster.
+  const triStateRow = (value, setValue, options) => (
+    <div style={{ display: "grid", gap: "4px" }}>
+      {options.map((o) => (
+        <div key={o.value}>
+          {checkRow(value === o.value, o.label, () => setValue(o.value), o.desc ? { desc: o.desc } : {})}
+        </div>
+      ))}
+    </div>
+  );
+
   // ── Collapsible sections ──────────────────────────────────────────────────
   const isSectionOpen = (id) => !!openSections[id];
   const toggleSection = (id) => setOpenSections((s) => ({ ...s, [id]: !s[id] }));
@@ -880,7 +946,7 @@ export default function BreachClock() {
       case "form-summary":
         return !!record.incidentSummary;
       case "form-data":
-        return anyJurisdiction || sensitivity.length > 0 || encryptionApplied ||
+        return anyJurisdiction || sensitivity.length > 0 || !!encrypted || !!redacted ||
           record.dataSubjectBlocks.some((b) => b.name || b.count || b.elements.length || b.others.some((o) => o.trim()));
       case "form-measures":
         return !!(record.measuresTaken || record.measuresProposed ||
@@ -1148,17 +1214,51 @@ export default function BreachClock() {
     </div>
   );
 
-  const renderEncryption = () => (
-    <div style={{ marginBottom: "24px" }}>
-      {labelRow("Was the compromised data encrypted, with an uncompromised key?")}
-      {checkRow(
-        encryptionApplied,
-        "The compromised data was encrypted, and the encryption key was not also compromised.",
-        () => setEncryptionApplied(!encryptionApplied)
-      )}
-      {isNarrow && <div style={{ marginTop: "14px" }}>{renderNote("encryption")}</div>}
-    </div>
-  );
+  // Encryption cluster (S3b). Five tri-state inputs in the field-mark idiom, with
+  // nested reveals: strength + keyAcquired appear only when encrypted=Yes;
+  // reidentificationAcquired only when redacted=Yes. The cluster is US-facing but
+  // also drives the GDPR path (via the derived encryptionApplied) until S5, so it
+  // renders whenever any jurisdiction is selected — gating it US-only would strand
+  // EU-only GDPR encryption, the only encryption control until S5.
+  const renderEncryption = () => {
+    if (!anyJurisdiction) return null;
+    const helperStyle = { fontSize: "13px", lineHeight: 1.5, margin: "0 0 10px", color: "#2C2418", opacity: 0.7, maxWidth: "640px" };
+    return (
+      <div style={{ marginBottom: "24px" }}>
+        <div style={{ marginBottom: "20px" }}>
+          {labelRow("Was the affected data encrypted?")}
+          {triStateRow(encrypted, setEncrypted, YES_NO)}
+        </div>
+        {encrypted === "yes" && (
+          <>
+            <div style={{ marginBottom: "20px" }}>
+              {labelRow("Was the encryption at least 128-bit (AES-128 or stronger)?")}
+              <p style={helperStyle}>Massachusetts recognizes its safe harbor only for 128-bit-or-higher.</p>
+              {triStateRow(encryptionStrength, setEncryptionStrength, ENCRYPTION_STRENGTH_OPTIONS)}
+            </div>
+            <div style={{ marginBottom: "20px" }}>
+              {labelRow("Was the encryption key, decryption means, or a security credential able to render the encrypted data readable also acquired?")}
+              <p style={helperStyle}>If acquired, the encryption safe harbor does not apply — California explicitly includes an acquired security credential.</p>
+              {triStateRow(keyAcquired, setKeyAcquired, YES_NO)}
+            </div>
+          </>
+        )}
+        <div style={{ marginBottom: "20px" }}>
+          {labelRow("Was the affected data redacted?")}
+          <p style={helperStyle}>Virginia's safe harbor includes redacted data; most states' do not.</p>
+          {triStateRow(redacted, setRedacted, YES_NO)}
+        </div>
+        {redacted === "yes" && (
+          <div style={{ marginBottom: "20px" }}>
+            {labelRow("Was the information needed to re-identify the redacted data also acquired?")}
+            <p style={helperStyle}>If acquired, the redaction safe harbor does not apply.</p>
+            {triStateRow(reidentificationAcquired, setReidentificationAcquired, YES_NO)}
+          </div>
+        )}
+        {isNarrow && <div style={{ marginTop: "14px" }}>{renderNote("encryption")}</div>}
+      </div>
+    );
+  };
 
   // ── EU/UK risk assessment (operative; shown only when an EU/UK jurisdiction
   //    is selected). Three mutually-exclusive rows behaving as radios: clicking
@@ -1811,7 +1911,7 @@ export default function BreachClock() {
               }).join(" · ") || "—"
             )}
             {recapRow("Data types (Q1)", sensitivity.map((s) => SENSITIVITY_OPTIONS.find((o) => o.id === s)?.label).filter(Boolean).join(" · ") || "—")}
-            {recapRow("Encryption", encryptionApplied ? "Applied — suppression evaluated" : "Not reported")}
+            {recapRow("Encryption", encryptionRecap)}
             {(jurisdictions.eu || jurisdictions.uk) &&
               recapRow(
                 "Risk assessment",

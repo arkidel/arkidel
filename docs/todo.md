@@ -423,9 +423,25 @@ disclosure gate will also produce `review`.
   encryption suppression is not wired to the UI until S3b; the engine path is
   test-driven for now. Committed with the adversarial harness (A group
   re-pointed) added to the file list.
-- **S1 + S2 + S3a complete. S3b next:** the UI cluster in `BreachClock.jsx`
-  (replace the single encryption toggle with the sub-questions; wire the cluster
-  inputs into `computeDeadlines`).
+- **S3b — done (2026-06-14):** the encryption cluster UI in `BreachClock.jsx`
+  (UI-only; no engine/data change). The single encryption toggle is replaced by
+  five tri-state inputs (encrypted / encryptionStrength / redacted / keyAcquired /
+  reidentificationAcquired, wording + helpers per ADDENDUM §A), built on a
+  `triStateRow` check-row-as-radio helper. Nested reveals: strength + keyAcquired
+  appear when encrypted=Yes; reidentification when redacted=Yes. All five wired
+  into `computeDeadlines`. **GDPR preserved (instruction 2):** `encryptionApplied`
+  is now a *derived* boolean (`encrypted === "yes" && keyAcquired === "no"`) that
+  still drives the EU/UK Art. 34 gate until S5 — the same cluster drives both US
+  and GDPR; nothing stranded. **Visibility:** the cluster renders when any
+  jurisdiction is selected (not US-only) — gating it US-only would strand EU-only
+  GDPR encryption, the sole encryption control until S5. Analysis-inputs recap now
+  summarizes the cluster. Verified: in-file 66/66, adversarial 57/57 (engine
+  untouched), build green; preview gate-render — cluster renders, both reveals
+  work, no console errors, and a mixed-state result (CA fires + VA
+  redaction-suppressed, same incident) renders correctly.
+- **S1 + S2 + S3a + S3b complete. S4 next:** flip MA's encryption gate from
+  `suppress` to `review` + add `requiresStrength: "ge_128"` + the §3(b)
+  second-trigger copy; populate the review bucket; add the MA second-trigger test.
 
 ---
 
