@@ -798,6 +798,11 @@ UK in parallel).
   the statute.
 - **Sources confirmed via project knowledge base:** IAPP US State Breach
   Notification Chart, February 2026 update.
+- **Source-URL liveness verified (2026-06-14):** All source URLs for this
+  jurisdiction confirmed live. Earlier non-reachability during the link-liveness
+  audit was Prague-origin geofencing (US-only state sites refusing non-US
+  traffic), NOT dead links — confirmed via US-routed access and Wayback Machine
+  200 captures. No URL change. Covers: coag.gov/resources/data-protection-laws/.
 - **Reviewer:** *(pending)*
 
 ---
@@ -972,6 +977,11 @@ the model to support an `authorities[]` array on a single obligation.
   of the dual-trigger reading of § 3(b).
 - **Sources confirmed via project knowledge base:** IAPP US State Breach
   Notification Chart, February 2026 update.
+- **Source-URL liveness verified (2026-06-14):** All source URLs for this
+  jurisdiction confirmed live. Earlier non-reachability during the link-liveness
+  audit was Prague-origin geofencing (US-only state sites refusing non-US
+  traffic), NOT dead links — confirmed via US-routed access and Wayback Machine
+  200 captures. No URL change. Covers: malegislature.gov (M.G.L. c. 93H § 3).
 - **Reviewer:** *(pending)*
 
 ---
@@ -1418,6 +1428,13 @@ multi-authority array.
   all-eight-jurisdictions stacking test; this change closes a traceability
   gap identified in a coverage audit. No rule in `data.js` changed; this is
   test coverage only. Engine test count: 50 → 51, all passing.
+- **Source-URL liveness verified (2026-06-14):** All source URLs for this
+  jurisdiction confirmed live. Earlier non-reachability during the link-liveness
+  audit was Prague-origin geofencing (US-only state sites refusing non-US
+  traffic), NOT dead links — confirmed via US-routed access and Wayback Machine
+  200 captures. No URL change. Covers: law.lis.virginia.gov § 18.2-186.6,
+  law.lis.virginia.gov § 32.1-127.1:05, and
+  oag.state.va.us/programs-initiatives/computer-crime.
 - **Reviewer:** *(pending)*
 
 ---
