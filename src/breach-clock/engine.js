@@ -53,11 +53,16 @@ function isHighRisk(sensitivity) {
 // chain leaves the harbor unsatisfied, so the obligation fires rather than being
 // silently excused.
 //
-// STAGE 1 scope: the only wired consumer is the EU/UK risk gate, whose gates are
-// derived from the existing data fields by `deriveGates` (no data.js change yet).
-// Later stages declare `ob.conditionalGates` directly in data.js and the adapter
-// falls away; the legacy resident-threshold and global-encryption blocks in
-// computeDeadlines are intentionally left in place for Stage 1.
+// Consumers (as of Stage 3a): the EU/UK risk fireCondition (derived from the
+// legacy gating.* fields by `deriveGates`) and the per-obligation encryption /
+// redaction safeHarbors declared as `ob.conditionalGates` in data.js. The former
+// global `encryptionApplied` switch is GONE — every state's encryption harbor is
+// now a safeHarbor gate. US states' gates read the cluster inputs (encrypted /
+// keyAcquired / redacted / reidentificationAcquired); the GDPR Art. 34
+// unintelligibility gate still reads the `encryptionApplied` fact until Stage 5
+// swaps it for a dedicated `gdprUnintelligibility` input. The resident-threshold
+// block in computeDeadlines stays legacy (US-only). fireConditions are evaluated
+// before that threshold; safeHarbors after it.
 // =============================================================================
 
 function fireConditionMet(gate, value) {
@@ -79,8 +84,19 @@ function safeHarborSatisfied(gate, inputs) {
   return true;
 }
 
-function evaluateConditionalGates(gates, inputs) {
-  // Pass 1 — fireConditions.
+// Normalize a gate's suppression metadata into { type, citation, description }.
+// fireCondition gates (the risk gate) carry a nested `suppression`; safeHarbor
+// gates carry a top-level `suppressionType` + `citation` + `description`.
+function gateSuppression(gate) {
+  if (gate.suppression) return gate.suppression;
+  return { type: gate.suppressionType, citation: gate.citation, description: gate.description };
+}
+
+// fireConditions — preconditions an obligation needs to fire at all. Evaluated
+// BEFORE the resident-threshold check, preserving the historical
+// risk → threshold → encryption ordering. Returns a pending/suppressed verdict,
+// or null when no fireCondition blocks.
+function evaluateFireConditions(gates, inputs) {
   for (const gate of gates) {
     if (gate.role !== "fireCondition") continue;
     const value = inputs[gate.input];
@@ -88,8 +104,15 @@ function evaluateConditionalGates(gates, inputs) {
     if (!established) return { outcome: "pending", gate };
     if (!fireConditionMet(gate, value)) return { outcome: "suppressed", gate };
   }
-  // Pass 2 — safeHarbors. `review` outranks `suppress`, so a suppress match is
-  // held and only returned if no review match is found anywhere in the list.
+  return null;
+}
+
+// safeHarbors — affirmative excuses. Evaluated AFTER the resident-threshold check,
+// so a below-threshold US obligation is silently absent (returned at the
+// threshold) rather than suppressed. `review` outranks `suppress`, so a suppress
+// match is held and only returned if no review match is found anywhere in the
+// list. Returns a review/suppressed verdict, or null when no harbor applies.
+function evaluateSafeHarbors(gates, inputs) {
   let suppressGate = null;
   for (const gate of gates) {
     if (gate.role !== "safeHarbor") continue;
@@ -98,16 +121,17 @@ function evaluateConditionalGates(gates, inputs) {
     if (gate.onSatisfied === "suppress" && !suppressGate) suppressGate = gate;
   }
   if (suppressGate) return { outcome: "suppressed", gate: suppressGate };
-  return { outcome: "fires" };
+  return null;
 }
 
-// Stage-1 adapter: express the existing EU/UK risk gate in the generic gate
-// vocabulary without touching data.js. Obligations that declare their own
-// `conditionalGates` (later stages) use them directly. Behavior-identical to the
-// former inline risk block: riskRequired → fires on "risk"|"high"; highRequired →
-// fires on "high"; any value outside VALID_RISK_LEVELS → pending.
+// Build the full gate list for an obligation: the risk fireCondition derived from
+// the legacy gating.* fields (the behavior-preserved adapter from Stage 1) MERGED
+// with any declared `conditionalGates` (the encryption / redaction safeHarbors
+// added in Stage 3a). An obligation can carry both — EU/UK Art. 34 has a risk
+// fireCondition AND an unintelligibility safeHarbor. Behavior-identical risk
+// semantics: riskRequired → fires on "risk"|"high"; highRiskRequired → fires on
+// "high"; any value outside VALID_RISK_LEVELS → pending.
 function deriveGates(ob) {
-  if (Array.isArray(ob.conditionalGates)) return ob.conditionalGates;
   const gates = [];
   if (ob.gating?.riskRequired || ob.gating?.highRiskRequired) {
     gates.push({
@@ -123,6 +147,7 @@ function deriveGates(ob) {
       },
     });
   }
+  if (Array.isArray(ob.conditionalGates)) gates.push(...ob.conditionalGates);
   return gates;
 }
 
@@ -151,7 +176,24 @@ function deriveGates(ob) {
  * dependent obligation does not fire either.
  */
 function computeDeadlines(facts) {
-  const { awarenessDate, jurisdictions = {}, residentCounts = {}, sensitivity = [], encryptionApplied = false, riskLevel } = facts;
+  const {
+    awarenessDate,
+    jurisdictions = {},
+    residentCounts = {},
+    sensitivity = [],
+    encryptionApplied = false,
+    riskLevel,
+    encrypted,
+    encryptionStrength,
+    redacted,
+    keyAcquired,
+    reidentificationAcquired,
+  } = facts;
+  // Conditional-gate inputs — incident-global facts the gates read. Anything
+  // unset stays undefined and (per the safeHarbor rule) leaves a harbor
+  // unsatisfied, so the obligation fires. `encryptionApplied` is the lone legacy
+  // boolean still consumed (GDPR Art. 34(3)(a) until Stage 5).
+  const gateInputs = { riskLevel, encrypted, encryptionStrength, redacted, keyAcquired, reidentificationAcquired, encryptionApplied };
   const deadlines = [];
   const suppressed = [];
   const pending = [];
@@ -181,65 +223,39 @@ function computeDeadlines(facts) {
       : (typeof residentCountRaw === "number" ? residentCountRaw : parseInt(residentCountRaw, 10));
 
     jur.obligations.forEach((ob) => {
-      // Conditional-gate seam — engages only for obligations that declare gates
-      // (Stage 1: the EU/UK risk gate, derived from gating.riskRequired /
-      // highRiskRequired). US obligations declare no gates here and fall straight
-      // through to the legacy residentThreshold + encryption blocks below, which
-      // is what permits mixed states: a US state can fire while EU/UK sit pending
-      // awaiting a risk assessment.
-      //
-      // The seam runs BEFORE the threshold and encryption blocks, preserving the
-      // former ordering (risk → threshold → encryption): a not-"high" individual
-      // obligation is risk-suppressed, never encryption-suppressed. Per the seam,
-      // only the exact sentinels in VALID_RISK_LEVELS engage the risk fireCondition
-      // — any other value routes to pending, identical to unset, because
-      // suppression (telling the user no notification is required) must never rest
-      // on an unrecognized riskLevel.
+      // Conditional-gate seam, Pass 1 — fireConditions, evaluated BEFORE the
+      // resident-threshold check (preserving the risk → threshold → encryption
+      // order). The EU/UK risk gate is the only fireCondition; US obligations have
+      // none and fall through. An unset/invalid riskLevel routes to pending (never
+      // suppression — telling the user no notification is required must not rest on
+      // an unrecognized value); a valid-but-unmet level suppresses. This is what
+      // permits mixed states — a US state can fire while EU/UK sit pending.
       const gates = deriveGates(ob);
-      if (gates.length) {
-        const verdict = evaluateConditionalGates(gates, { riskLevel });
-        if (verdict.outcome === "pending") {
-          pending.push({
-            jurisdiction: jur.short,
-            authority: ob.authority,
-            citation: ob.citation,
-            source_url: ob.source_url,
-            statute: jur.statute,
-            _jurId: jur.id,
-          });
-          return;
-        }
-        if (verdict.outcome === "suppressed") {
-          const sup = verdict.gate.suppression;
-          suppressed.push({
-            jurisdiction: jur.short,
-            authority: ob.authority,
-            original_citation: ob.citation,
-            suppression_type: sup.type,
-            suppression_citation: sup.citation,
-            suppression_description: sup.description,
-            source_url: ob.source_url,
-            statute: jur.statute,
-          });
-          return;
-        }
-        if (verdict.outcome === "review") {
-          // A satisfied safeHarbor gate routes here when the obligation's outcome
-          // turns on a judgment the engine does not make. No gate emits this in
-          // Stage 2 (the bucket stays empty); Stage 4 wires the MA second-trigger
-          // gate (onSatisfied:"review") and this branch begins populating it.
-          review.push({
-            jurisdiction: jur.short,
-            authority: ob.authority,
-            original_citation: ob.citation,
-            review_citation: verdict.gate.citation,
-            review_reason: verdict.gate.description,
-            source_url: ob.source_url,
-            statute: jur.statute,
-          });
-          return;
-        }
-        // outcome "fires" → fall through to threshold + encryption + deadline push.
+      const fireVerdict = evaluateFireConditions(gates, gateInputs);
+      if (fireVerdict?.outcome === "pending") {
+        pending.push({
+          jurisdiction: jur.short,
+          authority: ob.authority,
+          citation: ob.citation,
+          source_url: ob.source_url,
+          statute: jur.statute,
+          _jurId: jur.id,
+        });
+        return;
+      }
+      if (fireVerdict?.outcome === "suppressed") {
+        const sup = gateSuppression(fireVerdict.gate);
+        suppressed.push({
+          jurisdiction: jur.short,
+          authority: ob.authority,
+          original_citation: ob.citation,
+          suppression_type: sup.type,
+          suppression_citation: sup.citation,
+          suppression_description: sup.description,
+          source_url: ob.source_url,
+          statute: jur.statute,
+        });
+        return;
       }
       if (ob.gating?.residentThreshold !== undefined) {
         const threshold = ob.gating.residentThreshold;
@@ -249,52 +265,42 @@ function computeDeadlines(facts) {
         if (!met) return;
       }
 
-      // Encryption suppression — split into two distinct legal mechanisms:
-      //
-      //   1. breachDefinitionExcludesEncrypted: per-se statutory rule. The
-      //      jurisdiction's definition of "breach" excludes encrypted data
-      //      with uncompromised key (MA, CA, TX, CO). When encryption is
-      //      reported, the obligation does not arise as a matter of statutory
-      //      text. UI label: "Statutory breach definition excludes encrypted data".
-      //
-      //   2. obligationExemptedByUnintelligibility: judgment-based exemption.
-      //      The obligation exists but is exempted when the controller
-      //      implemented appropriate technical and organisational measures
-      //      rendering the data unintelligible (EU GDPR Art. 34(3)(a), UK).
-      //      Encryption is the canonical example of such a measure, not the
-      //      only way. UI label: "Exempted by unintelligibility-of-data
-      //      provision (encryption is the canonical example)".
-      //
-      // Both produce the same engine behavior (suppress the obligation), but
-      // the suppressed-card text and memo language must distinguish them.
-      if (encryptionApplied) {
-        let suppressionMechanism = null;
-        if (ob.breachDefinitionExcludesEncrypted?.applies) {
-          suppressionMechanism = {
-            type: "breach_definition",
-            citation: ob.breachDefinitionExcludesEncrypted.citation,
-            description: ob.breachDefinitionExcludesEncrypted.description,
-          };
-        } else if (ob.obligationExemptedByUnintelligibility?.applies) {
-          suppressionMechanism = {
-            type: "unintelligibility_exemption",
-            citation: ob.obligationExemptedByUnintelligibility.citation,
-            description: ob.obligationExemptedByUnintelligibility.description,
-          };
-        }
-        if (suppressionMechanism) {
-          suppressed.push({
-            jurisdiction: jur.short,
-            authority: ob.authority,
-            original_citation: ob.citation,
-            suppression_type: suppressionMechanism.type,
-            suppression_citation: suppressionMechanism.citation,
-            suppression_description: suppressionMechanism.description,
-            source_url: ob.source_url,
-            statute: jur.statute,
-          });
-          return;
-        }
+      // Conditional-gate seam, Pass 2 — safeHarbors (affirmative excuses),
+      // evaluated AFTER the threshold check. Each obligation's encryption (and, for
+      // VA, redaction) harbor is a per-obligation safeHarbor gate declared in
+      // data.js — the former global `encryptionApplied` switch is gone. Two legal
+      // mechanisms, distinguished by the gate's suppressionType for the card / memo
+      // text: US "breach_definition" (statutory breach excludes encrypted/redacted
+      // data) and GDPR "unintelligibility_exemption" (Art. 34(3)(a), still reading
+      // the encryptionApplied fact until Stage 5). A harbor that turns on counsel
+      // judgment routes to `review` instead (Stage 4: MA second trigger);
+      // `review` outranks `suppress`.
+      const harborVerdict = evaluateSafeHarbors(gates, gateInputs);
+      if (harborVerdict?.outcome === "review") {
+        review.push({
+          jurisdiction: jur.short,
+          authority: ob.authority,
+          original_citation: ob.citation,
+          review_citation: harborVerdict.gate.citation,
+          review_reason: harborVerdict.gate.description,
+          source_url: ob.source_url,
+          statute: jur.statute,
+        });
+        return;
+      }
+      if (harborVerdict?.outcome === "suppressed") {
+        const sup = gateSuppression(harborVerdict.gate);
+        suppressed.push({
+          jurisdiction: jur.short,
+          authority: ob.authority,
+          original_citation: ob.citation,
+          suppression_type: sup.type,
+          suppression_citation: sup.citation,
+          suppression_description: sup.description,
+          source_url: ob.source_url,
+          statute: jur.statute,
+        });
+        return;
       }
 
       // Compute deadline. Dependent obligations get null in pass 1 and are
@@ -839,7 +845,8 @@ const TEST_CASES = [
       jurisdictions: { ny: true },
       residentCounts: { ny: 10000 },
       sensitivity: ["financial"],
-      encryptionApplied: true,
+      encrypted: "yes",
+      keyAcquired: "no",
     },
     expect: expectAll(
       expectCount(0),
@@ -922,7 +929,8 @@ const TEST_CASES = [
       jurisdictions: { va: true },
       residentCounts: { va: 5000 },
       sensitivity: ["financial"],
-      encryptionApplied: true,
+      encrypted: "yes",
+      keyAcquired: "no",
     },
     expect: expectAll(
       expectCount(0),
@@ -1025,7 +1033,8 @@ const TEST_CASES = [
     facts: {
       jurisdictions: { ma: true },
       sensitivity: ["financial"],
-      encryptionApplied: true,
+      encrypted: "yes",
+      keyAcquired: "no",
     },
     expect: expectAll(
       expectCount(0),
@@ -1041,7 +1050,7 @@ const TEST_CASES = [
     facts: {
       jurisdictions: { ma: true },
       sensitivity: ["financial"],
-      encryptionApplied: false,
+      encrypted: "no",
     },
     expect: expectAll(
       expectCount(3),
@@ -1090,7 +1099,8 @@ const TEST_CASES = [
       jurisdictions: { ca: true },
       residentCounts: { ca: 1000 },
       sensitivity: ["financial"],
-      encryptionApplied: true,
+      encrypted: "yes",
+      keyAcquired: "no",
     },
     expect: expectAll(
       expectCount(0),
@@ -1106,7 +1116,8 @@ const TEST_CASES = [
       jurisdictions: { tx: true },
       residentCounts: { tx: 50000 },
       sensitivity: ["financial"],
-      encryptionApplied: true,
+      encrypted: "yes",
+      keyAcquired: "no",
     },
     expect: expectAll(
       expectCount(0),
@@ -1123,7 +1134,8 @@ const TEST_CASES = [
       jurisdictions: { co: true },
       residentCounts: { co: 5000 },
       sensitivity: ["financial"],
-      encryptionApplied: true,
+      encrypted: "yes",
+      keyAcquired: "no",
     },
     expect: expectAll(
       expectCount(0),
@@ -1132,6 +1144,67 @@ const TEST_CASES = [
       expectSuppressed("Colorado", "Consumer Reporting"),
       expectSuppressedCount(3)
     ),
+  },
+
+  // === Encryption cluster — per-state safeHarbor gates (S3a) ===
+  // New edges proving the per-obligation gates, beyond the re-pointed parity cases
+  // above. The harbor applies ONLY when every condition is affirmatively
+  // established; any unset/partial value → obligation fires.
+  {
+    name: "CA: encrypted but security credential / key also acquired → fires (not suppressed)",
+    category: "Encryption cluster",
+    facts: { jurisdictions: { ca: true }, residentCounts: { ca: 1000 }, sensitivity: ["financial"], encrypted: "yes", keyAcquired: "yes" },
+    expect: expectAll(
+      expectFires("California", "California Residents"),
+      expectFires("California", "Attorney General"),
+      expectNotSuppressed("California", "California Residents")
+    ),
+  },
+  {
+    name: "CO: encrypted but key also acquired → fires (§ 6-1-716(2)(a.4) re-trigger)",
+    category: "Encryption cluster",
+    facts: { jurisdictions: { co: true }, residentCounts: { co: 5000 }, sensitivity: ["financial"], encrypted: "yes", keyAcquired: "yes" },
+    expect: expectAll(
+      expectFires("Colorado", "Colorado Residents"),
+      expectFires("Colorado", "Attorney General"),
+      expectFires("Colorado", "Consumer Reporting")
+    ),
+  },
+  {
+    name: "VA: redacted, re-identification info NOT acquired → suppressed (redaction harbor)",
+    category: "Encryption cluster",
+    facts: { jurisdictions: { va: true }, residentCounts: { va: 5000 }, sensitivity: ["financial"], redacted: "yes", reidentificationAcquired: "no" },
+    expect: expectAll(
+      expectCount(0),
+      expectSuppressed("Virginia", "Virginia Residents", "breach_definition"),
+      expectSuppressed("Virginia", "Attorney General", "breach_definition"),
+      expectSuppressed("Virginia", "Consumer Reporting", "breach_definition")
+    ),
+  },
+  {
+    name: "VA: redacted but re-identification info also acquired → fires",
+    category: "Encryption cluster",
+    facts: { jurisdictions: { va: true }, residentCounts: { va: 5000 }, sensitivity: ["financial"], redacted: "yes", reidentificationAcquired: "yes" },
+    expect: expectAll(
+      expectFires("Virginia", "Virginia Residents"),
+      expectFires("Virginia", "Attorney General"),
+      expectFires("Virginia", "Consumer Reporting")
+    ),
+  },
+  {
+    name: "Conservative unset: encrypted=yes but keyAcquired unset → fires (harbor needs key affirmatively not acquired)",
+    category: "Encryption cluster",
+    facts: { jurisdictions: { ca: true }, residentCounts: { ca: 1000 }, sensitivity: ["financial"], encrypted: "yes" },
+    expect: expectAll(
+      expectFires("California", "California Residents"),
+      expectNotSuppressed("California", "California Residents")
+    ),
+  },
+  {
+    name: "CA: encryption strength is irrelevant for non-MA states — encrypted + key not acquired + below_128 → still suppressed",
+    category: "Encryption cluster",
+    facts: { jurisdictions: { ca: true }, residentCounts: { ca: 1000 }, sensitivity: ["financial"], encrypted: "yes", keyAcquired: "no", encryptionStrength: "below_128" },
+    expect: expectSuppressed("California", "California Residents", "breach_definition"),
   },
 
   // === Dependent deadlines (deadline_relative_to) ===
@@ -1161,7 +1234,8 @@ const TEST_CASES = [
       jurisdictions: { ca: true },
       residentCounts: { ca: 1000 },
       sensitivity: ["identifiers"],
-      encryptionApplied: true,
+      encrypted: "yes",
+      keyAcquired: "no",
     },
     expect: expectAll(
       expectCount(0),
@@ -1179,6 +1253,8 @@ const TEST_CASES = [
       sensitivity: ["financial"],
       riskLevel: "high",
       encryptionApplied: true,
+      encrypted: "yes",
+      keyAcquired: "no",
     },
     expect: expectAll(
       expectFires("EU GDPR", "Supervisory Authority"),

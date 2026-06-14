@@ -404,8 +404,28 @@ disclosure gate will also produce `review`.
   `review` (bucket empty); behavior-preserved. Quad-state invariant verified
   across 189 fact-sets (review empty, no obligation in >1 bucket). In-file 60/60
   + adversarial 57/57 unchanged; production build green.
-- **S1 + S2 complete. S3 next:** US encryption cluster + safeHarbor gates,
-  remove the global encryption switch atomically, re-point encryption tests.
+- **S3a — done (2026-06-14):** every encryption-suppressing state migrated to
+  per-obligation safeHarbor `conditionalGates` in `data.js` (CA/TX/CO/NY/MA
+  encryption; VA encryption + redaction; EU/UK Art. 34 unintelligibility). The
+  global `encryptionApplied` switch is deleted from the engine — no dual code
+  path; the seam now evaluates fireConditions before the threshold and
+  safeHarbors after it. Behavior reproduced exactly: MA still suppresses
+  (`onSatisfied:"suppress"`; S4 flips it to `review` + adds `requiresStrength`),
+  GDPR Art. 34 still suppresses via the `encryptionApplied` fact the gate reads
+  (S5 swaps it for `gdprUnintelligibility`). US states read the cluster inputs
+  `encrypted`/`keyAcquired`/`redacted`/`reidentificationAcquired`. Existing
+  encryption cases re-pointed to identical outcomes (only `facts` changed, never
+  `expect`); +6 new edge cases (CA security-credential, CO re-trigger, VA
+  redaction both ways, conservative-unset, strength-irrelevant-for-non-MA).
+  In-file 66/66 (was 60), adversarial 57/57, EU/UK risk 12/12 unchanged,
+  quad-state invariant holds (review empty), build green. **Transitional:** the
+  UI still sends the old `encryptionApplied` boolean and not the cluster, so US
+  encryption suppression is not wired to the UI until S3b; the engine path is
+  test-driven for now. Committed with the adversarial harness (A group
+  re-pointed) added to the file list.
+- **S1 + S2 + S3a complete. S3b next:** the UI cluster in `BreachClock.jsx`
+  (replace the single encryption toggle with the sub-questions; wire the cluster
+  inputs into `computeDeadlines`).
 
 ---
 

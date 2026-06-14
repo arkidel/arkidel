@@ -109,9 +109,11 @@ T("A. Mixed", "All EIGHT jurisdictions, riskLevel unset, mixed counts", (a) => {
   a.ok(P(r, "EU GDPR", "Supervisory Authority"), "EU SA pending");
 });
 
-T("A. Mixed", "All EIGHT, riskLevel high + encryption (global suppression)", (a) => {
-  // Encryption is global. Order is risk -> threshold -> encryption.
-  //   GDPR Art.33 has no encryption mechanism -> fires (EU SA + UK ICO) = 2 deadlines.
+T("A. Mixed", "All EIGHT, riskLevel high + encryption (per-obligation safeHarbor gates)", (a) => {
+  // S3a: encryption is per-obligation safeHarbor gates, not a global switch. US
+  // states read encrypted/keyAcquired; GDPR Art.34 still reads encryptionApplied
+  // (until S5). Order is risk(fireCondition) -> threshold -> encryption(safeHarbor).
+  //   GDPR Art.33 has no encryption gate -> fires (EU SA + UK ICO) = 2 deadlines.
   //   GDPR Art.34 (high meets risk, then encryption) -> unintelligibility-suppressed x2.
   //   Every US obligation whose threshold is met -> breach_definition-suppressed.
   // Counts: ca1000, tx20000, co5000, ny6000, va2000 -> all thresholds met.
@@ -122,6 +124,8 @@ T("A. Mixed", "All EIGHT, riskLevel high + encryption (global suppression)", (a)
     residentCounts: { ca: 1000, tx: 20000, co: 5000, ny: 6000, va: 2000 },
     riskLevel: "high",
     encryptionApplied: true,
+    encrypted: "yes",
+    keyAcquired: "no",
   });
   a.eq(r.deadlines.length, 2, "deadlines count (EU SA + UK ICO only)");
   a.eq(r.pending.length, 0, "pending count");
