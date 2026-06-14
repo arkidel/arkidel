@@ -1028,20 +1028,26 @@ const TEST_CASES = [
 
   // === Encryption suppression — Massachusetts (breach-definition exclusion) ===
   {
-    name: "MA + encryption applied → all three obligations suppressed, zero deadlines",
+    // S4 re-point: was "all three suppressed" (suppressedCount 3); MA's gate
+    // flipped suppress→review and gained requiresStrength ge_128, so with the
+    // harbor met (128-bit, key not acquired) all three route to REVIEW, not
+    // suppression. Intended behavior change, not a silent rewrite.
+    name: "MA + encryption (128-bit, key not acquired) → all three obligations require counsel review (§ 3(b) second trigger)",
     category: "Encryption suppression",
     facts: {
       jurisdictions: { ma: true },
       sensitivity: ["financial"],
       encrypted: "yes",
+      encryptionStrength: "ge_128",
       keyAcquired: "no",
     },
     expect: expectAll(
       expectCount(0),
-      expectSuppressedCount(3),
-      expectSuppressed("Massachusetts", "Massachusetts Residents"),
-      expectSuppressed("Massachusetts", "Attorney General"),
-      expectSuppressed("Massachusetts", "OCABR")
+      expectSuppressedCount(0),
+      expectReviewCount(3),
+      expectReview("Massachusetts", "Massachusetts Residents"),
+      expectReview("Massachusetts", "Attorney General"),
+      expectReview("Massachusetts", "OCABR")
     ),
   },
   {
@@ -1207,6 +1213,35 @@ const TEST_CASES = [
     expect: expectSuppressed("California", "California Residents", "breach_definition"),
   },
 
+  // === MA second-trigger review gate (S4) ===
+  // MA's harbor is met only when encrypted AND 128-bit-or-higher AND key not
+  // acquired — and even then it routes to REVIEW (the § 3(b) second trigger has no
+  // encryption qualifier), never silent suppression. Any weaker fact → MA fires.
+  {
+    name: "MA: encrypted + 128-bit + key ACQUIRED → fires (harbor defeated by key)",
+    category: "MA review gate",
+    facts: { jurisdictions: { ma: true }, sensitivity: ["financial"], encrypted: "yes", encryptionStrength: "ge_128", keyAcquired: "yes" },
+    expect: expectAll(expectCount(3), expectReviewCount(0), expectSuppressedCount(0)),
+  },
+  {
+    name: "MA: encrypted but below 128-bit → fires (MA harbor requires 128-bit-or-higher)",
+    category: "MA review gate",
+    facts: { jurisdictions: { ma: true }, sensitivity: ["financial"], encrypted: "yes", encryptionStrength: "below_128", keyAcquired: "no" },
+    expect: expectAll(expectCount(3), expectReviewCount(0), expectSuppressedCount(0)),
+  },
+  {
+    name: "MA: encrypted, strength Unknown → fires (conservative — 128-bit not affirmatively met)",
+    category: "MA review gate",
+    facts: { jurisdictions: { ma: true }, sensitivity: ["financial"], encrypted: "yes", encryptionStrength: "unknown", keyAcquired: "no" },
+    expect: expectAll(expectCount(3), expectReviewCount(0), expectSuppressedCount(0)),
+  },
+  {
+    name: "MA: encrypted, strength UNSET → fires (conservative — harbor needs strength affirmatively ge_128)",
+    category: "MA review gate",
+    facts: { jurisdictions: { ma: true }, sensitivity: ["financial"], encrypted: "yes", keyAcquired: "no" },
+    expect: expectAll(expectCount(3), expectReviewCount(0), expectSuppressedCount(0)),
+  },
+
   // === Dependent deadlines (deadline_relative_to) ===
   {
     name: "CA dependent deadline: AG clock = resident clock + 15 days = 45 days from awareness",
@@ -1246,7 +1281,10 @@ const TEST_CASES = [
 
   // === Multi-jurisdiction encryption interaction ===
   {
-    name: "MA + EU + encryption: MA fully suppressed; EU Art. 33 fires, EU Art. 34 suppressed",
+    // S4 re-point: was MA fully suppressed (suppressedCount 4). With MA's gate now
+    // review + ge_128, MA routes to REVIEW while EU SA fires and EU DS is
+    // suppressed — firing + suppressed + review co-occurring in one result.
+    name: "MA + EU + encryption (128-bit): MA routes to review; EU Art. 33 fires, EU Art. 34 suppressed (firing + suppressed + review together)",
     category: "Encryption suppression",
     facts: {
       jurisdictions: { ma: true, eu: true },
@@ -1254,17 +1292,18 @@ const TEST_CASES = [
       riskLevel: "high",
       encryptionApplied: true,
       encrypted: "yes",
+      encryptionStrength: "ge_128",
       keyAcquired: "no",
     },
     expect: expectAll(
       expectFires("EU GDPR", "Supervisory Authority"),
       expectDoesNotFire("EU GDPR", "Data Subjects"),
-      expectDoesNotFire("Massachusetts", "Massachusetts Residents"),
-      expectSuppressed("Massachusetts", "Massachusetts Residents"),
-      expectSuppressed("Massachusetts", "Attorney General"),
-      expectSuppressed("Massachusetts", "OCABR"),
+      expectReview("Massachusetts", "Massachusetts Residents"),
+      expectReview("Massachusetts", "Attorney General"),
+      expectReview("Massachusetts", "OCABR"),
       expectSuppressed("EU GDPR", "Data Subjects"),
-      expectSuppressedCount(4),
+      expectSuppressedCount(1),
+      expectReviewCount(3),
       expectCount(1)
     ),
   },

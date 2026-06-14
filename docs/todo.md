@@ -439,9 +439,25 @@ disclosure gate will also produce `review`.
   untouched), build green; preview gate-render — cluster renders, both reveals
   work, no console errors, and a mixed-state result (CA fires + VA
   redaction-suppressed, same incident) renders correctly.
-- **S1 + S2 + S3a + S3b complete. S4 next:** flip MA's encryption gate from
-  `suppress` to `review` + add `requiresStrength: "ge_128"` + the §3(b)
-  second-trigger copy; populate the review bucket; add the MA second-trigger test.
+- **S4 — done (2026-06-14):** MA's encryption gate flipped `suppress` → `review`,
+  with `requiresStrength: "ge_128"` added and the description replaced by the
+  § 3(b) second-trigger copy ("The encryption safe harbor excuses § 3(b)'s
+  breach-of-security trigger, but § 3(b)'s second trigger … must be independently
+  assessed by counsel."). All three MA obligations (AG, OCABR, residents) route
+  together. First population of the review bucket; the S2 review card renders from
+  the gate data with no UI change. MA routing now: encrypted + ge_128 + key-not-
+  acquired → REVIEW; anything weaker (unencrypted, below_128, Unknown, strength
+  unset, key acquired) → FIRES. The first intended behavior change in the feature
+  — two MA encryption test cases re-pointed (suppress → review), each flagged in
+  the commit. No other state changed (CA/TX/CO/NY/VA stay suppress; EU/UK
+  unchanged). Engine *logic* untouched (requiresStrength + review push existed
+  from S1–S3a); engine.js edited for TEST_CASES only. In-file 70/70 (was 66; +4
+  new MA edges), adversarial 57/57, quad-state invariant holds with review
+  populated, build green.
+- **S1 + S2 + S3a + S3b + S4 complete. S5 next:** GDPR Art. 34(3)(a) — add a
+  dedicated `gdprUnintelligibility` input + UI control near the risk section,
+  swap the EU/UK Art. 34 gate's `input` from `encryptionApplied` to it, and
+  retire the derived `encryptionApplied`.
 
 ---
 

@@ -31,6 +31,7 @@ const AW = new Date("2026-05-01T09:00:00.000Z");
 const D = (r, j, au) => r.deadlines.find((x) => x.jurisdiction === j && x.authority.toLowerCase().includes(au.toLowerCase()));
 const S = (r, j, au) => r.suppressed.find((x) => x.jurisdiction === j && x.authority.toLowerCase().includes(au.toLowerCase()));
 const P = (r, j, au) => r.pending.find((x) => x.jurisdiction === j && x.authority.toLowerCase().includes(au.toLowerCase()));
+const R = (r, j, au) => (r.review || []).find((x) => x.jurisdiction === j && x.authority.toLowerCase().includes(au.toLowerCase()));
 const ISO = (d) => (d ? d.toISOString() : null);
 // Canonical JSON for deep-equality (Date -> ISO via default toJSON).
 const J = (v) => JSON.stringify(v);
@@ -115,9 +116,12 @@ T("A. Mixed", "All EIGHT, riskLevel high + encryption (per-obligation safeHarbor
   // (until S5). Order is risk(fireCondition) -> threshold -> encryption(safeHarbor).
   //   GDPR Art.33 has no encryption gate -> fires (EU SA + UK ICO) = 2 deadlines.
   //   GDPR Art.34 (high meets risk, then encryption) -> unintelligibility-suppressed x2.
-  //   Every US obligation whose threshold is met -> breach_definition-suppressed.
+  //   Every US obligation whose threshold is met -> breach_definition-suppressed,
+  //   EXCEPT MA: S4 routes MA's harbor (encrypted + 128-bit + key-not-acquired) to
+  //   REVIEW (the § 3(b) second trigger), so strength ge_128 is supplied here.
   // Counts: ca1000, tx20000, co5000, ny6000, va2000 -> all thresholds met.
-  //   Suppressed US: CA 2, TX 3, CO 3, MA 3, NY 5, VA 3 = 19; +2 GDPR DS = 21.
+  //   Suppressed US: CA 2, TX 3, CO 3, NY 5, VA 3 = 16; +2 GDPR DS = 18.
+  //   Review: MA 3. Deadlines: EU SA + UK ICO = 2. (firing + suppressed + review.)
   const r = computeDeadlines({
     awarenessDate: AW,
     jurisdictions: { eu: true, uk: true, ca: true, tx: true, co: true, ma: true, ny: true, va: true },
@@ -125,11 +129,15 @@ T("A. Mixed", "All EIGHT, riskLevel high + encryption (per-obligation safeHarbor
     riskLevel: "high",
     encryptionApplied: true,
     encrypted: "yes",
+    encryptionStrength: "ge_128",
     keyAcquired: "no",
   });
   a.eq(r.deadlines.length, 2, "deadlines count (EU SA + UK ICO only)");
   a.eq(r.pending.length, 0, "pending count");
-  a.eq(r.suppressed.length, 21, "suppressed count");
+  a.eq(r.suppressed.length, 18, "suppressed count (MA 3 moved to review)");
+  a.eq(r.review.length, 3, "review count (MA AG + OCABR + residents)");
+  a.ok(R(r, "Massachusetts", "Massachusetts Residents"), "MA residents -> review");
+  a.ok(!S(r, "Massachusetts", "Massachusetts Residents"), "MA not suppressed");
   a.ok(D(r, "EU GDPR", "Supervisory Authority"), "EU SA fires (no encryption mechanism on Art.33)");
   a.ok(!S(r, "EU GDPR", "Supervisory Authority"), "EU SA not suppressed");
   a.eq(S(r, "EU GDPR", "Data Subjects")?.suppression_type, "unintelligibility_exemption", "EU DS suppression type");
