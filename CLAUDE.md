@@ -77,8 +77,10 @@ section). In `data.js`, the EU/UK Art. 33 authority notification declares
 `gating.riskRequired` and the Art. 34 individual notification declares
 `gating.highRiskRequired` (now satisfied by `riskLevel === "high"`), each paired
 with a `riskSuppression` field. `computeDeadlines` evaluates risk gating
-**before** the encryption check and returns a **third bucket, `pending`**,
-alongside `deadlines` and `suppressed`. The three states, per `riskLevel`:
+**before** the encryption check and returns the **`pending`** bucket alongside
+`deadlines` and `suppressed` — and, since the encryption decomposition, a fourth
+**`review`** bucket (see the quad-state invariant below). The three states, per
+`riskLevel`:
 
 - **unset (`""`)** → both GDPR obligations are **pending** — neither fired nor
   suppressed; the engine is waiting on the controller's assessment.
@@ -89,23 +91,54 @@ alongside `deadlines` and `suppressed`. The three states, per `riskLevel`:
 - **`"high"`** → both fire (Art. 34 has no fixed-hour deadline). Because risk
   gating runs first, a not-`"high"` Art. 34 is risk-suppressed, never
   encryption-suppressed; an Art. 34 that *does* fire is still subject to the
-  Art. 34(3)(a) unintelligibility (encryption) exemption.
+  Art. 34(3)(a) unintelligibility exemption — now driven by the explicit
+  `gdprUnintelligibility` input (see the encryption model below).
 
 US-state obligations gate on `residentThreshold` only and are untouched by risk
 — which is exactly what makes mixed results correct (next paragraph).
 
-Encryption is a *global* incident fact, not a per-jurisdiction one. When
-encryption is reported, the engine evaluates suppression across every selected
-jurisdiction at once, so **for the encryption switch alone** a results page is
-uniform: with encryption applied, all modeled jurisdictions' obligations are
-suppressed; without it, none are. That uniformity is a property of the
-encryption switch only — **do not generalize it.** Risk assessment deliberately
-*does* produce mixed results: a US state can fire while the EU/UK obligations sit
-pending (no assessment yet) or risk-suppressed, all on the same results page. The
-earlier "do not design for a mixed state the engine cannot produce" guidance was
-the encryption-switch carve-out only; the results-page layout must now handle
-mixed firing / pending / suppressed cards together (the pending state surfaces as
-one consolidated card — see the UI section).
+**Encryption is modeled per obligation, not by a global switch (live as of the
+encryption decomposition; build-of-record: the "Encryption gate build plan"
+addendum in `docs/todo.md`).** The former global `encryptionApplied` boolean is
+gone. Each obligation declares its safe harbor as data — a `conditionalGates`
+entry the engine interprets — so encryption routing differs by jurisdiction and
+**intentionally produces mixed results on one page**: e.g. CA suppressed / CO
+fired / MA counsel-review / EU-UK Art. 34 exempt, all in the same incident. This
+**supersedes the old global-switch "no mixed states" rule** — that rule was a
+property of the single switch, which no longer exists. (The separate
+GDPR-pending-while-US-fires carve-out from risk gating still stands; mixed
+*encryption* outcomes are now also correct and expected.)
+
+Per-jurisdiction encryption routing, as encoded in `data.js`:
+
+- **CA / TX / CO / NY** — suppress when the data was encrypted and the
+  key/credential was not also acquired (`safeHarbor`, `defeatedBy: keyAcquired`).
+  Unencrypted, or key-acquired, → fires.
+- **VA** — two harbors per obligation: encryption (`defeatedBy: keyAcquired`)
+  **and** redaction (`input: redacted`, `defeatedBy: reidentificationAcquired`);
+  either satisfied → suppress (mirrors § 18.2-186.6(A)'s "unencrypted or
+  unredacted" scope).
+- **MA** — routes to **counsel review, not suppression** (`onSatisfied: "review"`,
+  `requiresStrength: "ge_128"`): the § 1 encryption harbor needs 128-bit-or-higher
+  with the key uncompromised, but § 3(b)'s second trigger has no encryption
+  qualifier and must be independently assessed, so encryption can never *silently*
+  excuse MA. Anything short of the harbor (unencrypted, below-128, unknown/unset
+  strength, key acquired) → fires.
+- **EU / UK** — Art. 34 individual notification is exempted via the explicit
+  `gdprUnintelligibility` input (Art. 34(3)(a); no 128-bit floor). Art. 33
+  supervisory-authority notification is **never** encryption-exempt.
+
+**The generic conditional-gate seam.** Encryption is the first full consumer of a
+general per-obligation seam: each obligation carries `conditionalGates` with
+`role: "fireCondition"` (a precondition; an unset input → `pending`) or
+`role: "safeHarbor"` (an affirmative excuse; `onSatisfied: "suppress" | "review"`).
+The engine evaluates them per obligation — fireConditions before the
+resident-threshold check, safeHarbors after — and is maximally conservative: any
+unset/partial value along a harbor chain leaves the harbor unsatisfied, so the
+obligation fires rather than being silently excused. The EU/UK risk gate is
+re-expressed through this seam (behavior-preserved); the harm gate and the NY
+inadvertent-disclosure exception are designed-for future consumers. Full design
+and staging is the addendum in `docs/todo.md`.
 
 **`riskLevel` fails safe to pending (live as of the riskLevel-hardening
 commit).** The engine treats `riskLevel` as valid only when it is exactly one of
@@ -139,13 +172,17 @@ safety property. Covered by the `E. riskLevel` group in
   end of the statutory final day — conservative versus calendar-day counting.
   Deliberate; the adversarial harness's `D. Time` group pins this (spring-forward,
   fall-back, end-of-month, leap February, sub-second).
-- **Unreachable tri-state invariant.** Because encryption and `riskLevel` are
-  both *global* incident facts, the three result buckets firing + pending +
-  suppressed can never co-occur in a single result. Pending requires `riskLevel`
-  unset/invalid, which means GDPR cannot be risk-suppressed; the only other
-  suppressor is global encryption, which also kills US firing. So the results
-  page never needs to render all three blocks at once — but per the mixed-results
-  note above it must still handle firing-with-pending and firing-with-suppressed.
+- **Quad-state invariant.** `computeDeadlines` returns **four** buckets —
+  `deadlines`, `suppressed`, `pending`, and `review` — and every obligation that
+  is evaluated lands in **exactly one**. `review` means the obligation's outcome
+  turns on a substantive legal judgment the engine does not make (currently only
+  MA's § 3(b) second trigger; the harm gate and the NY inadvertent-disclosure
+  exception will also produce it). The earlier "unreachable tri-state" no longer
+  holds: because encryption is now routed *per obligation*, combinations once
+  impossible **do** co-occur in one result — e.g. firing + suppressed + review (a
+  US state fires, EU/UK Art. 34 is exempt, MA is in review), or firing + pending
+  (a US state fires while EU/UK await a risk assessment). The results page and PDF
+  memo must render any combination of the four; do not assume mutual exclusivity.
 
 ### `src/breach-clock/BreachClock.jsx` — React UI
 
@@ -166,7 +203,10 @@ information, (2) how & when discovered, (3) when the incident occurred,
 - **Operative vs. record is internal, not user-facing.** Five fields feed the
   engine — awareness → `awarenessDate`; jurisdictions → `jurisdictions`;
   per-jurisdiction counts → `residentCounts`; Q1 personal-data types →
-  `sensitivity`; encryption → `encryptionApplied`. They're grouped under
+  `sensitivity`; encryption → the per-obligation cluster (`encrypted` /
+  `encryptionStrength` / `redacted` / `keyAcquired` / `reidentificationAcquired`)
+  plus the GDPR `gdprUnintelligibility` input (the former single
+  `encryptionApplied` boolean is retired — see the encryption model above). They're grouped under
   `OPERATIVE_KEYS` so quick mode and the cross-check can target them, but they
   carry **no** "required/operative" badge in the default full view (the lone
   visible "Required" badge is on the record-only incident title, used for the
@@ -204,7 +244,8 @@ information, (2) how & when discovered, (3) when the incident occurred,
   the global footer disclaimer in `Layout.jsx` now carry that function).
 - **Checkbox-row selection idiom.** Every selection control — jurisdictions, Q1,
   type-of-incident, the CIA data-security principles, the data-element
-  checklists, and the boolean toggles (quick mode, encryption, "not available")
+  checklists, the tri-state encryption-cluster / risk / unintelligibility rows,
+  and the boolean toggles (quick mode, "not available")
   — uses one `.check-row`: a prominent always-visible square checkbox + a
   clickable, hover-lit, keyboard-operable (`role="checkbox"`, space/enter) row.
   Dropdowns, text, textarea, and number inputs keep their plain styling (for

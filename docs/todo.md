@@ -474,9 +474,24 @@ disclosure gate will also produce `review`.
   `render-truncation-gate` harnesses (re-pointed dead `encryptionApplied`); the
   truncation gate's old "suppressed" scenario — silently neutered back at S3a when
   MA moved off the global switch — is re-pointed to the MA **review** path.
-- **S1–S5 complete (engine/data done). S6 next (docs only):** update the "no
-  mixed states" carve-out + the tri→quad-state invariant passage in CLAUDE.md,
-  and the CA/TX/CO/NY/VA + EU/UK intake-form sign-offs in `docs/intake-forms.md`.
+- **S6 — done (2026-06-14, pending Jim's diff sign-off):** docs only. CLAUDE.md
+  updated — the "no mixed states" carve-out now records that per-jurisdiction
+  encryption routing intentionally produces mixed results (superseding the
+  global-switch rule); the "unreachable tri-state" passage became the **quad-state
+  invariant** (deadlines/suppressed/pending/review, exactly one per obligation,
+  combinations may co-occur); a per-state encryption-model summary + the generic
+  conditionalGates-seam note were added; and two stale UI-section references to the
+  retired `encryptionApplied` were corrected. `docs/intake-forms.md` — a dated
+  "Encryption modeling (2026-06-14)" note added to all **eight** sign-offs
+  (CA/TX/CO/NY suppress; VA encryption + redaction; **MA suppress→review**, scope
+  addition flagged; EU/UK Art. 34 via gdprUnintelligibility), each non-substantive
+  to deadlines/thresholds and pointing to the addendum as build-of-record.
+- **Encryption-gate feature COMPLETE (S1–S6).** Generic per-obligation
+  conditionalGates seam; quad-state engine; per-state encryption safe harbors
+  (CA/TX/CO/NY suppress, VA encryption+redaction, MA counsel-review, EU/UK
+  Art. 34(3)(a) via gdprUnintelligibility); full cluster UI; docs + intake-form
+  sign-offs recorded. Commits ebde37f (S1) · 6828dff (S2) · fc265e5 (S3a) ·
+  f2e03b2 (S3b) · bfc9834 (S4) · 3c17f49 (S5) · S6 pending sign-off.
 
 ---
 

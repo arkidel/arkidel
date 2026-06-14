@@ -246,6 +246,16 @@ threshold may be met").
   for Art. 34(3)(a)) from `breachDefinitionExcludesEncrypted` (used for U.S.
   state statutes that definitionally exclude encrypted data from the breach
   definition). Same engine behavior; more honest legal taxonomy.
+- **Encryption modeling (2026-06-14):** The Art. 34(3)(a) individual-notification
+  exemption is now driven by an explicit `gdprUnintelligibility` input (tri-state)
+  on a per-obligation `conditionalGates` safe-harbor gate, replacing the former
+  derived `encryptionApplied` boolean and superseding the
+  `obligationExemptedByUnintelligibility` data field noted above (its citation and
+  description were relocated verbatim into the gate). No 128-bit floor —
+  Art. 34(3)(a) is a qualitative standard; Art. 33 is unaffected (never
+  encryption-exempt). No change to any deadline, citation, or prose; the exemption
+  outcome is unchanged. Build-of-record: the "Encryption gate build plan" addendum
+  in `docs/todo.md`.
 - **Reviewer:** *(pending)*
 
 ---
@@ -375,6 +385,15 @@ UK in parallel).
   Non-substantive link update only: no change to any rule, threshold, citation,
   deadline, or prose. All three target URLs in this refresh (UK ICO, TX AG, NY
   DFS) verified live (HTTP 200) on 2026-06-14. (Commit 9143531.)
+- **Encryption modeling (2026-06-14):** The Art. 34(3)(a) individual-notification
+  exemption is now driven by an explicit `gdprUnintelligibility` input (tri-state)
+  on a per-obligation `conditionalGates` safe-harbor gate, replacing the former
+  derived `encryptionApplied` boolean and superseding the
+  `obligationExemptedByUnintelligibility` data field (its citation and description
+  were relocated verbatim into the gate). No 128-bit floor — Art. 34(3)(a) UK GDPR
+  is a qualitative standard; Art. 33 is unaffected (never encryption-exempt). No
+  change to any deadline, citation, or prose; the exemption outcome is unchanged.
+  Build-of-record: the "Encryption gate build plan" addendum in `docs/todo.md`.
 - **Reviewer:** *(pending)*
 
 ---
@@ -528,6 +547,15 @@ UK in parallel).
   and threshold language.
 - **Sources confirmed via project knowledge base:** IAPP US State Breach
   Notification Chart, February 2026 update.
+- **Encryption modeling (2026-06-14):** The global `encryptionApplied` switch was
+  replaced by a per-obligation `conditionalGates` safe-harbor gate: each modeled
+  obligation suppresses when the data was encrypted and the encryption
+  key/security credential was not also acquired (`safeHarbor`, `defeatedBy:
+  keyAcquired`). The encryption *outcome* — suppression when encrypted with an
+  uncompromised key — is unchanged; only the modeling moved from a global boolean
+  to per-obligation data. No change to any deadline, threshold, citation, or
+  prose. Build-of-record: the "Encryption gate build plan" addendum in
+  `docs/todo.md`.
 - **Reviewer:** *(pending)*
 
 ---
@@ -670,6 +698,14 @@ UK in parallel).
   Non-substantive link update only: no change to any rule, threshold, citation,
   deadline, or prose. All three target URLs in this refresh (UK ICO, TX AG, NY
   DFS) verified live (HTTP 200) on 2026-06-14. (Commit 9143531.)
+- **Encryption modeling (2026-06-14):** The global `encryptionApplied` switch was
+  replaced by a per-obligation `conditionalGates` safe-harbor gate: each modeled
+  obligation suppresses when the data was encrypted and the decryption key was not
+  also acquired (`safeHarbor`, `defeatedBy: keyAcquired`) — tracking
+  § 521.053(a)'s definition of "breach of system security." The encryption outcome
+  is unchanged; only the modeling moved from a global boolean to per-obligation
+  data. No change to any deadline, threshold, citation, or prose. Build-of-record:
+  the "Encryption gate build plan" addendum in `docs/todo.md`.
 - **Reviewer:** *(pending)*
 
 ---
@@ -803,6 +839,16 @@ UK in parallel).
   audit was Prague-origin geofencing (US-only state sites refusing non-US
   traffic), NOT dead links — confirmed via US-routed access and Wayback Machine
   200 captures. No URL change. Covers: coag.gov/resources/data-protection-laws/.
+- **Encryption modeling (2026-06-14):** The global `encryptionApplied` switch was
+  replaced by a per-obligation `conditionalGates` safe-harbor gate: each modeled
+  obligation suppresses when the data was encrypted and the key/means to decrypt
+  was not also acquired (`safeHarbor`, `defeatedBy: keyAcquired`). This captures
+  § 6-1-716(1)(h)'s "unencrypted" breach definition together with the
+  § 6-1-716(2)(a.4) re-trigger (key acquired defeats the harbor → fires). The
+  encryption outcome is unchanged; only the modeling moved from a global boolean
+  to per-obligation data. No change to any deadline, threshold, citation, or
+  prose. Build-of-record: the "Encryption gate build plan" addendum in
+  `docs/todo.md`.
 - **Reviewer:** *(pending)*
 
 ---
@@ -982,6 +1028,19 @@ the model to support an `authorities[]` array on a single obligation.
   audit was Prague-origin geofencing (US-only state sites refusing non-US
   traffic), NOT dead links — confirmed via US-routed access and Wayback Machine
   200 captures. No URL change. Covers: malegislature.gov (M.G.L. c. 93H § 3).
+- **Encryption modeling — treatment changed (2026-06-14):** The global
+  `encryptionApplied` switch was replaced by a per-obligation `conditionalGates`
+  gate, and MA's treatment **changed from suppression to counsel review**. Where
+  the § 1 encryption harbor is met — encrypted with 128-bit-or-higher encryption
+  (`requiresStrength: "ge_128"`) and the key not acquired — all three MA
+  obligations now route to **counsel review (`onSatisfied: "review"`), not
+  suppression**. Rationale: § 3(b)'s second trigger (unauthorized acquisition or
+  use of personal information) has no encryption qualifier, so encryption can never
+  *silently* excuse MA notification; the second trigger must be independently
+  assessed (see the `ma-dual-trigger-section-3b` counsel note). Anything short of
+  the harbor (unencrypted, below-128-bit, unknown/unset strength, or key acquired)
+  → MA fires. No deadline, threshold, or citation changed. Build-of-record: the
+  "Encryption gate build plan" addendum in `docs/todo.md`.
 - **Reviewer:** *(pending)*
 
 ---
@@ -1236,6 +1295,14 @@ multi-authority array.
   retained and marked superseded, and a fresh entry for the consolidated note
   was added to each section. No change to any rule, threshold, deadline, or
   obligation. Applied in the same commit as the data.js NY edits (Edits A & B).
+- **Encryption modeling (2026-06-14):** The global `encryptionApplied` switch was
+  replaced by a per-obligation `conditionalGates` safe-harbor gate: each modeled
+  obligation suppresses when the data was encrypted and the decryption key was not
+  also compromised (`safeHarbor`, `defeatedBy: keyAcquired`) — tracking
+  § 899-aa(1)(b)'s "private information" definition. The encryption outcome is
+  unchanged; only the modeling moved from a global boolean to per-obligation data.
+  No change to any deadline, threshold, citation, or prose. Build-of-record: the
+  "Encryption gate build plan" addendum in `docs/todo.md`.
 - **Reviewer:** *(pending)*
 
 ---
@@ -1435,6 +1502,16 @@ multi-authority array.
   200 captures. No URL change. Covers: law.lis.virginia.gov § 18.2-186.6,
   law.lis.virginia.gov § 32.1-127.1:05, and
   oag.state.va.us/programs-initiatives/computer-crime.
+- **Encryption modeling (2026-06-14):** The global `encryptionApplied` switch was
+  replaced by per-obligation `conditionalGates` safe-harbor gates. Each VA
+  obligation now carries TWO harbors — encryption (`defeatedBy: keyAcquired`)
+  **and** redaction (`input: redacted`, `defeatedBy: reidentificationAcquired`) —
+  reflecting § 18.2-186.6(A)'s "unencrypted or unredacted" scope; either harbor,
+  when satisfied (key / re-identification info not acquired), suppresses. The
+  encryption/redaction outcome is unchanged; only the modeling moved from a global
+  boolean to per-obligation data. No change to any deadline, threshold, citation,
+  or prose. Build-of-record: the "Encryption gate build plan" addendum in
+  `docs/todo.md`.
 - **Reviewer:** *(pending)*
 
 ---
