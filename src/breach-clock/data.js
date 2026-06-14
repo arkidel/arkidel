@@ -71,7 +71,7 @@ const JURISDICTIONS = [
         deadline_trigger: "awareness",
         gating: { riskRequired: true },
         citation: "Art. 33 UK GDPR",
-        source_url: "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/security-data-protection/personal-data-breaches/",
+        source_url: "https://ico.org.uk/for-organisations/report-a-breach/personal-data-breach/",
         condition: "Required within 72 hours of awareness unless the breach is assessed as unlikely to result in a risk to the rights and freedoms of natural persons.",
         riskSuppression: {
           citation: "Art. 33(5) UK GDPR",
@@ -85,7 +85,7 @@ const JURISDICTIONS = [
         deadline_trigger: "awareness",
         gating: { highRiskRequired: true },
         citation: "Art. 34 UK GDPR",
-        source_url: "https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/security-data-protection/personal-data-breaches/",
+        source_url: "https://ico.org.uk/for-organisations/report-a-breach/personal-data-breach/",
         condition: "Required without undue delay where the breach is assessed as likely to result in a high risk to the rights and freedoms of data subjects.",
         riskSuppression: {
           citation: "Art. 34 UK GDPR",
@@ -177,7 +177,7 @@ const JURISDICTIONS = [
         gating: { residentThreshold: 250, comparator: "gte" },
         thresholdLabel: "AG notification",
         citation: "Tex. Bus. & Com. Code § 521.053(i)",
-        source_url: "https://www.texasattorneygeneral.gov/consumer-protection/file-consumer-complaint/report-data-breach",
+        source_url: "https://www.texasattorneygeneral.gov/consumer-protection/data-breach-reporting",
         condition: "As soon as practicable and no later than the 30th day after determination of the breach where 250 or more Texas residents are affected. Electronic submission via the Texas AG's online breach reporting form.",
         breachDefinitionExcludesEncrypted: {
           applies: true,
@@ -404,7 +404,7 @@ const JURISDICTIONS = [
         title: "NYDFS sectoral overlay — covered entities have a separate 72-hour notification under 23 NYCRR Part 500",
         content: "If the entity is a 'covered entity' under 23 NYCRR Part 500.1 (i.e., regulated by the New York Department of Financial Services), the entity must additionally notify NYDFS within 72 hours of determining that a cybersecurity event has occurred, in accordance with 23 NYCRR § 500.17(c). This is in addition to the AG / Department of State / State Police notification above and is governed by the DFS cybersecurity regulations rather than § 899-aa. The February 14, 2025 chapter amendment to § 899-aa (S804) clarified that the DFS-notification carve-out applies only to NYDFS-regulated entities; non-regulated entities do NOT owe DFS notification under § 899-aa(8). Respond does not model the 72-hour DFS clock because it depends on entity-type characteristics outside the breach facts. If you are a NYDFS covered entity, treat the DFS deadline as the binding clock for DFS, separate from this analysis.",
         citation: "23 NYCRR § 500.17(c); N.Y. Gen. Bus. Law § 899-aa(8)(a)(ii)",
-        source_url: "https://www.dfs.ny.gov/industry_guidance/cyber_filings",
+        source_url: "https://www.dfs.ny.gov/industry_guidance/cybersecurity",
       },
       {
         id: "ny-hipaa-cross-link",
