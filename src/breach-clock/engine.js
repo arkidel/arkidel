@@ -29,6 +29,103 @@ function isHighRisk(sensitivity) {
   return sensitivity.some((s) => HIGH_RISK_CATEGORIES.includes(s));
 }
 
+// =============================================================================
+// GENERIC PER-OBLIGATION CONDITIONAL-GATE SEAM
+//
+// Each obligation routes through an ordered list of conditional gates. A gate is
+// plain data (see docs/todo.md, ADDENDUM section B) with two roles:
+//
+//   fireCondition — a precondition the obligation needs to fire at all. Its input
+//     must be affirmatively established to a qualifying value. If the input is
+//     unset/invalid the outcome is `pending` (we are waiting on the user); if it
+//     is established but does not qualify the outcome is `suppressed`.
+//   safeHarbor    — an affirmative excuse. Satisfied only when its qualifying
+//     value is affirmatively established, AND any required encryption strength is
+//     met, AND any `defeatedBy` input is affirmatively "no". A satisfied harbor
+//     routes the obligation to `suppress` or `review` per its `onSatisfied`.
+//
+// Resolution (ADDENDUM section C): all fireConditions first — any indeterminate
+// input → pending; any established-but-not-met condition → suppressed. Then the
+// safeHarbors — `review` outranks `suppress` (never silently suppress when a path
+// demands a substantive judgment). Nothing blocking → the obligation fires.
+//
+// The seam is maximally conservative: any unset/partial value along a harbor
+// chain leaves the harbor unsatisfied, so the obligation fires rather than being
+// silently excused.
+//
+// STAGE 1 scope: the only wired consumer is the EU/UK risk gate, whose gates are
+// derived from the existing data fields by `deriveGates` (no data.js change yet).
+// Later stages declare `ob.conditionalGates` directly in data.js and the adapter
+// falls away; the legacy resident-threshold and global-encryption blocks in
+// computeDeadlines are intentionally left in place for Stage 1.
+// =============================================================================
+
+function fireConditionMet(gate, value) {
+  if (Array.isArray(gate.anyOf)) return gate.anyOf.includes(value);
+  if (gate.equals !== undefined) return value === gate.equals;
+  return true;
+}
+
+function safeHarborSatisfied(gate, inputs) {
+  const value = inputs[gate.input];
+  const qualifies = Array.isArray(gate.anyOf)
+    ? gate.anyOf.includes(value)
+    : gate.equals !== undefined
+      ? value === gate.equals
+      : value === "yes";
+  if (!qualifies) return false;
+  if (gate.requiresStrength && inputs.encryptionStrength !== gate.requiresStrength) return false;
+  if (gate.defeatedBy && inputs[gate.defeatedBy] !== "no") return false;
+  return true;
+}
+
+function evaluateConditionalGates(gates, inputs) {
+  // Pass 1 — fireConditions.
+  for (const gate of gates) {
+    if (gate.role !== "fireCondition") continue;
+    const value = inputs[gate.input];
+    const established = !gate.validValues || gate.validValues.includes(value);
+    if (!established) return { outcome: "pending", gate };
+    if (!fireConditionMet(gate, value)) return { outcome: "suppressed", gate };
+  }
+  // Pass 2 — safeHarbors. `review` outranks `suppress`, so a suppress match is
+  // held and only returned if no review match is found anywhere in the list.
+  let suppressGate = null;
+  for (const gate of gates) {
+    if (gate.role !== "safeHarbor") continue;
+    if (!safeHarborSatisfied(gate, inputs)) continue;
+    if (gate.onSatisfied === "review") return { outcome: "review", gate };
+    if (gate.onSatisfied === "suppress" && !suppressGate) suppressGate = gate;
+  }
+  if (suppressGate) return { outcome: "suppressed", gate: suppressGate };
+  return { outcome: "fires" };
+}
+
+// Stage-1 adapter: express the existing EU/UK risk gate in the generic gate
+// vocabulary without touching data.js. Obligations that declare their own
+// `conditionalGates` (later stages) use them directly. Behavior-identical to the
+// former inline risk block: riskRequired → fires on "risk"|"high"; highRequired →
+// fires on "high"; any value outside VALID_RISK_LEVELS → pending.
+function deriveGates(ob) {
+  if (Array.isArray(ob.conditionalGates)) return ob.conditionalGates;
+  const gates = [];
+  if (ob.gating?.riskRequired || ob.gating?.highRiskRequired) {
+    gates.push({
+      role: "fireCondition",
+      input: "riskLevel",
+      validValues: VALID_RISK_LEVELS,
+      anyOf: ob.gating.highRiskRequired ? ["high"] : ["risk", "high"],
+      whenUnset: "pending",
+      suppression: {
+        type: "risk_assessment",
+        citation: ob.riskSuppression?.citation,
+        description: ob.riskSuppression?.description,
+      },
+    });
+  }
+  return gates;
+}
+
 /**
  * Pure deadline-builder. Produces the same arrays the UI renders, given a
  * facts object. No dependence on React state.
@@ -78,28 +175,24 @@ function computeDeadlines(facts) {
       : (typeof residentCountRaw === "number" ? residentCountRaw : parseInt(residentCountRaw, 10));
 
     jur.obligations.forEach((ob) => {
-      // Risk-assessment gating — engages only for obligations that declare
-      // gating.riskRequired or gating.highRiskRequired (the GDPR authority and
-      // individual notifications). US obligations gate on residentThreshold and
-      // are left untouched here, which is what permits mixed states: a US state
-      // can fire while EU/UK sit pending awaiting a risk assessment.
+      // Conditional-gate seam — engages only for obligations that declare gates
+      // (Stage 1: the EU/UK risk gate, derived from gating.riskRequired /
+      // highRiskRequired). US obligations declare no gates here and fall straight
+      // through to the legacy residentThreshold + encryption blocks below, which
+      // is what permits mixed states: a US state can fire while EU/UK sit pending
+      // awaiting a risk assessment.
       //
-      // Threshold:
-      //   riskRequired     → met when riskLevel is "risk" or "high"
-      //   highRiskRequired → met when riskLevel is "high"
-      // Outcomes:
-      //   unset OR invalid value → pending (no valid assessment yet; fails safe)
-      //   valid but not met      → suppressed (risk_assessment mechanism)
-      //   valid and met          → fall through to encryption check + deadline push
-      // This runs BEFORE the encryption block, so a not-"high" individual
-      // obligation is risk-suppressed, never encryption-suppressed.
-      //
-      // Only the exact sentinels in VALID_RISK_LEVELS engage the risk logic.
-      // Any other value routes to pending, identical to unset — suppression
-      // (which tells the user no notification is required) must never rest on an
-      // unrecognized riskLevel.
-      if (ob.gating?.riskRequired || ob.gating?.highRiskRequired) {
-        if (!VALID_RISK_LEVELS.includes(riskLevel)) {
+      // The seam runs BEFORE the threshold and encryption blocks, preserving the
+      // former ordering (risk → threshold → encryption): a not-"high" individual
+      // obligation is risk-suppressed, never encryption-suppressed. Per the seam,
+      // only the exact sentinels in VALID_RISK_LEVELS engage the risk fireCondition
+      // — any other value routes to pending, identical to unset, because
+      // suppression (telling the user no notification is required) must never rest
+      // on an unrecognized riskLevel.
+      const gates = deriveGates(ob);
+      if (gates.length) {
+        const verdict = evaluateConditionalGates(gates, { riskLevel });
+        if (verdict.outcome === "pending") {
           pending.push({
             jurisdiction: jur.short,
             authority: ob.authority,
@@ -110,22 +203,23 @@ function computeDeadlines(facts) {
           });
           return;
         }
-        const thresholdMet = ob.gating.highRiskRequired
-          ? riskLevel === "high"
-          : riskLevel === "risk" || riskLevel === "high";
-        if (!thresholdMet) {
+        if (verdict.outcome === "suppressed") {
+          const sup = verdict.gate.suppression;
           suppressed.push({
             jurisdiction: jur.short,
             authority: ob.authority,
             original_citation: ob.citation,
-            suppression_type: "risk_assessment",
-            suppression_citation: ob.riskSuppression.citation,
-            suppression_description: ob.riskSuppression.description,
+            suppression_type: sup.type,
+            suppression_citation: sup.citation,
+            suppression_description: sup.description,
             source_url: ob.source_url,
             statute: jur.statute,
           });
           return;
         }
+        // outcome "fires" → fall through to threshold + encryption + deadline
+        // push. ("review" cannot occur in Stage 1: no safeHarbor gate is derived
+        // yet, and the review bucket itself lands in Stage 2.)
       }
       if (ob.gating?.residentThreshold !== undefined) {
         const threshold = ob.gating.residentThreshold;

@@ -239,6 +239,167 @@ Surfaced after the EU/UK risk-assessment feature shipped (`be2f252` engine/data,
 
 ---
 
+## Encryption gate — per-jurisdiction decomposition `[substance]` (queued 2026-06-14)
+
+Signed-off build-of-record for replacing the single global encryption switch
+with a per-jurisdiction encryption safe-harbor cluster, routed through a generic
+per-obligation conditional seam. Multi-stage, protected-file work (`engine.js`,
+`data.js`, plus `BreachClock.jsx`, tests, docs). Recorded verbatim below as the
+build-of-record; do not paraphrase. STAGE 1 in progress 2026-06-14.
+
+```
+ADDENDUM — Encryption gate build plan (granular/precise variant)
+Extends the per-jurisdiction encryption decomposition spec. Engine.js + data.js
+(PROTECTED) + BreachClock.jsx + tests + docs. Multi-commit, staged.
+
+DESIGN PRINCIPLE: most granular and precise at every fork; never let an
+unset/partial value suppress or under-notify. A safe harbor applies ONLY when every
+condition is affirmatively established; any unset → obligation fires.
+
+--- A. FINAL SUB-QUESTION WORDING (factual-assertion voice) ---
+US cluster (shown for US jurisdictions), each tri-state, unset → fires:
+  1. encrypted: "Was the affected data encrypted?" Yes / No
+  2. encryptionStrength (revealed iff encrypted=Yes): "Was the encryption at least
+     128-bit (AES-128 or stronger)?" Yes (128-bit+) / No (below 128-bit) / Unknown
+     Helper: "Massachusetts recognizes its safe harbor only for 128-bit-or-higher."
+  3. redacted: "Was the affected data redacted?" Yes / No
+     Helper: "Virginia's safe harbor includes redacted data; most states' do not."
+  4a. keyAcquired (revealed iff encrypted=Yes): "Was the encryption key, decryption
+     means, or a security credential able to render the encrypted data readable also
+     acquired?" Yes / No
+     Helper: "If acquired, the encryption safe harbor does not apply — California
+     explicitly includes an acquired security credential."
+  4b. reidentificationAcquired (revealed iff redacted=Yes): "Was the information
+     needed to re-identify the redacted data also acquired?" Yes / No
+     Helper: "If acquired, the redaction safe harbor does not apply."
+GDPR input (separate; shown for EU/UK near the risk section), tri-state:
+  5. gdprUnintelligibility: "Were appropriate technical measures (e.g. encryption)
+     applied that render the data unintelligible to unauthorised persons?" Yes / No
+     Helper: "Under Art. 34(3)(a), individual notification may be exempt where such
+     measures rendered the data unintelligible. Does NOT affect Art. 33 authority
+     notification." (No 128-bit floor — Art. 34(3)(a) is a qualitative standard.)
+
+--- B. GENERIC SEAM (conditionalGates, per OBLIGATION, multi-gate, role-typed) ---
+The engine walks each obligation's conditionalGates generically. NO per-state
+encryption logic in the engine body — each gate is data. Evaluation is PER
+OBLIGATION (not per jurisdiction), so a CRA obligation can route independently of a
+resident-notice obligation in the same state.
+
+Gate shape:
+  { role: "fireCondition" | "safeHarbor",
+    input: "<conditional input id>",        // e.g. "encrypted", "riskLevel", "gdprUnintelligibility"
+    condition: <how to read input>,          // e.g. value=="yes"; riskLevel in ["risk","high"]
+    requiresStrength: "ge_128" | null,        // MA encryption only
+    defeatedBy: "keyAcquired" | "reidentificationAcquired" | null,
+    onSatisfied: "suppress" | "review" | null,// safeHarbor only
+    whenUnset: "pending" | "fires",           // fireCondition→pending; safeHarbor→fires
+    citation, description }
+
+A safeHarbor gate is SATISFIED iff: input affirmatively == qualifying value, AND
+(requiresStrength==null OR strength affirmatively meets it), AND (defeatedBy==null
+OR that input affirmatively == "no"). Any unset in that chain → NOT satisfied →
+obligation fires (unless another gate suppresses). Maximally conservative.
+
+Risk gate is RE-EXPRESSED in this vocabulary (behavior-identical; its 12 EU/UK
+tests are the regression net): Art.33 obligation gets a fireCondition gate
+{input:"riskLevel", condition: in ["risk","high"], whenUnset:"pending"}; Art.34 gets
+fireCondition {riskLevel=="high", whenUnset:"pending"} PLUS a safeHarbor gate
+{input:"gdprUnintelligibility", onSatisfied:"suppress", whenUnset:"fires"}.
+
+--- C. PER-OBLIGATION BUCKET RESOLUTION (4 buckets) ---
+Buckets: deadlines | suppressed | pending | review. Resolve each obligation:
+  1. fireCondition gates first. If any is indeterminate (its input unset) → PENDING.
+     If any fireCondition is not-met → SUPPRESSED (reason: that condition).
+     If all fireConditions met (or none) → continue.
+  2. safeHarbor gates. Among satisfied ones: if any onSatisfied=="review" → REVIEW;
+     else if any =="suppress" → SUPPRESSED. If none satisfied → DEADLINES.
+  Precedence: pending (missing input) outranks harbor evaluation; review outranks
+  suppress (never silently suppress when a path demands judgment).
+
+--- D. ROUTING TABLE (confirm each row vs statute) ---
+Each US obligation carries a safeHarbor encryption gate; VA also a redaction gate:
+  CA  encryption: defeatedBy keyAcquired (incl. security credential) → suppress
+  TX  encryption: defeatedBy keyAcquired → suppress
+  CO  encryption: defeatedBy keyAcquired (the 6-1-716(2)(a.4) re-trigger) → suppress
+  NY  encryption: defeatedBy keyAcquired → suppress
+  VA  encryption: defeatedBy keyAcquired → suppress; AND redaction:
+      defeatedBy reidentificationAcquired → suppress (either harbor suffices)
+  MA  encryption: requiresStrength ge_128, defeatedBy keyAcquired → REVIEW (see E)
+  GDPR Art.34 only: gdprUnintelligibility → suppress (Art.34(3)(a)); Art.33 never.
+Per-obligation: if any obligation is encryption-INDEPENDENT it declares NO
+encryption gate and always fires. (No modeled CRA obligation is encryption-
+independent — encryption defeats the breach definition for the whole state, so CRA
+suppresses with the rest.)
+
+--- E. MA ROUTING ---
+MA c.93H 3(b) has two triggers; the SECOND (unauthorized acquisition/use of PI) has
+NO encryption qualifier, so encryption can never fully suppress MA.
+  - encrypted=Yes AND strength=ge_128 AND keyAcquired=No → 1 harbor met → all three
+    MA obligations (AG, OCABR, residents) → REVIEW, with copy: "The encryption safe
+    harbor excuses 3(b)'s breach-of-security trigger, but 3(b)'s second trigger
+    (unauthorized acquisition or use, no encryption qualifier) must be independently
+    assessed by counsel."
+  - harbor not met (unencrypted, strength below/unknown, key acquired, or any unset)
+    → MA fires normally (deadlines).
+  - MA has no CRA-equivalent in the modeled set (AG/OCABR/residents only).
+
+--- F. `review` BUCKET SEMANTICS (general, not MA-only) ---
+Meaning: all inputs provided, but the obligation's outcome turns on a substantive
+legal judgment the engine does not make. Distinct from `pending` (awaiting a user
+input) and `suppressed` (affirmatively excused). The harm gate and NY inadvertent-
+disclosure gate will also produce `review`.
+  - Engine: computeDeadlines returns a 4th array `review`; runTests signature gains
+    a 4th arg; the tri-state invariant doc becomes a quad-state invariant.
+  - Results page: a distinct card, NOT Ember (Ember is warnings). Neutral (Mist
+    family) treatment, labeled "Counsel review required", each item showing the
+    reason. Mixed states render plainly (e.g. CA suppressed / CO fired / MA review).
+  - PDF memo: a dedicated "Requires counsel review" section listing review items +
+    reasons, parallel to suppressed/pending.
+  - Recap row: review-state obligations shown with their reason.
+
+--- G. STAGING (multi-commit; each: explicit-filename commit, HOLD push; tests green
+    + gate-render reviewed before the next) ---
+  S1. Generic conditionalGates seam in engine.js + re-express the risk gate in it.
+      BEHAVIOR-PRESERVED. The 12 EU/UK risk tests + all existing tests stay green.
+      No new buckets, no new inputs.
+  S2. Add the 4th `review` bucket to the engine return shape + runTests 4th arg +
+      results card + PDF memo + recap — but NO obligation routes to it yet. Pure
+      shape change; all existing tests green.
+  S3. US encryption cluster: add inputs (encrypted/strength/redacted/keyAcquired/
+      reidentificationAcquired) + safeHarbor gates for CA/TX/CO/NY/VA (suppress) and
+      VA redaction gate; remove the global encryption switch atomically; re-point the
+      existing encryption tests + adversarial A/B groups; add CA-credential,
+      CO-re-trigger, VA-redacted edges. UI cluster. Gate-render mixed-state results.
+  S4. MA encryption gate → review (populates the bucket) + second-trigger copy. Add
+      MA-second-trigger test. Gate-render the MA review card.
+  S5. GDPR Art.34(3)(a): add gdprUnintelligibility input + safeHarbor gate on Art.34
+      only + UI input near the risk section. Add tests (high+unintelligible→suppress;
+      high+not→fire; Art.33 unaffected). Gate-render.
+  S6. Docs: update the "no mixed states" carve-out (per-jurisdiction encryption
+      routing supersedes it; mixed results are correct) AND the tri→quad-state
+      invariant passage; update the CA/TX/CO/NY/VA + EU/UK intake-form sign-off
+      sections to record the encryption-model change. PROTECTED + sign-off.
+
+--- H. GUARDRAILS ---
+  - Do NOT wire the harm gate or NY inadvertent gate here — later `review`-producing
+    consumers; keep the seam general. Encryption + GDPR-unintel are the only wired
+    consumers in this build.
+  - No deadline/threshold/prose changes except MA's review treatment + the carve-out
+    doc + the encryption-model intake-form notes.
+  - No push at any stage; protected-file work.
+```
+
+### Stage status
+
+- **S1 — in progress (2026-06-14):** generic per-obligation `conditionalGates`
+  seam in `engine.js`; EU/UK risk gate re-expressed in it, behavior-preserved;
+  three buckets retained; global encryption switch untouched. Regression net:
+  in-file suite (60 cases) + adversarial harness (57 cases) must stay green with
+  no test rewritten to fit new behavior.
+- S2–S6 — not started.
+
+---
+
 ## Completed
 
 ### 2026-06-07
