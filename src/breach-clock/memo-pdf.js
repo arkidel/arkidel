@@ -52,12 +52,12 @@ async function loadFontBytes() {
   return _fontBytesCache;
 }
 
-export async function generateMemoPdf(facts, deadlines, suppressed) {
+export async function generateMemoPdf(facts, deadlines, suppressed, review = []) {
   const fontBytes = await loadFontBytes();
   const logoBytes = await fetch(logoPngUrl).then((r) => r.arrayBuffer());
   return renderMemoPdfBytes(facts, deadlines, suppressed, {
     fontBytes,
     logoBytes,
     generatedAt: new Date(),
-  });
+  }, review);
 }

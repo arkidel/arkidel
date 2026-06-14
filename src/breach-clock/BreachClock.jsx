@@ -438,7 +438,10 @@ export default function BreachClock() {
   // obligations awaiting a risk assessment (neither fired nor suppressed). An
   // unset assessment surfaces as a pending result, so it is deliberately NOT
   // part of canCompute / the submit gate below.
-  const { deadlines, suppressed, pending } = computeDeadlines({
+  // `review` (Stage 2 quad-state bucket) carries obligations whose outcome turns
+  // on a substantive legal judgment the engine does not make. Empty until Stage 4
+  // routes the MA second-trigger here.
+  const { deadlines, suppressed, pending, review } = computeDeadlines({
     awarenessDate,
     jurisdictions,
     residentCounts,
@@ -566,7 +569,7 @@ export default function BreachClock() {
         riskLevel,
         incidentReport: quickMode ? null : buildIncidentReportSections(),
       };
-      const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed);
+      const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed, review);
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1246,7 +1249,7 @@ export default function BreachClock() {
         </div>
       )}
 
-      {!hasPending && deadlines.length === 0 && suppressed.length > 0 && (
+      {!hasPending && review.length === 0 && deadlines.length === 0 && suppressed.length > 0 && (
         <div style={{ marginBottom: "16px", padding: "24px 28px", background: "#5A6E4A", color: "#FAF8F2", borderRadius: "12px" }}>
           <div className="section-mark" style={{ color: "#FAF8F2", opacity: 0.85, marginBottom: "8px" }}>Result</div>
           <div className="serif" style={{ fontSize: "24px", fontWeight: 400, lineHeight: 1.2 }}>
@@ -1258,7 +1261,7 @@ export default function BreachClock() {
         </div>
       )}
 
-      {!hasPending && deadlines.length === 0 && suppressed.length === 0 && (
+      {!hasPending && review.length === 0 && deadlines.length === 0 && suppressed.length === 0 && (
         <div style={{ marginBottom: "16px", padding: "24px 28px", background: "#1B2A3F", color: "#FAF8F2", borderRadius: "12px" }}>
           <div className="section-mark" style={{ color: "#FAF8F2", opacity: 0.85, marginBottom: "8px" }}>No deadlines computed</div>
           <p style={{ fontSize: "14px", marginTop: "8px", opacity: 0.9, lineHeight: 1.6 }}>
@@ -1405,6 +1408,53 @@ export default function BreachClock() {
                 {s.source_url && (
                   <a
                     href={s.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: "6px",
+                      fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500,
+                      marginTop: "14px", color: "inherit", textDecoration: "none",
+                      borderBottom: "1px solid currentColor", paddingBottom: "2px", opacity: 0.8,
+                    }}
+                  >
+                    View primary source ↗
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Counsel-review obligations (quad-state `review` bucket). Neutral Mist
+          treatment — distinct from the Ember warning palette (Ember is for
+          warnings only) and from the Moss suppressed cards. Empty until Stage 4
+          routes the MA second-trigger here, so this block does not render in
+          Stage 2; built now so Stage 4 needs no further results-page work. */}
+      {review.length > 0 && (
+        <div style={{ marginTop: "40px" }}>
+          <div className="section-mark" style={{ marginBottom: "16px" }}>
+            Counsel review required
+          </div>
+          <div style={{ display: "grid", gap: "12px" }}>
+            {review.map((r, i) => (
+              <div key={i} style={{ background: "#fff", borderLeft: "4px solid #9FAEC2", padding: "20px 24px", borderRadius: "0 12px 12px 0" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px", color: "#1B2A3F" }}>
+                  <Info size={14} />
+                  <div className="section-mark" style={{ opacity: 1 }}>{r.jurisdiction}</div>
+                </div>
+                <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
+                  {r.authority}
+                </div>
+                {r.review_citation && (
+                  <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>
+                    {r.original_citation ? `${r.original_citation} → ` : ""}{r.review_citation}
+                  </div>
+                )}
+                <div className="rule-text">{r.review_reason}</div>
+                {r.source_url && (
+                  <a
+                    href={r.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
@@ -1766,6 +1816,11 @@ export default function BreachClock() {
               recapRow(
                 "Risk assessment",
                 riskLevel ? RISK_OPTIONS.find((o) => o.value === riskLevel)?.label : "Not assessed"
+              )}
+            {review.length > 0 &&
+              recapRow(
+                "Counsel review",
+                review.map((r) => `${r.jurisdiction} — ${r.authority}${r.review_citation ? ` (${r.review_citation})` : ""}`).join(" · ")
               )}
           </div>
         </div>

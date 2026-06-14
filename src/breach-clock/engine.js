@@ -155,7 +155,13 @@ function computeDeadlines(facts) {
   const deadlines = [];
   const suppressed = [];
   const pending = [];
-  if (!awarenessDate) return { deadlines, suppressed, pending };
+  // Fourth bucket (Stage 2): obligations whose outcome turns on a substantive
+  // legal judgment the engine does not make — a satisfied safeHarbor gate with
+  // onSatisfied:"review". Quad-state invariant: every considered obligation lands
+  // in exactly one of the four arrays. EMPTY until Stage 4 wires the MA gate — no
+  // gate emits "review" yet.
+  const review = [];
+  if (!awarenessDate) return { deadlines, suppressed, pending, review };
 
   // Two-pass build:
   //   Pass 1 — collect obligations that fire, computing deadlines that anchor
@@ -217,9 +223,23 @@ function computeDeadlines(facts) {
           });
           return;
         }
-        // outcome "fires" → fall through to threshold + encryption + deadline
-        // push. ("review" cannot occur in Stage 1: no safeHarbor gate is derived
-        // yet, and the review bucket itself lands in Stage 2.)
+        if (verdict.outcome === "review") {
+          // A satisfied safeHarbor gate routes here when the obligation's outcome
+          // turns on a judgment the engine does not make. No gate emits this in
+          // Stage 2 (the bucket stays empty); Stage 4 wires the MA second-trigger
+          // gate (onSatisfied:"review") and this branch begins populating it.
+          review.push({
+            jurisdiction: jur.short,
+            authority: ob.authority,
+            original_citation: ob.citation,
+            review_citation: verdict.gate.citation,
+            review_reason: verdict.gate.description,
+            source_url: ob.source_url,
+            statute: jur.statute,
+          });
+          return;
+        }
+        // outcome "fires" → fall through to threshold + encryption + deadline push.
       }
       if (ob.gating?.residentThreshold !== undefined) {
         const threshold = ob.gating.residentThreshold;
@@ -356,7 +376,7 @@ function computeDeadlines(facts) {
     return rest;
   });
 
-  return { deadlines: cleaned, suppressed, pending };
+  return { deadlines: cleaned, suppressed, pending, review };
 }
 
 
@@ -401,9 +421,9 @@ const expectCount = (n) => (deadlines) =>
     ? { pass: true }
     : { pass: false, message: `Expected ${n} deadlines; got ${deadlines.length}` };
 
-const expectAll = (...checks) => (deadlines, suppressed, pending) => {
+const expectAll = (...checks) => (deadlines, suppressed, pending, review) => {
   const failures = checks
-    .map((c) => c(deadlines, suppressed, pending))
+    .map((c) => c(deadlines, suppressed, pending, review))
     .filter((r) => !r.pass)
     .map((r) => r.message);
   return failures.length === 0
@@ -456,6 +476,23 @@ const expectSuppressedCount = (n) => (deadlines, suppressed = []) =>
   suppressed.length === n
     ? { pass: true }
     : { pass: false, message: `Expected ${n} suppressed obligations; got ${suppressed.length}` };
+
+// Review-bucket expectations (Stage 2 plumbing; first exercised by Stage 4's MA
+// second-trigger cases). The bucket is empty until Stage 4, so no current case
+// uses these.
+const expectReview = (jurisdiction, authoritySubstring) => (deadlines, suppressed = [], pending = [], review = []) => {
+  const found = review.find(
+    (r) => r.jurisdiction === jurisdiction && r.authority.toLowerCase().includes(authoritySubstring.toLowerCase())
+  );
+  return found
+    ? { pass: true }
+    : { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" to require counsel review; got ${review.length} review: ${review.map((r) => `${r.jurisdiction}/${r.authority}`).join(" | ")}` };
+};
+
+const expectReviewCount = (n) => (deadlines, suppressed = [], pending = [], review = []) =>
+  review.length === n
+    ? { pass: true }
+    : { pass: false, message: `Expected ${n} review obligations; got ${review.length}` };
 
 
 
@@ -1168,8 +1205,8 @@ function runTests() {
         ...t.facts,
         awarenessDate: t.facts._skipAwareness ? undefined : TEST_AWARENESS,
       };
-      const { deadlines, suppressed, pending } = computeDeadlines(facts);
-      const result = t.expect(deadlines, suppressed, pending);
+      const { deadlines, suppressed, pending, review } = computeDeadlines(facts);
+      const result = t.expect(deadlines, suppressed, pending, review);
       return {
         name: t.name,
         category: t.category,

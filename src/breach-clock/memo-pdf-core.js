@@ -494,6 +494,16 @@ function suppressedBlocks(s) {
   ];
 }
 
+function reviewBlocks(r) {
+  return [
+    { type: "topRow", left: `${r.jurisdiction} — ${r.authority}` },
+    ...(r.original_citation ? [{ type: "labelMono", label: "Obligation", body: r.original_citation }] : []),
+    ...(r.review_citation ? [{ type: "labelMono", label: "Requires review under", body: r.review_citation }] : []),
+    ...(r.review_reason ? [{ type: "body", text: r.review_reason }] : []),
+    ...(r.source_url ? [{ type: "url", label: "Source", url: r.source_url }] : []),
+  ];
+}
+
 function noteBlocks(jurShort, note) {
   return [
     { type: "noteHeader", label: jurShort, title: note.title },
@@ -773,15 +783,20 @@ function drawIncidentReport(state, sections) {
 
 // ─── Main entry point ─────────────────────────────────────────────────────
 //
-// renderMemoPdfBytes(facts, deadlines, suppressed, { fontBytes, logoBytes, generatedAt })
+// renderMemoPdfBytes(facts, deadlines, suppressed, { fontBytes, logoBytes, generatedAt }, review)
 //
 // fontBytes:  { serifReg, serifBold, sansReg, sansBold, monoReg } — each an ArrayBuffer / Uint8Array
 // logoBytes:  ArrayBuffer / Uint8Array — the rune-glyph PNG
 // generatedAt: Date — when the memo was generated; affects letterhead + footer
+// review:     Array — obligations requiring counsel review (Stage 2 quad-state
+//             bucket). Trailing param with an empty-array default so existing
+//             four-arg callers (the gate harnesses) keep working untouched. Empty
+//             until Stage 4 routes the MA second-trigger here, so its section
+//             omits itself.
 //
 // Returns: Uint8Array — the serialized PDF bytes
 //
-export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontBytes, logoBytes, generatedAt }) {
+export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontBytes, logoBytes, generatedAt }, review = []) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
 
@@ -813,6 +828,11 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
 
   if (suppressed && suppressed.length > 0) {
     drawCardSection(state, "Notification Suppressed by Encryption", suppressed, suppressedBlocks, MOSS);
+  }
+
+  if (review && review.length > 0) {
+    // Neutral (Mist) border, parallel to the suppressed/deadline sections.
+    drawCardSection(state, "Requires Counsel Review", review, reviewBlocks, MIST);
   }
 
   const jurNotes = collectJurisdictionalNotes(facts);

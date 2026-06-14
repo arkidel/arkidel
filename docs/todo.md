@@ -391,12 +391,21 @@ disclosure gate will also produce `review`.
 
 ### Stage status
 
-- **S1 — in progress (2026-06-14):** generic per-obligation `conditionalGates`
-  seam in `engine.js`; EU/UK risk gate re-expressed in it, behavior-preserved;
-  three buckets retained; global encryption switch untouched. Regression net:
-  in-file suite (60 cases) + adversarial harness (57 cases) must stay green with
-  no test rewritten to fit new behavior.
-- S2–S6 — not started.
+- **S1 — done (2026-06-14):** generic per-obligation `conditionalGates` seam in
+  `engine.js`; EU/UK risk gate re-expressed in it, behavior-preserved; three
+  buckets retained; global encryption switch untouched. In-file 60/60 +
+  adversarial 57/57, no test rewritten. Commit `ebde37f`.
+- **S2 — done (2026-06-14):** 4th `review` bucket added end to end —
+  `computeDeadlines` returns `review`; `runTests`/`expectAll` extended to a 4th
+  arg (plus unused `expectReview`/`expectReviewCount` helpers for S4); results
+  page gains a neutral Mist "Counsel review required" card + conditional recap
+  row; PDF memo gains a "Requires Counsel Review" section (Mist border); both
+  zero-state banners now guard on `review.length === 0`. Nothing routes to
+  `review` (bucket empty); behavior-preserved. Quad-state invariant verified
+  across 189 fact-sets (review empty, no obligation in >1 bucket). In-file 60/60
+  + adversarial 57/57 unchanged; production build green.
+- **S1 + S2 complete. S3 next:** US encryption cluster + safeHarbor gates,
+  remove the global encryption switch atomically, re-point encryption tests.
 
 ---
 
