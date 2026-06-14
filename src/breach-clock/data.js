@@ -402,8 +402,8 @@ const JURISDICTIONS = [
       {
         id: "ny-dfs-sectoral-overlay",
         title: "NYDFS sectoral overlay — covered entities have a separate 72-hour notification under 23 NYCRR Part 500",
-        content: "If the entity is a 'covered entity' under 23 NYCRR Part 500.1 (i.e., regulated by the New York Department of Financial Services), the entity must additionally notify NYDFS within 72 hours of determining that a cybersecurity event has occurred, in accordance with 23 NYCRR § 500.17(c). This is in addition to the AG / Department of State / State Police notification above and is governed by the DFS cybersecurity regulations rather than § 899-aa. The February 14, 2025 chapter amendment to § 899-aa (S804) clarified that the DFS-notification carve-out applies only to NYDFS-regulated entities; non-regulated entities do NOT owe DFS notification under § 899-aa(8). Respond does not model the 72-hour DFS clock because it depends on entity-type characteristics outside the breach facts. If you are a NYDFS covered entity, treat the DFS deadline as the binding clock for DFS, separate from this analysis.",
-        citation: "23 NYCRR § 500.17(c); N.Y. Gen. Bus. Law § 899-aa(8)(a)(ii)",
+        content: "If the entity is a 'covered entity' under 23 NYCRR Part 500.1 (i.e., regulated by the New York Department of Financial Services), the entity must additionally notify NYDFS within 72 hours of determining that a cybersecurity event has occurred, in accordance with 23 NYCRR § 500.17(a). This is in addition to the AG / Department of State / State Police notification above and is governed by the DFS cybersecurity regulations rather than § 899-aa. The February 14, 2025 chapter amendment to § 899-aa (S804) clarified that the DFS-notification carve-out applies only to NYDFS-regulated entities; non-regulated entities do NOT owe DFS notification under § 899-aa(8). Respond does not model the 72-hour DFS clock because it depends on entity-type characteristics outside the breach facts. If you are a NYDFS covered entity, treat the DFS deadline as the binding clock for DFS, separate from this analysis.",
+        citation: "23 NYCRR § 500.17(a); N.Y. Gen. Bus. Law § 899-aa(8)(a)(ii)",
         source_url: "https://www.dfs.ny.gov/industry_guidance/cybersecurity",
       },
       {
@@ -414,16 +414,9 @@ const JURISDICTIONS = [
         source_url: "https://www.nysenate.gov/legislation/laws/GBS/899-AA",
       },
       {
-        id: "ny-no-harm-determination-report",
-        title: "No-harm determination at more than 500 residents — 10-day report to AG even when notification is excused",
-        content: "Section 899-aa(2)(a) excuses notification entirely if the exposure of private information was inadvertent and the entity reasonably determines that misuse, financial harm, or emotional harm is not reasonably likely. However, where this no-harm determination is invoked AND the inadvertent exposure affected more than 500 New York residents, the entity must still provide the written determination to the New York Attorney General within 10 days of the determination. This is an obligation that fires precisely when the standard notification obligations don't, and is not modelled as a discrete deadline in the engine because it requires the substantive judgment that no-harm-likely. If you are invoking the no-harm gate and the affected New York-resident count is more than 500, this 10-day AG report is mandatory. Document the determination contemporaneously and retain for at least five years per § 899-aa(2)(a).",
-        citation: "N.Y. Gen. Bus. Law § 899-aa(2)(a)",
-        source_url: "https://www.nysenate.gov/legislation/laws/GBS/899-AA",
-      },
-      {
-        id: "ny-misuse-investigation-gate",
-        title: "Misuse-investigation gate under § 899-aa(2)(a) — substantive judgment, not modelled",
-        content: "Notification is not required under § 899-aa(2)(a) if the entity determines, after reasonable investigation, that the exposure was inadvertent and is not reasonably likely to result in misuse of the information, or financial or emotional harm. This is a substantive judgment that turns on the specific facts of the incident, not a data-driven gate; Respond's deadlines reflect the default position that notification is required. If facts support invoking this gate, see the no-harm-determination counsel note for the parallel 10-day AG reporting obligation that applies above 500 affected residents.",
+        id: "ny-inadvertent-disclosure-exception-899aa-2a",
+        title: "Inadvertent-disclosure exception (§ 899-aa(2)(a)) — narrow gate, plus 10-day AG report and 5-year retention",
+        content: "New York has no general harm-threshold exception. The only carve-out from the notification duty is § 899-aa(2)(a), and it is narrow. Notice to affected persons is not required only if BOTH (1) the exposure of private information was an inadvertent disclosure by persons authorized to access that information, AND (2) the person or business reasonably determines the exposure will not likely result in misuse of the information, financial harm to the affected persons, or — for unknown disclosure of online credentials — emotional harm. This is a fact-specific judgment. Respond's deadlines reflect the default position that notification is required. If the exception is invoked, two obligations attach: the determination must be documented in writing (such as in the Respond memo) and retained at least five years; and if the incident affects more than 500 New York residents, the written determination must be provided to the NY Attorney General within 10 days of the determination. The exception is unavailable where the disclosure was not inadvertent or involved access by an unauthorized person — the standard obligations then apply.",
         citation: "N.Y. Gen. Bus. Law § 899-aa(2)(a)",
         source_url: "https://www.nysenate.gov/legislation/laws/GBS/899-AA",
       },

@@ -1033,7 +1033,7 @@ multi-authority array.
 - **Conditional language:** The AG's online breach reporting portal serves as
   simultaneous notice to the AG, Department of State, and Division of State
   Police. NYDFS-regulated entities also notify NYDFS separately under 23 NYCRR
-  § 500.17(c) (see counsel notes 7.9).
+  § 500.17(a) (see counsel notes 7.9).
 
 ### 7.4b New York Department of State
 
@@ -1075,7 +1075,7 @@ multi-authority array.
 
 ## 7.7 Other obligations not modelled (handled via counsel notes)
 
-- **NYDFS sectoral notification** under 23 NYCRR § 500.17(c) — covered entities
+- **NYDFS sectoral notification** under 23 NYCRR § 500.17(a) — covered entities
   (per Part 500.1) must notify NYDFS within 72 hours of determining a
   cybersecurity event. Surfaced as counsel note (id:
   `ny-dfs-sectoral-overlay`). The February 14, 2025 chapter amendment (S804)
@@ -1092,10 +1092,27 @@ multi-authority array.
   where the misuse-investigation gate is invoked AND the inadvertent exposure
   affected more than 500 New York residents, the entity must provide the
   written determination to the AG within 10 days. Surfaced as counsel note
-  (id: `ny-no-harm-determination-report`).
+  (id: `ny-no-harm-determination-report`). **Superseded 2026-06-14** —
+  consolidated into `ny-inadvertent-disclosure-exception-899aa-2a` (redundant;
+  both described § 899-aa(2)(a)). Consolidation applied in the same commit as
+  the data.js NY edits (Edits A & B).
 - **Misuse-investigation gate** under § 899-aa(2)(a) — the substantive
   judgment that excuses notification entirely. Surfaced as counsel note
-  (id: `ny-misuse-investigation-gate`).
+  (id: `ny-misuse-investigation-gate`). **Superseded 2026-06-14** —
+  consolidated into `ny-inadvertent-disclosure-exception-899aa-2a` (redundant;
+  both described § 899-aa(2)(a)). Consolidation applied in the same commit as
+  the data.js NY edits (Edits A & B).
+- **Inadvertent-disclosure exception (§ 899-aa(2)(a))** — New York's only
+  carve-out from the notification duty: a narrow, fact-specific gate requiring
+  BOTH an inadvertent disclosure by an authorized person AND a reasonable
+  determination that misuse / financial harm / (for online-credential cases)
+  emotional harm is not likely. Where invoked, the determination must be
+  documented in writing and retained at least five years, and — above 500
+  affected New York residents — the written determination must go to the AG
+  within 10 days. Surfaced as counsel note (id:
+  `ny-inadvertent-disclosure-exception-899aa-2a`), consolidating the two
+  superseded entries above. Added 2026-06-14 in the same commit as the data.js
+  NY edits (Edits A & B).
 - **Notice content & format requirements** under § 899-aa(7) — required
   content elements for the notice to residents. Out of scope for the Breach
   Clock.
@@ -1126,7 +1143,7 @@ multi-authority array.
 
 - **In-app counsel note: NYDFS sectoral overlay.** Note id:
   `ny-dfs-sectoral-overlay`. Flags the separate 72-hour NYDFS notification
-  obligation under 23 NYCRR § 500.17(c) for covered entities. The Breach
+  obligation under 23 NYCRR § 500.17(a) for covered entities. The Breach
   Clock does not model the 72-hour DFS clock because it depends on entity
   type rather than breach facts.
 - **In-app counsel note: HIPAA / HITECH cross-link.** Note id:
@@ -1137,9 +1154,23 @@ multi-authority array.
   that arises precisely when the no-harm gate excuses notification — an
   obligation that fires when the standard obligations don't, and would
   require negative-condition gating to model in the engine.
+  **Superseded 2026-06-14** — consolidated into `ny-inadvertent-disclosure-exception-899aa-2a`
+  (redundant; both described § 899-aa(2)(a)). Consolidation applied in the same
+  commit as the data.js NY edits (Edits A & B).
 - **In-app counsel note: misuse-investigation gate.** Note id:
   `ny-misuse-investigation-gate`. Flags the substantive judgment that
-  excuses notification under § 899-aa(2)(a).
+  excuses notification under § 899-aa(2)(a). **Superseded 2026-06-14** —
+  consolidated into `ny-inadvertent-disclosure-exception-899aa-2a` (redundant;
+  both described § 899-aa(2)(a)). Consolidation applied in the same commit as
+  the data.js NY edits (Edits A & B).
+- **In-app counsel note: inadvertent-disclosure exception (§ 899-aa(2)(a)).**
+  Note id: `ny-inadvertent-disclosure-exception-899aa-2a`. The single
+  consolidated note replacing the two superseded entries above: states that NY
+  has no general harm-threshold exception, describes the narrow § 899-aa(2)(a)
+  gate (inadvertent disclosure by an authorized person + reasonable
+  no-likely-harm determination), and flags the written-determination five-year
+  retention and the 10-day AG report above 500 affected residents. Added
+  2026-06-14 in the same commit as the data.js NY edits (Edits A & B).
 
 ## 7.10 Recommended test cases
 
@@ -1181,6 +1212,20 @@ multi-authority array.
   Non-substantive link update only: no change to any rule, threshold, citation,
   deadline, or prose. All three target URLs in this refresh (UK ICO, TX AG, NY
   DFS) verified live (HTTP 200) on 2026-06-14. (Commit 9143531.)
+- **Citation correction (2026-06-14):** NYDFS 72-hour notice is 23 NYCRR
+  § 500.17(a), not (c); corrected at all three references in this form
+  (§7.4a conditional language, §7.7 obligations-not-modelled, §7.9 counsel
+  notes) and in the `ny-dfs-sectoral-overlay` note's content and citation in
+  `data.js`. Verified vs the DFS Cybersecurity Resource Center. Applied in the
+  same commit as the data.js NY edits (Edits A & B).
+- **Counsel-note consolidation (2026-06-14):** The two § 899-aa(2)(a) notes
+  `ny-no-harm-determination-report` and `ny-misuse-investigation-gate` — both
+  describing the same inadvertent-disclosure exception — were consolidated in
+  `data.js` into a single note `ny-inadvertent-disclosure-exception-899aa-2a`;
+  NY counsel-note count 4 → 3. The two prior §7.7 / §7.9 audit entries are
+  retained and marked superseded, and a fresh entry for the consolidated note
+  was added to each section. No change to any rule, threshold, deadline, or
+  obligation. Applied in the same commit as the data.js NY edits (Edits A & B).
 - **Reviewer:** *(pending)*
 
 ---
@@ -1398,7 +1443,7 @@ multi-authority array.
 - `gating: { residentThreshold, comparator }` — gates obligations on resident count, with `gt` / `gte` precision
 - `breachDefinitionExcludesEncrypted: { applies, citation, description }` — for jurisdictions whose statutory definition of "breach" excludes encrypted data with uncompromised key (per-se rule). Used by CA, TX, CO, MA.
 - `obligationExemptedByUnintelligibility: { applies, citation, description }` — for jurisdictions where the obligation exists but is conditionally exempted when appropriate technical and organisational measures rendered the data unintelligible (judgment-based, with the supervisory authority retaining override power). Used by EU GDPR Art. 34(3)(a) and UK GDPR Art. 34(3)(a).
-- `counselNotes: [{ id, title, content, citation, source_url }]` — jurisdiction-level prose flags rendered on the results page and in the downloadable memo. Used for substantive judgments, sectoral overlays, definitional nuances, and obligations that the engine cannot model. Currently used by CA (1 note: § 1280.15 healthcare regime), MA (1 note: § 3(b) dual trigger), NY (4 notes: NYDFS sectoral overlay, HIPAA / HITECH cross-link, no-harm determination report at >500 residents, misuse-investigation gate), and VA (4 notes: substantive harm threshold under § 18.2-186.6, § 32.1-127.1:05 medical-information regime, § 18.2-186.6(M) employer/payroll tax-data regime, good-faith employee/agent carve-out). Pattern available for other substantive judgments and sectoral overlays.
+- `counselNotes: [{ id, title, content, citation, source_url }]` — jurisdiction-level prose flags rendered on the results page and in the downloadable memo. Used for substantive judgments, sectoral overlays, definitional nuances, and obligations that the engine cannot model. Currently used by CA (1 note: § 1280.15 healthcare regime), MA (1 note: § 3(b) dual trigger), NY (3 notes: NYDFS sectoral overlay, HIPAA / HITECH cross-link, inadvertent-disclosure exception (§ 899-aa(2)(a))), and VA (4 notes: substantive harm threshold under § 18.2-186.6, § 32.1-127.1:05 medical-information regime, § 18.2-186.6(M) employer/payroll tax-data regime, good-faith employee/agent carve-out). Pattern available for other substantive judgments and sectoral overlays.
 
 # Appendix: Model gaps (not yet hit by current jurisdictions)
 
