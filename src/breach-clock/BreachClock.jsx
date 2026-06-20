@@ -31,7 +31,7 @@ import React, { useState, useEffect } from "react";
 import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, X, ChevronDown } from "lucide-react";
 import { JURISDICTIONS } from "./data.js";
 import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine.js";
-import { groupResultsByJurisdiction, blockSections } from "./results-grouping.js";
+import { groupResultsByJurisdiction } from "./results-grouping.js";
 import { generateMemoPdf } from "./memo-pdf.js";
 import usePageTitle from "../usePageTitle.js";
 
@@ -1348,7 +1348,7 @@ export default function BreachClock() {
 
     // Card renderers — markup IDENTICAL to the former outcome-first sections,
     // only relocated into the per-jurisdiction blocks. No copy or style change.
-    const renderActiveCard = (d, i, blockActive) => {
+    const renderActiveCard = (d, i, blockActive, extraStyle) => {
       const timeRemaining = d.deadline ? d.deadline.getTime() - now.getTime() : null;
       const isMissed = timeRemaining !== null && timeRemaining < 0;
       const isUrgent = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 3600 * 1000;
@@ -1363,10 +1363,9 @@ export default function BreachClock() {
         ? `${depMatch[1]} after notifying residents`
         : null;
       return (
-        <div key={i} className={`deadline-card ${isMissed ? "missed" : isUrgent ? "urgent" : ""}`}>
+        <div key={i} className={`deadline-card ${isMissed ? "missed" : isUrgent ? "urgent" : ""}`} style={extraStyle}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
             <div>
-              <div className="section-mark" style={{ marginBottom: "10px" }}>{d.jurisdiction}</div>
               <div className="serif" style={{ fontSize: "26px", fontWeight: 400, lineHeight: 1.15, marginBottom: "12px", letterSpacing: "-0.01em" }}>
                 Notify {d.authority}
               </div>
@@ -1450,12 +1449,8 @@ export default function BreachClock() {
       </div>
     );
 
-    const renderReviewCard = (r, i) => (
-      <div key={i} style={{ background: "#fff", borderLeft: "4px solid #9FAEC2", padding: "20px 24px", borderRadius: "0 12px 12px 0" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px", color: "#1B2A3F" }}>
-          <Info size={14} />
-          <div className="section-mark" style={{ opacity: 1 }}>{r.jurisdiction}</div>
-        </div>
+    const renderReviewCard = (r, i, extraStyle) => (
+      <div key={i} style={{ background: "#fff", borderLeft: "4px solid #9FAEC2", padding: "20px 24px", borderRadius: "0 12px 12px 0", boxShadow: "0 2px 8px rgba(27,42,63,0.10)", ...extraStyle }}>
         <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
           {r.authority}
         </div>
@@ -1483,49 +1478,103 @@ export default function BreachClock() {
       </div>
     );
 
-    const renderNoteCard = ({ jurShort, note }) => (
-      <aside key={note.id} style={{ background: "#fff", color: "#2C2418", padding: "20px 24px", borderLeft: "4px solid #E8DDC4", borderRadius: "0 12px 12px 0" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", color: "#1B2A3F" }}>
-          <Info size={14} />
-          <div className="section-mark" style={{ opacity: 1 }}>{jurShort}</div>
-        </div>
-        <div className="serif" style={{ fontSize: "18px", fontWeight: 400, lineHeight: 1.3, marginBottom: "10px", letterSpacing: "-0.005em" }}>
-          {note.title}
-        </div>
-        <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 10px" }}>{note.content}</p>
-        {note.citation && (
-          <div className="mono" style={{ fontSize: "11px", opacity: 0.7 }}>
-            {note.citation}
-            {note.source_url && (
-              <>
-                {" — "}
-                <a href={note.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "#1B2A3F", textDecoration: "underline" }}>
-                  primary source
-                </a>
-              </>
+    // Counsel notes now render as one continuous parchment SECTION (no per-note
+    // stripe-cards): a single panel whose notes are divided by a hairline rule.
+    // The group eyebrow (caveat/sectoral) lives inside the panel at the top of
+    // the first note; parallels carry a per-note lead instead. lapEdge adds 8px
+    // clearance on the edge a card laps (16 lap − 8) so the text margin there
+    // matches the panel's other edges. Cards overhang the panel ~10px each side,
+    // so the panel is inset 10px left/right.
+    const renderParchmentPanel = ({ key, notes, eyebrow, perNoteLead, lapEdge, marginTop, zIndex = 0 }) => (
+      <div
+        key={key}
+        style={{
+          background: "#EBE2C9",
+          border: "1px solid rgba(176,160,122,0.45)",
+          borderRadius: "9px",
+          overflow: "hidden",
+          marginLeft: "10px",
+          marginRight: "10px",
+          marginTop: typeof marginTop === "number" ? `${marginTop}px` : marginTop,
+          paddingTop: lapEdge === "top" ? "8px" : undefined,
+          paddingBottom: lapEdge === "bottom" ? "8px" : undefined,
+          position: "relative",
+          zIndex,
+        }}
+      >
+        {notes.map(({ jurShort, note }, i) => (
+          <div
+            key={note.id}
+            style={{ padding: "12px 17px", borderTop: i > 0 ? "1px solid rgba(176,160,122,0.5)" : undefined }}
+          >
+            {(perNoteLead || (i === 0 && eyebrow)) && (
+              <div
+                className="mono"
+                style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#9b8e6c", marginBottom: "8px" }}
+              >
+                {perNoteLead || eyebrow}
+              </div>
+            )}
+            <div className="serif" style={{ fontSize: "17px", fontWeight: 400, lineHeight: 1.3, marginBottom: "8px", letterSpacing: "-0.005em", color: "#2C2418" }}>
+              {note.title}
+            </div>
+            <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 8px", color: "#2C2418" }}>{note.content}</p>
+            {note.citation && (
+              <div className="mono" style={{ fontSize: "11px", opacity: 0.7, color: "#2C2418" }}>
+                {note.citation}
+                {note.source_url && (
+                  <>
+                    {" — "}
+                    <a href={note.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "#2C2418", textDecoration: "underline" }}>
+                      primary source
+                    </a>
+                  </>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </aside>
-    );
-
-    // Minimal within-block sub-labels — existing copy, relocated (active cards
-    // lead unlabelled). Subject to gate review.
-    const SECTION_LABEL = { review: "Counsel review required", suppressed: "Notification likely not required", notes: "Jurisdictional notes" };
-    const SECTION_GAP = { active: "16px", review: "12px", suppressed: "12px", notes: "12px" };
-    const renderSection = (section, block) => (
-      <div key={section.kind} style={{ marginTop: SECTION_LABEL[section.kind] ? "24px" : "0" }}>
-        {SECTION_LABEL[section.kind] && (
-          <div className="section-mark" style={{ marginBottom: "12px" }}>{SECTION_LABEL[section.kind]}</div>
-        )}
-        <div style={{ display: "grid", gap: SECTION_GAP[section.kind] }}>
-          {section.kind === "active" && section.cards.map((d, i) => renderActiveCard(d, i, block.activeCards))}
-          {section.kind === "review" && section.cards.map((r, i) => renderReviewCard(r, i))}
-          {section.kind === "suppressed" && section.cards.map((s, i) => renderSuppressedCard(s, i))}
-          {section.kind === "notes" && section.cards.map((n) => renderNoteCard(n))}
-        </div>
+        ))}
       </div>
     );
+
+    // Per-jurisdiction block body, in placement order:
+    //   caveat panel (above) → obligation cards (each with its parallel panel
+    //   tucked under) → suppressed cards → sectoral panel (foot).
+    // The first card laps UP 16px over the caveat; parallel/sectoral panels tuck
+    // UP 16px under the card above. Cards carry z-index above the parchment.
+    const PARALLEL_LEAD = "Parallel AG obligation — may also apply";
+    const renderBlock = (block) => {
+      const out = [];
+      const hasCaveat = block.caveatNotes.length > 0;
+      if (hasCaveat) {
+        out.push(renderParchmentPanel({ key: "caveat", notes: block.caveatNotes, eyebrow: "Pre-Notification Considerations", lapEdge: "bottom", marginTop: 16 }));
+      }
+      block.obligations.forEach((ob, idx) => {
+        const first = idx === 0;
+        const cardStyle = { marginTop: first ? (hasCaveat ? "-16px" : "16px") : "16px", position: "relative", zIndex: 1 };
+        out.push(
+          ob.role === "active"
+            ? renderActiveCard(ob.card, `ob-${idx}`, block.activeCards, cardStyle)
+            : renderReviewCard(ob.card, `ob-${idx}`, cardStyle)
+        );
+        ob.parallelNotes.forEach((pn, j) =>
+          out.push(renderParchmentPanel({ key: `par-${idx}-${j}`, notes: [pn], perNoteLead: PARALLEL_LEAD, lapEdge: "top", marginTop: -16 }))
+        );
+      });
+      if (block.suppressedCards.length > 0) {
+        out.push(<div key="sup-label" className="section-mark" style={{ margin: "24px 0 12px" }}>Notification likely not required</div>);
+        block.suppressedCards.forEach((s, i) =>
+          out.push(<div key={`sup-${i}`} style={{ marginTop: i === 0 ? 0 : "12px" }}>{renderSuppressedCard(s, i)}</div>)
+        );
+      }
+      if (block.sectoralNotes.length > 0) {
+        out.push(renderParchmentPanel({ key: "sectoral", notes: block.sectoralNotes, eyebrow: "Other Applicable Requirements", lapEdge: null, marginTop: 24 }));
+      }
+      block.footParallelNotes.forEach((pn, j) =>
+        out.push(renderParchmentPanel({ key: `fpar-${j}`, notes: [pn], perNoteLead: PARALLEL_LEAD, lapEdge: null, marginTop: j === 0 && block.sectoralNotes.length === 0 ? 24 : 12 }))
+      );
+      return out;
+    };
 
     return (
     <>
@@ -1578,7 +1627,7 @@ export default function BreachClock() {
               <div className="serif" style={{ fontSize: "22px", fontWeight: 400, lineHeight: 1.2, letterSpacing: "-0.01em" }}>{block.name}</div>
               <div className="mono" style={{ fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>{block.statuteSubtitle}</div>
             </div>
-            {blockSections(block).map((section) => renderSection(section, block))}
+            {renderBlock(block)}
           </div>
         ))}
       </div>
@@ -2175,6 +2224,7 @@ export default function BreachClock() {
         .deadline-card {
           background: #fff; border-left: 4px solid #1B2A3F; padding: 24px;
           position: relative; overflow: hidden; border-radius: 0 12px 12px 0;
+          box-shadow: 0 2px 8px rgba(27,42,63,0.10);
         }
         .deadline-card.urgent { border-left-color: #C76E3A; background: #FBF5EE; }
         .deadline-card.missed { background: #1B2A3F; color: #FAF8F2; border-left-color: #C76E3A; }

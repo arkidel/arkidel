@@ -3,15 +3,29 @@
 //
 // Pure, shared regrouping of the engine's flat result buckets (deadlines,
 // suppressed, review) plus each selected jurisdiction's counsel notes into
-// jurisdiction-first blocks — one block per jurisdiction holding all of that
-// jurisdiction's cards and notes. Consumed by BOTH the on-screen results page
+// jurisdiction-first blocks. Consumed by BOTH the on-screen results page
 // (BreachClock.jsx) and the PDF memo (memo-pdf-core.js) so the two surfaces
-// cannot drift in how output is grouped or ordered.
+// cannot drift in how output is grouped, ordered, or placed.
 //
 // This file performs NO legal computation. It only regroups and reorders
 // objects the engine already produced; engine.js / data.js are untouched. The
-// card objects it receives are passed through by reference, not rebuilt — card
-// content, copy, and ordering-within-a-card are exactly as the engine emitted.
+// card and note objects it receives/reads are passed through by reference, not
+// rebuilt — content, copy, citations, and within-card ordering are exactly as
+// the engine emitted and as data.js declares.
+//
+// Counsel-note PLACEMENT. Each note in data.js carries a `placement`
+// ("caveat" | "parallel" | "sectoral") and, for parallels, an `anchor` ("ag").
+// This module relocates notes out of a trailing bucket and into position
+// relative to their obligations:
+//   - caveatNotes   (placement "caveat")   → one group ABOVE the obligation cards
+//   - obligations[].parallelNotes (placement "parallel") → attached to the
+//                    obligation whose kind matches the note's anchor ("ag" → the
+//                    Attorney General obligation), to render immediately AFTER
+//                    that card
+//   - sectoralNotes (placement "sectoral") → one group at the block FOOT
+// A parallel note whose anchored obligation did not fire (e.g. encryption-
+// suppressed AG) has no card to sit under; rather than drop a counsel note it
+// falls back to footParallelNotes, rendered at the block foot.
 //
 // The `pending` bucket is intentionally NOT grouped here. It renders as a single
 // consolidated "Risk assessment required" banner above the blocks, so a
@@ -21,27 +35,27 @@
 
 import { JURISDICTIONS } from "./data.js";
 
-// ── Ordering knobs — the two ordering choices, isolated so the gate review can
-//    flip either independently without touching the grouping logic. ──
-//
-// (A) WITHIN_BLOCK_SEQUENCE — the order of card-type groups INSIDE one
-//     jurisdiction block: (1) active deadline cards, (2) counsel-review cards,
-//     (3) suppressed / not-required cards, (4) counsel notes. Reorder these four
-//     keys to change within-block order on BOTH surfaces at once.
-export const WITHIN_BLOCK_SEQUENCE = ["active", "review", "suppressed", "notes"];
-//
-// (B) CROSS_BLOCK_URGENCY_FIRST — block order ACROSS jurisdictions.
-//       true  → jurisdictions with at least one active deadline first, ordered
-//               by soonest deadline; then jurisdictions with no active deadline;
-//               canonical data.js order as the tie-break.
-//       false → fixed canonical data.js order, ignoring urgency.
+// CROSS_BLOCK_URGENCY_FIRST — block order ACROSS jurisdictions.
+//   true  → jurisdictions with at least one active deadline first, ordered by
+//           soonest deadline; then jurisdictions with no active deadline;
+//           canonical data.js order as the tie-break.
+//   false → fixed canonical data.js order, ignoring urgency.
 export const CROSS_BLOCK_URGENCY_FIRST = true;
 
 // Canonical short-name → metadata lookup over the data.js jurisdiction list.
+// kindByAuthority maps each obligation's display authority to its `kind`, so a
+// parallel note's anchor ("ag") can be matched to the firing card whose
+// obligation kind is "ag" (the Attorney General).
 const BY_SHORT = new Map(
   JURISDICTIONS.map((j, index) => [
     j.short,
-    { id: j.id, name: j.name, statute: j.statute, index },
+    {
+      id: j.id,
+      name: j.name,
+      statute: j.statute,
+      index,
+      kindByAuthority: new Map((j.obligations || []).map((o) => [o.authority, o.kind])),
+    },
   ])
 );
 
@@ -82,8 +96,24 @@ function soonestActive(block) {
   return min;
 }
 
+// Split a block's note entries ({ jurShort, note }) by placement. "sectoral" is
+// also the safe default for any unknown/missing placement — a neutral block-foot
+// position that never implies a pre-notification gate.
+function splitNotesByPlacement(entries) {
+  const caveat = [];
+  const sectoral = [];
+  const parallel = [];
+  for (const entry of entries) {
+    const p = entry.note.placement;
+    if (p === "caveat") caveat.push(entry);
+    else if (p === "parallel") parallel.push(entry);
+    else sectoral.push(entry);
+  }
+  return { caveat, sectoral, parallel };
+}
+
 /**
- * Regroup engine output into jurisdiction-first blocks.
+ * Regroup engine output into jurisdiction-first blocks with placed counsel notes.
  *
  * @param {Object}  result
  * @param {Array}   [result.deadlines]     - active deadline cards (engine `deadlines`)
@@ -91,11 +121,16 @@ function soonestActive(block) {
  * @param {Array}   [result.review]        - counsel-review cards
  * @param {Object}  [result.jurisdictions] - { [id]: boolean } selected-jurisdiction map (facts.jurisdictions),
  *                                           used to attach each selected jurisdiction's counsel notes.
- * @returns {Array<{ jurisdictionId, name, statuteSubtitle,
- *                   activeCards, counselReviewCards, suppressedCards, counselNotes }>}
+ * @returns {Array<{
+ *   jurisdictionId, name, statuteSubtitle,
+ *   activeCards, counselReviewCards, suppressedCards,
+ *   caveatNotes,                                    // [{ jurShort, note }] — render ABOVE the cards
+ *   obligations,                                    // [{ card, role: "active"|"review", parallelNotes: [{ jurShort, note }] }]
+ *   sectoralNotes,                                  // [{ jurShort, note }] — render at the FOOT
+ *   footParallelNotes,                              // [{ jurShort, note }] — orphaned parallels, render at the FOOT
+ * }>}
  *   One entry per jurisdiction that produced any output (an all-suppressed or
- *   notes-only jurisdiction still gets a block), ordered per the knobs above.
- *   Each counselNotes entry is { jurShort, note } (mirrors the PDF note shape).
+ *   notes-only jurisdiction still gets a block), ordered per the knob above.
  */
 export function groupResultsByJurisdiction({
   deadlines = [],
@@ -116,8 +151,9 @@ export function groupResultsByJurisdiction({
         activeCards: [],
         counselReviewCards: [],
         suppressedCards: [],
-        counselNotes: [],
+        _notes: [],
         _index: meta.index,
+        _kindByAuthority: meta.kindByAuthority,
       });
     }
     return blocks.get(meta.id);
@@ -142,12 +178,37 @@ export function groupResultsByJurisdiction({
     if (!jurisdictions[j.id]) return;
     if (!j.counselNotes || j.counselNotes.length === 0) return;
     const b = ensureBlock(j.short);
-    if (b) j.counselNotes.forEach((note) => b.counselNotes.push({ jurShort: j.short, note }));
+    if (b) j.counselNotes.forEach((note) => b._notes.push({ jurShort: j.short, note }));
   });
 
   const list = [...blocks.values()];
   list.forEach((b) => {
     b.activeCards = sortActiveCards(b.activeCards);
+
+    const { caveat, sectoral, parallel } = splitNotesByPlacement(b._notes);
+
+    // Obligations = active cards (role "active") then counsel-review cards
+    // (role "review"), in their existing order. Parallels attach to the first
+    // obligation whose kind matches the note's anchor.
+    const obligations = [
+      ...b.activeCards.map((card) => ({ card, role: "active", parallelNotes: [] })),
+      ...b.counselReviewCards.map((card) => ({ card, role: "review", parallelNotes: [] })),
+    ];
+    const footParallelNotes = [];
+    for (const entry of parallel) {
+      const anchor = entry.note.anchor;
+      const target =
+        anchor != null
+          ? obligations.find((o) => b._kindByAuthority.get(o.card.authority) === anchor)
+          : null;
+      if (target) target.parallelNotes.push(entry);
+      else footParallelNotes.push(entry);
+    }
+
+    b.caveatNotes = caveat;
+    b.obligations = obligations;
+    b.sectoralNotes = sectoral;
+    b.footParallelNotes = footParallelNotes;
   });
 
   list.sort((a, b) => {
@@ -162,22 +223,6 @@ export function groupResultsByJurisdiction({
     return a._index - b._index; // tie-break: data.js order
   });
 
-  return list.map(({ _index, ...rest }) => rest);
-}
-
-/**
- * The block's non-empty card-type groups, in WITHIN_BLOCK_SEQUENCE order, for
- * renderers that iterate generically. Each entry: { kind, cards }.
- * Both surfaces call this so within-block order is defined in exactly one place.
- */
-export function blockSections(block) {
-  const byKind = {
-    active: block.activeCards,
-    review: block.counselReviewCards,
-    suppressed: block.suppressedCards,
-    notes: block.counselNotes,
-  };
-  return WITHIN_BLOCK_SEQUENCE.map((kind) => ({ kind, cards: byKind[kind] || [] })).filter(
-    (s) => s.cards.length > 0
-  );
+  // Strip internal fields before returning.
+  return list.map(({ _index, _kindByAuthority, _notes, ...rest }) => rest);
 }

@@ -23,7 +23,7 @@
 import { PDFDocument, PDFString, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { JURISDICTIONS } from "./data.js";
-import { groupResultsByJurisdiction, blockSections } from "./results-grouping.js";
+import { groupResultsByJurisdiction } from "./results-grouping.js";
 
 // ─── Brand colors as pdf-lib RGB ──────────────────────────────────────────
 const MIDNIGHT = rgb(0.106, 0.165, 0.247);
@@ -364,8 +364,8 @@ function measureBlock(b, fonts) {
       measureWrapped(b.url, fonts.monoReg, SIZE.url, CARD_INNER_W);
   }
   if (b.type === "noteHeader") {
-    return SIZE.label * LINE + LABEL_TO_BODY_GAP +
-      measureWrapped(b.title, fonts.serifBold, SIZE.authority, CARD_INNER_W);
+    const labelH = b.label ? SIZE.label * LINE + LABEL_TO_BODY_GAP : 0;
+    return labelH + measureWrapped(b.title, fonts.serifBold, SIZE.authority, CARD_INNER_W);
   }
   return 0;
 }
@@ -441,8 +441,10 @@ function drawCard(page, blocks, topY, borderColor, fonts) {
         font: fonts.sansReg, size: SIZE.body, color: INK, maxWidth: CARD_INNER_W,
       });
     } else if (b.type === "noteHeader") {
-      drawTextLine(page, upperLabel(b.label), innerX, y - SIZE.label, fonts.sansReg, SIZE.label, MIST);
-      y -= SIZE.label * LINE + LABEL_TO_BODY_GAP - 2;
+      if (b.label) {
+        drawTextLine(page, upperLabel(b.label), innerX, y - SIZE.label, fonts.sansReg, SIZE.label, MIST);
+        y -= SIZE.label * LINE + LABEL_TO_BODY_GAP - 2;
+      }
       y = drawWrapped(page, b.title, innerX, y, {
         font: fonts.serifBold, size: SIZE.authority, color: MIDNIGHT, maxWidth: CARD_INNER_W,
       });
@@ -503,9 +505,12 @@ function reviewBlocks(r) {
   ];
 }
 
-function noteBlocks(jurShort, note) {
+// Note card content. The group eyebrow / per-note lead is drawn as a separate
+// sub-label line above the card (drawSubLabel in the block plan), so the card
+// header itself is label-less — just the note title, then body / citation / src.
+function noteBlocks(note) {
   return [
-    { type: "noteHeader", label: jurShort, title: note.title },
+    { type: "noteHeader", title: note.title },
     ...(note.content ? [{ type: "body", text: note.content }] : []),
     ...(note.citation ? [{ type: "labelMono", label: "Citation", body: note.citation }] : []),
     ...(note.source_url ? [{ type: "url", label: "Source", url: note.source_url }] : []),
@@ -516,27 +521,21 @@ function noteBlocks(jurShort, note) {
 //
 // Presentation grouping shared with the on-screen results page via
 // results-grouping.js, so the two surfaces cannot drift: one block per
-// jurisdiction, holding that jurisdiction's active deadline cards, counsel-
-// review cards, suppressed cards, and counsel notes — in the shared
-// within-block order. Card CONTENT is still built by the same per-card
-// block-builders (deadlineBlocks / reviewBlocks / suppressedBlocks /
-// noteBlocks) and drawn by the same drawCard; only the grouping and the
-// headings change.
+// jurisdiction. Counsel notes are PLACED (not bucketed): a caveat group at the
+// block top, each parallel note right after its anchored (AG) card, and a
+// sectoral group at the foot — the same order as the screen, rendered FLAT in
+// the parchment register here (no lap; pdf-lib can't reproduce it). Card and
+// note CONTENT is still built by the same per-item block-builders
+// (deadlineBlocks / reviewBlocks / suppressedBlocks / noteBlocks) and drawn by
+// the same drawCard.
 
-const SECTION_BLOCKS = {
-  active: (item) => deadlineBlocks(item),
-  review: (item) => reviewBlocks(item),
-  suppressed: (item) => suppressedBlocks(item),
-  notes: (item) => noteBlocks(item.jurShort, item.note),
-};
-const SECTION_COLOR = { active: MIDNIGHT, review: MIST, suppressed: MOSS, notes: PARCHMENT };
-// Minimal within-block sub-labels — active leads unlabelled; the rest match the
-// on-screen labels so the two surfaces read the same. Subject to gate review.
-const SECTION_LABEL = {
-  review: "Counsel review required",
-  suppressed: "Notification likely not required",
-  notes: "Jurisdictional notes",
-};
+// Obligation/suppressed group sub-labels (kept from the outcome-first layout);
+// the parchment note groups carry the placement eyebrows below.
+const REVIEW_LABEL = "Counsel review required";
+const SUPPRESSED_LABEL = "Notification likely not required";
+const CAVEAT_EYEBROW = "Pre-Notification Considerations";
+const SECTORAL_EYEBROW = "Other Applicable Requirements";
+const PARALLEL_LEAD = "Parallel AG obligation — may also apply";
 
 // Heading advance for keep-with-next: section heading + rule (mirrors
 // drawSectionHeading) + the statute-subtitle line.
@@ -555,35 +554,95 @@ function drawSubLabel(state, text) {
   state.cursorY -= SIZE.label * LINE + 6;
 }
 
+// Reprinted at the top of a continued page when a jurisdiction block spills over.
+function drawContinuedHeader(state, name) {
+  const { fonts } = state;
+  drawTextLine(state.currentPage(), `${name} (continued)`, CONTENT_X, state.cursorY - SIZE.authority, fonts.serifBold, SIZE.authority, MIDNIGHT);
+  const ruleY = state.cursorY - SIZE.authority - 6;
+  state.currentPage().drawLine({ start: { x: CONTENT_X, y: ruleY }, end: { x: CONTENT_X + CONTENT_W, y: ruleY }, thickness: 0.5, color: MIST });
+  state.cursorY = ruleY - 12;
+}
+
+// Ordered render plan for one block: { t: "label", text } | { t: "card", blocks, color }.
+// Placement order mirrors the screen: caveat group → obligations (each followed
+// by its parallel notes) → suppressed group → sectoral group → orphaned parallels.
+function buildBlockPlan(block) {
+  const plan = [];
+  const label = (text) => plan.push({ t: "label", text });
+  const card = (blocks, color) => plan.push({ t: "card", blocks, color });
+  const noteCard = (entry) => card(noteBlocks(entry.note), PARCHMENT);
+
+  if (block.caveatNotes.length) {
+    label(CAVEAT_EYEBROW);
+    block.caveatNotes.forEach(noteCard);
+  }
+
+  let reviewLabelled = false;
+  for (const ob of block.obligations) {
+    if (ob.role === "review" && !reviewLabelled) {
+      label(REVIEW_LABEL);
+      reviewLabelled = true;
+    }
+    card(
+      ob.role === "active" ? deadlineBlocks(ob.card) : reviewBlocks(ob.card),
+      ob.role === "active" ? MIDNIGHT : MIST
+    );
+    ob.parallelNotes.forEach((pn) => {
+      label(PARALLEL_LEAD);
+      noteCard(pn);
+    });
+  }
+
+  if (block.suppressedCards.length) {
+    label(SUPPRESSED_LABEL);
+    block.suppressedCards.forEach((s) => card(suppressedBlocks(s), MOSS));
+  }
+
+  if (block.sectoralNotes.length) {
+    label(SECTORAL_EYEBROW);
+    block.sectoralNotes.forEach(noteCard);
+  }
+  block.footParallelNotes.forEach((pn) => {
+    label(PARALLEL_LEAD);
+    noteCard(pn);
+  });
+
+  return plan;
+}
+
+function planItemHeight(item, fonts) {
+  return item.t === "label" ? SUBLABEL_H : measureCard(item.blocks, fonts);
+}
+
 function drawJurisdictionBlock(state, block) {
   const { fonts } = state;
-  const sections = blockSections(block);
-  if (sections.length === 0) return;
+  const plan = buildBlockPlan(block);
+  if (plan.length === 0) return;
 
-  // Keep the jurisdiction heading with its first rendered content — the first
-  // sub-label (if any) plus the WHOLE first card (measureCard is the card's
-  // true height; cards draw atomically). Same keep-with-next guard as the rest
-  // of the memo; each subsequent card is reserved whole via ensureRoom below.
-  const first = sections[0];
-  const firstLabelH = SECTION_LABEL[first.kind] ? SUBLABEL_H : 0;
-  const firstCardH = measureCard(SECTION_BLOCKS[first.kind](first.cards[0]), fonts);
-  keepHeaderWithNext(state, JUR_HEADING_H, firstLabelH + firstCardH);
+  // Keep the jurisdiction heading with its first plan item (a label, or the
+  // whole first card — measureCard is the card's true height; cards draw
+  // atomically). Same keep-with-next guard the rest of the memo uses.
+  keepHeaderWithNext(state, JUR_HEADING_H, planItemHeight(plan[0], fonts));
   drawJurisdictionHeading(state, block.name, block.statuteSubtitle);
 
-  for (const section of sections) {
-    const blocksFn = SECTION_BLOCKS[section.kind];
-    const borderColor = SECTION_COLOR[section.kind];
-    const label = SECTION_LABEL[section.kind];
-    if (label) {
-      // Keep the sub-label with its first card.
-      keepHeaderWithNext(state, SUBLABEL_H, measureCard(blocksFn(section.cards[0]), fonts));
-      drawSubLabel(state, label);
-    }
-    for (const item of section.cards) {
-      const blocks = blocksFn(item);
-      const h = measureCard(blocks, fonts);
+  for (let i = 0; i < plan.length; i++) {
+    const item = plan[i];
+    const h = planItemHeight(item, fonts);
+    const pagesBefore = state.pages.length;
+    if (item.t === "label") {
+      // Keep a label with the first item that follows it.
+      const nextH = i + 1 < plan.length ? planItemHeight(plan[i + 1], fonts) : 0;
+      keepHeaderWithNext(state, h, nextH);
+    } else {
       state.ensureRoom(h);
-      const cardBottom = drawCard(state.currentPage(), blocks, state.cursorY, borderColor, fonts);
+    }
+    // If that break detection added a page mid-block, reprint the running header.
+    if (state.pages.length > pagesBefore) drawContinuedHeader(state, block.name);
+
+    if (item.t === "label") {
+      drawSubLabel(state, item.text);
+    } else {
+      const cardBottom = drawCard(state.currentPage(), item.blocks, state.cursorY, item.color, fonts);
       state.cursorY = cardBottom - CARD_GAP;
     }
   }
