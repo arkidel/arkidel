@@ -171,6 +171,7 @@ const JURISDICTIONS = [
     counselNotes: [
       {
         id: "ca-health-safety-code-1280-15",
+        placement: "sectoral",
         title: "Healthcare facilities — separate state breach reporting under § 1280.15",
         content: "If the affected entity is a clinic, health facility, home health agency, or hospice licensed under California law, breach notification to the California Department of Public Health is required no later than 15 business days after detection of unauthorized access to, or use or disclosure of, a patient's medical information under Cal. Health & Safety Code § 1280.15. This is a sectoral regime separate from the general breach-notification statute and is not modeled by Respond — if applicable, the 15-business-day clock runs in parallel with the general obligations above.",
         citation: "Cal. Health & Safety Code § 1280.15",
@@ -413,6 +414,7 @@ const JURISDICTIONS = [
     counselNotes: [
       {
         id: "ma-dual-trigger-section-3b",
+        placement: "caveat",
         title: "Dual notification trigger under § 3(b) — assess both",
         content: "Massachusetts c. 93H § 3(b) imposes the notification duty under TWO independent triggers, joined by 'or': (1) the entity knows or has reason to know of a 'breach of security' as defined in § 1, OR (2) the entity knows or has reason to know that personal information was acquired or used by an unauthorized person, or used for an unauthorized purpose. The two triggers do not have identical scope. The § 1 'breach of security' definition includes a substantial-risk-of-identity-theft-or-fraud requirement, a good-faith-acquisition carve-out for employees/agents acting for lawful purposes, and the encryption qualifier (encrypted data only counts if the key was also acquired). The second trigger contains none of these elements — it captures any unauthorized acquisition or use of personal information. As a result, the encryption-suppression analysis above (which derives from the § 1 definition) may be incomplete: even where encrypted data with an uncompromised key falls outside § 1, the second trigger of § 3(b) could independently require notification on facts where personal information was acquired or used by an unauthorized person. Likewise, a 'no substantial risk of identity theft or fraud' conclusion under § 1 does not by itself excuse notification if the second trigger fires. Confirm both triggers against the facts before concluding that notification is not required.",
         citation: "M.G.L. c. 93H §§ 1, 3(b)",
@@ -543,6 +545,7 @@ const JURISDICTIONS = [
     counselNotes: [
       {
         id: "ny-dfs-sectoral-overlay",
+        placement: "sectoral",
         title: "NYDFS sectoral overlay — covered entities have a separate 72-hour notification under 23 NYCRR Part 500",
         content: "If the entity is a 'covered entity' under 23 NYCRR Part 500.1 (i.e., regulated by the New York Department of Financial Services), the entity must additionally notify NYDFS within 72 hours of determining that a cybersecurity event has occurred, in accordance with 23 NYCRR § 500.17(a). This is in addition to the AG / Department of State / State Police notification above and is governed by the DFS cybersecurity regulations rather than § 899-aa. The February 14, 2025 chapter amendment to § 899-aa (S804) clarified that the DFS-notification carve-out applies only to NYDFS-regulated entities; non-regulated entities do NOT owe DFS notification under § 899-aa(8). Respond does not model the 72-hour DFS clock because it depends on entity-type characteristics outside the breach facts. If you are a NYDFS covered entity, treat the DFS deadline as the binding clock for DFS, separate from this analysis.",
         citation: "23 NYCRR § 500.17(a); N.Y. Gen. Bus. Law § 899-aa(8)(a)(ii)",
@@ -550,6 +553,8 @@ const JURISDICTIONS = [
       },
       {
         id: "ny-hipaa-cross-link",
+        placement: "parallel",
+        anchor: "ag",
         title: "HIPAA / HITECH cross-link — 5 business days to AG after HHS notification",
         content: "If the entity is a HIPAA covered entity or business associate that is also required to notify the U.S. Department of Health and Human Services Secretary under HIPAA or HITECH for the same incident, then notification to the New York Attorney General must be provided within 5 business days of notifying the HHS Secretary. This applies even where the breach involves information that is not 'private information' as defined in § 899-aa. Respond does not model HIPAA / HITECH notification thresholds, so this 5-business-day clock should be applied separately if HHS notification is required.",
         citation: "N.Y. Gen. Bus. Law § 899-aa(9)",
@@ -557,6 +562,7 @@ const JURISDICTIONS = [
       },
       {
         id: "ny-inadvertent-disclosure-exception-899aa-2a",
+        placement: "caveat",
         title: "Inadvertent-disclosure exception (§ 899-aa(2)(a)) — narrow gate, plus 10-day AG report and 5-year retention",
         content: "New York has no general harm-threshold exception. The only carve-out from the notification duty is § 899-aa(2)(a), and it is narrow. Notice to affected persons is not required only if BOTH (1) the exposure of private information was an inadvertent disclosure by persons authorized to access that information, AND (2) the person or business reasonably determines the exposure will not likely result in misuse of the information, financial harm to the affected persons, or — for unknown disclosure of online credentials — emotional harm. This is a fact-specific judgment. Respond's deadlines reflect the default position that notification is required. If the exception is invoked, two obligations attach: the determination must be documented in writing (such as in the Respond memo) and retained at least five years; and if the incident affects more than 500 New York residents, the written determination must be provided to the NY Attorney General within 10 days of the determination. The exception is unavailable where the disclosure was not inadvertent or involved access by an unauthorized person — the standard obligations then apply.",
         citation: "N.Y. Gen. Bus. Law § 899-aa(2)(a)",
@@ -676,6 +682,7 @@ const JURISDICTIONS = [
     counselNotes: [
       {
         id: "va-harm-threshold-186-6",
+        placement: "caveat",
         title: "Substantive harm threshold under § 18.2-186.6 — substantive judgment, not modelled",
         content: "Virginia's breach definition incorporates a substantive harm element: notification under § 18.2-186.6(B) is required only where the breach has caused, or the entity reasonably believes has caused or will cause, identity theft or other fraud to a Virginia resident. The same harm-threshold language appears in subsection (M) for the employer / payroll-service-provider tax-data regime. This is a fact-specific judgment that may excuse notification entirely in cases where the breach mechanics would otherwise trigger the obligations above. Respond's deadlines reflect the default position that notification is required; if the entity concludes after reasonable investigation that no identity theft or fraud is reasonably likely, the obligations may not arise. Document that determination contemporaneously and consult counsel before relying on it.",
         citation: "Va. Code § 18.2-186.6(A), (B), (M)",
@@ -683,6 +690,7 @@ const JURISDICTIONS = [
       },
       {
         id: "va-medical-information-32-1-127-1-05",
+        placement: "sectoral",
         title: "Medical information — separate breach notification regime under § 32.1-127.1:05",
         content: "Virginia has a separate breach notification statute for medical information, Va. Code § 32.1-127.1:05, applicable to certain entities holding medical information. Where the breach involves medical or health information, the requirements of § 32.1-127.1:05 may apply in addition to or instead of § 18.2-186.6, with different scope, timing, and content requirements. HIPAA covered entities and business associates may also have federal notification obligations under HIPAA/HITECH that interact with the Virginia regime. Respond does not model § 32.1-127.1:05 because it is a sectoral regime with applicability that depends on entity type rather than breach facts.",
         citation: "Va. Code § 32.1-127.1:05",
@@ -690,6 +698,8 @@ const JURISDICTIONS = [
       },
       {
         id: "va-employer-payroll-tax-data-186-6-m",
+        placement: "parallel",
+        anchor: "ag",
         title: "Employer / payroll-service-provider tax-data breaches — separate AG notification obligation under § 18.2-186.6(M)",
         content: "If the entity is an employer or payroll service provider, and the breach involves a Virginia employee's taxpayer identification number in combination with the income tax withheld for that employee, a separate notification obligation applies under § 18.2-186.6(M). This obligation runs in parallel to (not in place of) the main § 18.2-186.6 analysis above and requires notification to the Virginia Attorney General without unreasonable delay following discovery, with no resident-notification component and no CRA component. The harm threshold from the main statute applies — notification is required only where the breach has caused, or the entity reasonably believes has caused or will cause, identity theft or other fraud. Respond does not model this as a discrete obligation because applicability depends on entity type (employer or payroll service provider) and data type (TIN combined with income tax withheld) rather than on the breach facts themselves. If the entity is in scope, treat the subsection (M) AG notification as a separate parallel obligation. Note: subsection (M) applies only to information regarding the employer's own employees, not customers or other non-employees.",
         citation: "Va. Code § 18.2-186.6(M)",
@@ -697,6 +707,7 @@ const JURISDICTIONS = [
       },
       {
         id: "va-good-faith-employee-agent-carve-out",
+        placement: "caveat",
         title: "Good-faith acquisition by employees or agents — not a breach under the statute",
         content: "Section 18.2-186.6(A) excludes from the breach definition the good-faith acquisition of personal information by an employee or agent of the entity for purposes of the entity, provided that the personal information is not used for a purpose other than a lawful purpose of the entity and is not subject to further unauthorized disclosure. This is a fact-specific carve-out; if the relevant unauthorized acquisition was by an employee or agent acting in good faith for the entity's purposes, no breach has occurred under the statute and notification is not required. Respond does not gate on this because it requires substantive judgment about employee intent and use of the data.",
         citation: "Va. Code § 18.2-186.6(A)",
