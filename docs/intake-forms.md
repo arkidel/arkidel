@@ -19,8 +19,10 @@ unified term "encryption safe harbor" has been retired in favour of two
 distinct mechanisms reflecting the actual legal structure: (i)
 **`breachDefinitionExcludesEncrypted`** — for U.S. state statutes (CA, TX, CO,
 MA) whose definition of "breach" excludes encrypted data with uncompromised
-key as a per-se rule; and (ii) **`obligationExemptedByUnintelligibility`** —
-for the EU/UK GDPR Art. 34(3)(a) provision, which is a conditional exemption
+key as a per-se rule; and (ii) a per-obligation **`conditionalGates`**
+safe-harbor gate keyed to the **`gdprUnintelligibility`** input
+(`suppressionType: "unintelligibility_exemption"`) — for the EU/UK GDPR
+Art. 34(3)(a) provision, which is a conditional exemption
 from the duty to communicate to data subjects, contingent on appropriate
 technical and organisational measures having been applied to the affected
 data, with the supervisory authority retaining override power under Art. 34(4).
@@ -54,6 +56,19 @@ and four VA notes covering the harm-threshold gate, the § 32.1-127.1:05
 medical-information regime, the subsection (M) employer/payroll tax-data
 regime, and the good-faith employee/agent carve-out; IAPP chart is the
 source of truth for U.S. state rules going forward).
+
+**Label reconciliation** (June 20, 2026 update). Following the prior-commit
+EU/UK §1.5 / §2.5 reconciliation, this pass reconciled the GDPR
+unintelligibility mechanism name in the preamble encryption-suppression
+taxonomy and the appendices (Model features used, Intake form template,
+Adaptation for non-U.S. jurisdictions) to the current `data.js` gate — the
+per-obligation `conditionalGates` safe-harbor gate keyed to the
+`gdprUnintelligibility` input (`suppressionType: "unintelligibility_exemption"`,
+citation Art. 34(3)(a) GDPR / UK GDPR) — replacing the retired
+`obligationExemptedByUnintelligibility` field name. Label/field-name
+reconciliation only — no change to any rule, threshold, citation, deadline,
+conditional language, or the substance of the exemption. U.S.-state mechanism
+names were outside this pass's scope and are unchanged.
 
 ---
 
@@ -1557,7 +1572,7 @@ multi-authority array.
 - `gating: { highRiskRequired }` — gates obligations on sensitivity categories
 - `gating: { residentThreshold, comparator }` — gates obligations on resident count, with `gt` / `gte` precision
 - `breachDefinitionExcludesEncrypted: { applies, citation, description }` — for jurisdictions whose statutory definition of "breach" excludes encrypted data with uncompromised key (per-se rule). Used by CA, TX, CO, MA.
-- `obligationExemptedByUnintelligibility: { applies, citation, description }` — for jurisdictions where the obligation exists but is conditionally exempted when appropriate technical and organisational measures rendered the data unintelligible (judgment-based, with the supervisory authority retaining override power). Used by EU GDPR Art. 34(3)(a) and UK GDPR Art. 34(3)(a).
+- Per-obligation `conditionalGates` safe-harbor gate keyed to the `gdprUnintelligibility` input (`role: "safeHarbor"`, `onSatisfied: "suppress"`, `suppressionType: "unintelligibility_exemption"`, with `citation` and `description`) — for jurisdictions where the obligation exists but is conditionally exempted when appropriate technical and organisational measures rendered the data unintelligible (judgment-based, with the supervisory authority retaining override power). Used by EU GDPR Art. 34(3)(a) and UK GDPR Art. 34(3)(a).
 - `counselNotes: [{ id, title, content, citation, source_url }]` — jurisdiction-level prose flags rendered on the results page and in the downloadable memo. Used for substantive judgments, sectoral overlays, definitional nuances, and obligations that the engine cannot model. Currently used by CA (1 note: § 1280.15 healthcare regime), MA (1 note: § 3(b) dual trigger), NY (3 notes: NYDFS sectoral overlay, HIPAA / HITECH cross-link, inadvertent-disclosure exception (§ 899-aa(2)(a))), and VA (4 notes: substantive harm threshold under § 18.2-186.6, § 32.1-127.1:05 medical-information regime, § 18.2-186.6(M) employer/payroll tax-data regime, good-faith employee/agent carve-out). Pattern available for other substantive judgments and sectoral overlays.
 
 # Appendix: Model gaps (not yet hit by current jurisdictions)
@@ -1633,7 +1648,7 @@ the **Adaptation for non-U.S. jurisdictions** note at the end.
 
 - **Mechanism:** Choose ONE of:
   - **`breachDefinitionExcludesEncrypted`** — for jurisdictions whose statute *definitionally* excludes encrypted data with uncompromised key from the breach definition (most U.S. states).
-  - **`obligationExemptedByUnintelligibility`** — for jurisdictions where the obligation exists but is conditionally exempted when appropriate measures rendered the data unintelligible (EU/UK GDPR Art. 34(3)(a) and analogues).
+  - **Per-obligation `conditionalGates` safe-harbor gate keyed to the `gdprUnintelligibility` input** (`suppressionType: "unintelligibility_exemption"`) — for jurisdictions where the obligation exists but is conditionally exempted when appropriate measures rendered the data unintelligible (EU/UK GDPR Art. 34(3)(a) and analogues).
   - **None** — explicitly state that this jurisdiction has no encryption-related suppression mechanism modeled, and explain why (e.g., not present in statute; substantive-judgment gate not modeled; sectoral regime not modeled).
 - **Citation:** [statutory subsection or article — for U.S. states this is typically the definitions section]
 - **Description:** [the verbatim or near-verbatim text that appears in the rules-engine `description` field]
@@ -1657,7 +1672,7 @@ A checklist of which model features the jurisdiction exercises. Mark each with `
 - [ ] `gating: { highRiskRequired }` — sensitivity-based gating
 - [ ] `gating: { residentThreshold, comparator }` — resident-count-based gating
 - [ ] `breachDefinitionExcludesEncrypted` — per-se encryption exclusion
-- [ ] `obligationExemptedByUnintelligibility` — judgment-based encryption exemption
+- [ ] Per-obligation `conditionalGates` safe-harbor gate on the `gdprUnintelligibility` input — judgment-based encryption exemption
 - [ ] `counselNotes` — jurisdiction-level prose flag(s)
 - **New features needed (if any):** [list]
 
@@ -1697,6 +1712,6 @@ additions), the template above applies with the following modifications:
 - **Section N.1 Statute name (subtitle)** uses the regulation/directive title rather than a U.S. state code citation.
 - **Section N.2 Resident-count input** is typically *None* for jurisdictions like GDPR where notification turns on risk rather than count. State this explicitly.
 - **Section N.3 / N.4 / N.5 Authority names and citations** use the relevant articles (e.g., Art. 33 for GDPR supervisory authority notification; Art. 34 for individual notification).
-- **Encryption-suppression mechanism** for EU/UK is the `obligationExemptedByUnintelligibility` mechanism (judgment-based, partial — exempts individual notification only). Not the per-se U.S. mechanism.
+- **Encryption-suppression mechanism** for EU/UK is the per-obligation `conditionalGates` safe-harbor gate keyed to the `gdprUnintelligibility` input (judgment-based, partial — exempts individual notification only). Not the per-se U.S. mechanism.
 - **Section N.11 Sign-off** replaces the **IAPP chart consistency** line with **Primary-source consistency:** "Cross-checked against [primary source — e.g., EUR-Lex consolidated text, EDPB Guidelines, ICO guidance] on YYYY-MM-DD. Status: [...]." The IAPP chart does not cover non-U.S. jurisdictions; do not list it as a project knowledge base source.
 
