@@ -23,6 +23,7 @@
 import { PDFDocument, PDFString, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { JURISDICTIONS } from "./data.js";
+import { groupResultsByJurisdiction, blockSections } from "./results-grouping.js";
 
 // ─── Brand colors as pdf-lib RGB ──────────────────────────────────────────
 const MIDNIGHT = rgb(0.106, 0.165, 0.247);
@@ -511,27 +512,80 @@ function noteBlocks(jurShort, note) {
   ];
 }
 
-function drawCardSection(state, headingText, items, blocksFn, borderColor) {
-  if (items.length === 0) return;
+// ─── Section: jurisdiction-first blocks ───────────────────────────────────
+//
+// Presentation grouping shared with the on-screen results page via
+// results-grouping.js, so the two surfaces cannot drift: one block per
+// jurisdiction, holding that jurisdiction's active deadline cards, counsel-
+// review cards, suppressed cards, and counsel notes — in the shared
+// within-block order. Card CONTENT is still built by the same per-card
+// block-builders (deadlineBlocks / reviewBlocks / suppressedBlocks /
+// noteBlocks) and drawn by the same drawCard; only the grouping and the
+// headings change.
+
+const SECTION_BLOCKS = {
+  active: (item) => deadlineBlocks(item),
+  review: (item) => reviewBlocks(item),
+  suppressed: (item) => suppressedBlocks(item),
+  notes: (item) => noteBlocks(item.jurShort, item.note),
+};
+const SECTION_COLOR = { active: MIDNIGHT, review: MIST, suppressed: MOSS, notes: PARCHMENT };
+// Minimal within-block sub-labels — active leads unlabelled; the rest match the
+// on-screen labels so the two surfaces read the same. Subject to gate review.
+const SECTION_LABEL = {
+  review: "Counsel review required",
+  suppressed: "Notification likely not required",
+  notes: "Jurisdictional notes",
+};
+
+// Heading advance for keep-with-next: section heading + rule (mirrors
+// drawSectionHeading) + the statute-subtitle line.
+const JUR_HEADING_H = SIZE.sectionHead + 6 + 14 + SIZE.citation * LINE + 4;
+const SUBLABEL_H = SIZE.label * LINE + 6;
+
+function drawJurisdictionHeading(state, name, statute) {
   const { fonts } = state;
+  state.cursorY = drawSectionHeading(state.currentPage(), fonts, name, state.cursorY);
+  drawTextLine(state.currentPage(), statute, CONTENT_X, state.cursorY - SIZE.citation, fonts.monoReg, SIZE.citation, MIST);
+  state.cursorY -= SIZE.citation * LINE + 4;
+}
 
-  const firstBlocks = blocksFn(items[0]);
-  const firstCardHeight = measureCard(firstBlocks, fonts);
-  // Keep the section heading with the WHOLE first card (measureCard is the
-  // card's true rendered height). Cards draw atomically — each subsequent card
-  // is likewise reserved whole via ensureRoom(h) below — so a card's title
-  // block (its first block, e.g. the CALIFORNIA / NEW YORK note eyebrow + title)
-  // always rides with the body that follows it and cannot strand at a boundary.
-  keepHeaderWithNext(state, SIZE.sectionHead + 24, firstCardHeight);
-  state.cursorY = drawSectionHeading(state.currentPage(), fonts, headingText, state.cursorY);
+function drawSubLabel(state, text) {
+  drawTextLine(state.currentPage(), upperLabel(text), CONTENT_X, state.cursorY - SIZE.label, state.fonts.sansReg, SIZE.label, MIST);
+  state.cursorY -= SIZE.label * LINE + 6;
+}
 
-  for (let i = 0; i < items.length; i++) {
-    const blocks = i === 0 ? firstBlocks : blocksFn(items[i]);
-    const h = i === 0 ? firstCardHeight : measureCard(blocks, fonts);
-    state.ensureRoom(h);
-    const page = state.currentPage();
-    const cardBottom = drawCard(page, blocks, state.cursorY, borderColor, fonts);
-    state.cursorY = cardBottom - CARD_GAP;
+function drawJurisdictionBlock(state, block) {
+  const { fonts } = state;
+  const sections = blockSections(block);
+  if (sections.length === 0) return;
+
+  // Keep the jurisdiction heading with its first rendered content — the first
+  // sub-label (if any) plus the WHOLE first card (measureCard is the card's
+  // true height; cards draw atomically). Same keep-with-next guard as the rest
+  // of the memo; each subsequent card is reserved whole via ensureRoom below.
+  const first = sections[0];
+  const firstLabelH = SECTION_LABEL[first.kind] ? SUBLABEL_H : 0;
+  const firstCardH = measureCard(SECTION_BLOCKS[first.kind](first.cards[0]), fonts);
+  keepHeaderWithNext(state, JUR_HEADING_H, firstLabelH + firstCardH);
+  drawJurisdictionHeading(state, block.name, block.statuteSubtitle);
+
+  for (const section of sections) {
+    const blocksFn = SECTION_BLOCKS[section.kind];
+    const borderColor = SECTION_COLOR[section.kind];
+    const label = SECTION_LABEL[section.kind];
+    if (label) {
+      // Keep the sub-label with its first card.
+      keepHeaderWithNext(state, SUBLABEL_H, measureCard(blocksFn(section.cards[0]), fonts));
+      drawSubLabel(state, label);
+    }
+    for (const item of section.cards) {
+      const blocks = blocksFn(item);
+      const h = measureCard(blocks, fonts);
+      state.ensureRoom(h);
+      const cardBottom = drawCard(state.currentPage(), blocks, state.cursorY, borderColor, fonts);
+      state.cursorY = cardBottom - CARD_GAP;
+    }
   }
   state.cursorY -= 8;
 }
@@ -672,18 +726,6 @@ function buildJurisdictionList(facts) {
   }).join(", ");
 }
 
-function collectJurisdictionalNotes(facts) {
-  const out = [];
-  for (const j of JURISDICTIONS) {
-    if (!facts.jurisdictions[j.id]) continue;
-    if (!j.counselNotes || j.counselNotes.length === 0) continue;
-    for (const note of j.counselNotes) {
-      out.push({ jurShort: j.short, note });
-    }
-  }
-  return out;
-}
-
 // ─── Section: incident report (record fields) ─────────────────────────────
 //
 // Renders the unified-form record fields (general info, discovery, occurrence,
@@ -820,22 +862,19 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
     encryptionSummary: facts.encryptionSummary,
   });
 
-  if (deadlines && deadlines.length > 0) {
-    drawCardSection(state, "Deadline Obligations", deadlines, deadlineBlocks, MIDNIGHT);
-  }
-
-  if (suppressed && suppressed.length > 0) {
-    drawCardSection(state, "Notification Suppressed by Encryption", suppressed, suppressedBlocks, MOSS);
-  }
-
-  if (review && review.length > 0) {
-    // Neutral (Mist) border, parallel to the suppressed/deadline sections.
-    drawCardSection(state, "Requires Counsel Review", review, reviewBlocks, MIST);
-  }
-
-  const jurNotes = collectJurisdictionalNotes(facts);
-  if (jurNotes.length > 0) {
-    drawCardSection(state, "Jurisdictional Notes", jurNotes, ({ jurShort, note }) => noteBlocks(jurShort, note), PARCHMENT);
+  // Jurisdiction-first grouping (shared with the on-screen results page via
+  // results-grouping.js so the two surfaces can't drift). One block per
+  // jurisdiction holding its active / counsel-review / suppressed cards and
+  // counsel notes. `pending` is not passed to the memo, so — as before — it
+  // does not appear here.
+  const groups = groupResultsByJurisdiction({
+    deadlines: deadlines || [],
+    suppressed: suppressed || [],
+    review: review || [],
+    jurisdictions: facts.jurisdictions || {},
+  });
+  for (const block of groups) {
+    drawJurisdictionBlock(state, block);
   }
 
   if (facts.incidentReport && facts.incidentReport.length > 0) {

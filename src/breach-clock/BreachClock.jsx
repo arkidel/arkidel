@@ -31,6 +31,7 @@ import React, { useState, useEffect } from "react";
 import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, X, ChevronDown } from "lucide-react";
 import { JURISDICTIONS } from "./data.js";
 import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine.js";
+import { groupResultsByJurisdiction, blockSections } from "./results-grouping.js";
 import { generateMemoPdf } from "./memo-pdf.js";
 import usePageTitle from "../usePageTitle.js";
 
@@ -1336,6 +1337,196 @@ export default function BreachClock() {
             headline: "No notification obligations fire under the facts provided.",
             body: "Every obligation that would otherwise apply has been suppressed — by the encryption fact reported and/or the risk assessment. See the bases below.",
           };
+
+    // ── Jurisdiction-first grouping (presentation only; engine output unmoved) ──
+    // The shared helper regroups the flat engine buckets into one block per
+    // jurisdiction. `pending` is deliberately NOT grouped — it stays the
+    // consolidated banner above, so a pending-only jurisdiction yields no block.
+    // blockSections() returns each block's non-empty card-type groups in the
+    // shared within-block order (the order knob lives in results-grouping.js).
+    const groups = groupResultsByJurisdiction({ deadlines, suppressed, review, jurisdictions });
+
+    // Card renderers — markup IDENTICAL to the former outcome-first sections,
+    // only relocated into the per-jurisdiction blocks. No copy or style change.
+    const renderActiveCard = (d, i, blockActive) => {
+      const timeRemaining = d.deadline ? d.deadline.getTime() - now.getTime() : null;
+      const isMissed = timeRemaining !== null && timeRemaining < 0;
+      const isUrgent = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 3600 * 1000;
+      // Dependent ("cascading") deadline — read straight from the engine's basis
+      // string. We confirm the named parent actually fired in the same
+      // jurisdiction (now within this block's active cards) before labeling.
+      const depMatch = d.basis && d.basis.match(/—\s*(.+?)\s+from notification of\s+(.+?)\s*$/);
+      const depParent = depMatch
+        ? blockActive.find((p) => p !== d && p.jurisdiction === d.jurisdiction && p.authority === depMatch[2])
+        : null;
+      const depLabel = depParent
+        ? `${depMatch[1]} after notifying residents`
+        : null;
+      return (
+        <div key={i} className={`deadline-card ${isMissed ? "missed" : isUrgent ? "urgent" : ""}`}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
+            <div>
+              <div className="section-mark" style={{ marginBottom: "10px" }}>{d.jurisdiction}</div>
+              <div className="serif" style={{ fontSize: "26px", fontWeight: 400, lineHeight: 1.15, marginBottom: "12px", letterSpacing: "-0.01em" }}>
+                Notify {d.authority}
+              </div>
+              <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>{d.basis}</div>
+              <div className="rule-text">{d.conditional}</div>
+              {d.source_url && (
+                <a
+                  href={d.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "6px",
+                    fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500,
+                    marginTop: "14px", color: "inherit", textDecoration: "none",
+                    borderBottom: "1px solid currentColor", paddingBottom: "2px", opacity: 0.8,
+                  }}
+                >
+                  View primary source ↗
+                </a>
+              )}
+            </div>
+            <div style={{ textAlign: "right", minWidth: "200px" }}>
+              {d.deadline ? (
+                <>
+                  <div className="section-mark" style={{ marginBottom: "6px" }}>
+                    {isMissed ? "Overdue by" : "Time remaining"}
+                  </div>
+                  <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em" }}>
+                    {formatDuration(timeRemaining)}
+                  </div>
+                  <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "6px" }}>
+                    Due {d.deadline.toLocaleString()}
+                  </div>
+                  {depLabel && (
+                    <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "4px", maxWidth: "200px", marginLeft: "auto" }}>
+                      ({depLabel}; date assumes they're notified on their deadline)
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 14px", border: "1px solid currentColor" }}>
+                  <AlertTriangle size={14} />
+                  <div className="section-mark">No fixed hour deadline</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const renderSuppressedCard = (s, i) => (
+      <div key={i} style={{ background: "#fff", borderLeft: "4px solid #5A6E4A", padding: "20px 24px", borderRadius: "0 12px 12px 0" }}>
+        <div className="section-mark" style={{ marginBottom: "8px" }}>{s.jurisdiction}</div>
+        <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
+          {s.authority}
+        </div>
+        <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>
+          {s.suppression_type === "risk_assessment" ? (
+            `${s.suppression_citation} — notification threshold not met`
+          ) : (
+            <>{s.original_citation} → {s.suppression_citation} ({s.suppression_type === "breach_definition" ? "no breach as defined" : "notification exempted by unintelligibility"})</>
+          )}
+        </div>
+        <div className="rule-text">{s.suppression_description}</div>
+        {s.source_url && (
+          <a
+            href={s.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500,
+              marginTop: "14px", color: "inherit", textDecoration: "none",
+              borderBottom: "1px solid currentColor", paddingBottom: "2px", opacity: 0.8,
+            }}
+          >
+            View primary source ↗
+          </a>
+        )}
+      </div>
+    );
+
+    const renderReviewCard = (r, i) => (
+      <div key={i} style={{ background: "#fff", borderLeft: "4px solid #9FAEC2", padding: "20px 24px", borderRadius: "0 12px 12px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px", color: "#1B2A3F" }}>
+          <Info size={14} />
+          <div className="section-mark" style={{ opacity: 1 }}>{r.jurisdiction}</div>
+        </div>
+        <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
+          {r.authority}
+        </div>
+        {r.review_citation && (
+          <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>
+            {r.original_citation ? `${r.original_citation} → ` : ""}{r.review_citation}
+          </div>
+        )}
+        <div className="rule-text">{r.review_reason}</div>
+        {r.source_url && (
+          <a
+            href={r.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500,
+              marginTop: "14px", color: "inherit", textDecoration: "none",
+              borderBottom: "1px solid currentColor", paddingBottom: "2px", opacity: 0.8,
+            }}
+          >
+            View primary source ↗
+          </a>
+        )}
+      </div>
+    );
+
+    const renderNoteCard = ({ jurShort, note }) => (
+      <aside key={note.id} style={{ background: "#fff", color: "#2C2418", padding: "20px 24px", borderLeft: "4px solid #E8DDC4", borderRadius: "0 12px 12px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", color: "#1B2A3F" }}>
+          <Info size={14} />
+          <div className="section-mark" style={{ opacity: 1 }}>{jurShort}</div>
+        </div>
+        <div className="serif" style={{ fontSize: "18px", fontWeight: 400, lineHeight: 1.3, marginBottom: "10px", letterSpacing: "-0.005em" }}>
+          {note.title}
+        </div>
+        <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 10px" }}>{note.content}</p>
+        {note.citation && (
+          <div className="mono" style={{ fontSize: "11px", opacity: 0.7 }}>
+            {note.citation}
+            {note.source_url && (
+              <>
+                {" — "}
+                <a href={note.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "#1B2A3F", textDecoration: "underline" }}>
+                  primary source
+                </a>
+              </>
+            )}
+          </div>
+        )}
+      </aside>
+    );
+
+    // Minimal within-block sub-labels — existing copy, relocated (active cards
+    // lead unlabelled). Subject to gate review.
+    const SECTION_LABEL = { review: "Counsel review required", suppressed: "Notification likely not required", notes: "Jurisdictional notes" };
+    const SECTION_GAP = { active: "16px", review: "12px", suppressed: "12px", notes: "12px" };
+    const renderSection = (section, block) => (
+      <div key={section.kind} style={{ marginTop: SECTION_LABEL[section.kind] ? "24px" : "0" }}>
+        {SECTION_LABEL[section.kind] && (
+          <div className="section-mark" style={{ marginBottom: "12px" }}>{SECTION_LABEL[section.kind]}</div>
+        )}
+        <div style={{ display: "grid", gap: SECTION_GAP[section.kind] }}>
+          {section.kind === "active" && section.cards.map((d, i) => renderActiveCard(d, i, block.activeCards))}
+          {section.kind === "review" && section.cards.map((r, i) => renderReviewCard(r, i))}
+          {section.kind === "suppressed" && section.cards.map((s, i) => renderSuppressedCard(s, i))}
+          {section.kind === "notes" && section.cards.map((n) => renderNoteCard(n))}
+        </div>
+      </div>
+    );
+
     return (
     <>
       {hasPending && (
@@ -1380,208 +1571,17 @@ export default function BreachClock() {
         </div>
       )}
 
-      <div style={{ display: "grid", gap: "16px" }}>
-        {deadlines.map((d, i) => {
-          const timeRemaining = d.deadline ? d.deadline.getTime() - now.getTime() : null;
-          const isMissed = timeRemaining !== null && timeRemaining < 0;
-          const isUrgent = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 3600 * 1000;
-          // Dependent ("cascading") deadline — read straight from the engine's
-          // basis string, no engine change. A dependent obligation's basis reads
-          // "<citation> — <N units> from notification of <parent authority>"; we
-          // confirm the named parent actually fired in the same jurisdiction
-          // before labeling. The computed date is left exactly as the engine set
-          // it; this only makes the chain legible (today only California's AG
-          // 15-day clock matches, but the detection is general).
-          const depMatch = d.basis && d.basis.match(/—\s*(.+?)\s+from notification of\s+(.+?)\s*$/);
-          const depParent = depMatch
-            ? deadlines.find((p) => p !== d && p.jurisdiction === d.jurisdiction && p.authority === depMatch[2])
-            : null;
-          const depLabel = depParent
-            ? `${depMatch[1]} after notifying residents`
-            : null;
-          return (
-            <div key={i} className={`deadline-card ${isMissed ? "missed" : isUrgent ? "urgent" : ""}`}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
-                <div>
-                  <div className="section-mark" style={{ marginBottom: "10px" }}>{d.jurisdiction}</div>
-                  <div className="serif" style={{ fontSize: "26px", fontWeight: 400, lineHeight: 1.15, marginBottom: "12px", letterSpacing: "-0.01em" }}>
-                    Notify {d.authority}
-                  </div>
-                  <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>{d.basis}</div>
-                  <div className="rule-text">{d.conditional}</div>
-                  {d.source_url && (
-                    <a
-                      href={d.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: "6px",
-                        fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500,
-                        marginTop: "14px", color: "inherit", textDecoration: "none",
-                        borderBottom: "1px solid currentColor", paddingBottom: "2px", opacity: 0.8,
-                      }}
-                    >
-                      View primary source ↗
-                    </a>
-                  )}
-                </div>
-                <div style={{ textAlign: "right", minWidth: "200px" }}>
-                  {d.deadline ? (
-                    <>
-                      <div className="section-mark" style={{ marginBottom: "6px" }}>
-                        {isMissed ? "Overdue by" : "Time remaining"}
-                      </div>
-                      <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em" }}>
-                        {formatDuration(timeRemaining)}
-                      </div>
-                      <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "6px" }}>
-                        Due {d.deadline.toLocaleString()}
-                      </div>
-                      {depLabel && (
-                        <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "4px", maxWidth: "200px", marginLeft: "auto" }}>
-                          ({depLabel}; date assumes they're notified on their deadline)
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 14px", border: "1px solid currentColor" }}>
-                      <AlertTriangle size={14} />
-                      <div className="section-mark">No fixed hour deadline</div>
-                    </div>
-                  )}
-                </div>
-              </div>
+      <div style={{ display: "grid", gap: "44px", marginTop: "16px" }}>
+        {groups.map((block) => (
+          <div key={block.jurisdictionId}>
+            <div style={{ borderBottom: "1px solid rgba(27,42,63,0.12)", paddingBottom: "10px", marginBottom: "4px" }}>
+              <div className="serif" style={{ fontSize: "22px", fontWeight: 400, lineHeight: 1.2, letterSpacing: "-0.01em" }}>{block.name}</div>
+              <div className="mono" style={{ fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>{block.statuteSubtitle}</div>
             </div>
-          );
-        })}
+            {blockSections(block).map((section) => renderSection(section, block))}
+          </div>
+        ))}
       </div>
-
-      {(() => {
-        const selectedJurs = JURISDICTIONS.filter((j) => jurisdictions[j.id] && j.counselNotes && j.counselNotes.length > 0);
-        if (selectedJurs.length === 0) return null;
-        return (
-          <div style={{ marginTop: "40px" }}>
-            <div className="section-mark" style={{ marginBottom: "16px" }}>Jurisdictional notes</div>
-            <div style={{ display: "grid", gap: "12px" }}>
-              {selectedJurs.flatMap((jur) =>
-                jur.counselNotes.map((note) => (
-                  <aside key={note.id} style={{ background: "#fff", color: "#2C2418", padding: "20px 24px", borderLeft: "4px solid #E8DDC4", borderRadius: "0 12px 12px 0" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", color: "#1B2A3F" }}>
-                      <Info size={14} />
-                      <div className="section-mark" style={{ opacity: 1 }}>{jur.short}</div>
-                    </div>
-                    <div className="serif" style={{ fontSize: "18px", fontWeight: 400, lineHeight: 1.3, marginBottom: "10px", letterSpacing: "-0.005em" }}>
-                      {note.title}
-                    </div>
-                    <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 10px" }}>{note.content}</p>
-                    {note.citation && (
-                      <div className="mono" style={{ fontSize: "11px", opacity: 0.7 }}>
-                        {note.citation}
-                        {note.source_url && (
-                          <>
-                            {" — "}
-                            <a href={note.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "#1B2A3F", textDecoration: "underline" }}>
-                              primary source
-                            </a>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </aside>
-                ))
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
-      {suppressed.length > 0 && (
-        <div style={{ marginTop: "40px" }}>
-          <div className="section-mark" style={{ marginBottom: "16px" }}>
-            Notification likely not required
-          </div>
-          <div style={{ display: "grid", gap: "12px" }}>
-            {suppressed.map((s, i) => (
-              <div key={i} style={{ background: "#fff", borderLeft: "4px solid #5A6E4A", padding: "20px 24px", borderRadius: "0 12px 12px 0" }}>
-                <div className="section-mark" style={{ marginBottom: "8px" }}>{s.jurisdiction}</div>
-                <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
-                  {s.authority}
-                </div>
-                <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>
-                  {s.suppression_type === "risk_assessment" ? (
-                    `${s.suppression_citation} — notification threshold not met`
-                  ) : (
-                    <>{s.original_citation} → {s.suppression_citation} ({s.suppression_type === "breach_definition" ? "no breach as defined" : "notification exempted by unintelligibility"})</>
-                  )}
-                </div>
-                <div className="rule-text">{s.suppression_description}</div>
-                {s.source_url && (
-                  <a
-                    href={s.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: "6px",
-                      fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500,
-                      marginTop: "14px", color: "inherit", textDecoration: "none",
-                      borderBottom: "1px solid currentColor", paddingBottom: "2px", opacity: 0.8,
-                    }}
-                  >
-                    View primary source ↗
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Counsel-review obligations (quad-state `review` bucket). Neutral Mist
-          treatment — distinct from the Ember warning palette (Ember is for
-          warnings only) and from the Moss suppressed cards. Empty until Stage 4
-          routes the MA second-trigger here, so this block does not render in
-          Stage 2; built now so Stage 4 needs no further results-page work. */}
-      {review.length > 0 && (
-        <div style={{ marginTop: "40px" }}>
-          <div className="section-mark" style={{ marginBottom: "16px" }}>
-            Counsel review required
-          </div>
-          <div style={{ display: "grid", gap: "12px" }}>
-            {review.map((r, i) => (
-              <div key={i} style={{ background: "#fff", borderLeft: "4px solid #9FAEC2", padding: "20px 24px", borderRadius: "0 12px 12px 0" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px", color: "#1B2A3F" }}>
-                  <Info size={14} />
-                  <div className="section-mark" style={{ opacity: 1 }}>{r.jurisdiction}</div>
-                </div>
-                <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
-                  {r.authority}
-                </div>
-                {r.review_citation && (
-                  <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>
-                    {r.original_citation ? `${r.original_citation} → ` : ""}{r.review_citation}
-                  </div>
-                )}
-                <div className="rule-text">{r.review_reason}</div>
-                {r.source_url && (
-                  <a
-                    href={r.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: "6px",
-                      fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500,
-                      marginTop: "14px", color: "inherit", textDecoration: "none",
-                      borderBottom: "1px solid currentColor", paddingBottom: "2px", opacity: 0.8,
-                    }}
-                  >
-                    View primary source ↗
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </>
     );
   };
