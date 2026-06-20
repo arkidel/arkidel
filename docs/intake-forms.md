@@ -122,7 +122,8 @@ data as personal data and applies Art. 34(3)(a) as an obligation-level
 exemption.
 
 - **Applies?** **Yes — to Art. 34 individual notification only.**
-- **Mechanism in the data model:** `obligationExemptedByUnintelligibility`
+- **Mechanism in the data model:** a per-obligation `conditionalGates`
+  safe-harbor gate driven by the `gdprUnintelligibility` input
   (distinct from the U.S. states' `breachDefinitionExcludesEncrypted`, which
   is a definitional exclusion).
 - **Citation:** Art. 34(3)(a) GDPR
@@ -202,7 +203,7 @@ threshold may be met").
 ## 1.10 Model fit
 
 - [x] Different deadlines for different obligations (used)
-- [x] Per-obligation `obligationExemptedByUnintelligibility` (used)
+- [x] Per-obligation `conditionalGates` safe-harbor gate on the `gdprUnintelligibility` input (used)
 - [ ] No model gaps surfaced for this jurisdiction.
 
 ## 1.11 Counsel notes
@@ -256,6 +257,16 @@ threshold may be met").
   encryption-exempt). No change to any deadline, citation, or prose; the exemption
   outcome is unchanged. Build-of-record: the "Encryption gate build plan" addendum
   in `docs/todo.md`.
+- **Documentation reconciliation (2026-06-20):** The §1.5 encryption-subsection
+  labels were reconciled to the current `data.js` mechanism. The present-tense
+  `obligationExemptedByUnintelligibility` field name — in the §1.5 "Mechanism in
+  the data model" line and the §1.10 model-fit checklist — was updated to name
+  the per-obligation `conditionalGates` safe-harbor gate driven by the
+  `gdprUnintelligibility` input now in force, catching the documentation up to
+  the S5/S6 code change. Label/field-name reconciliation only — no change to any
+  rule, threshold, citation, deadline, conditional language, or the substance of
+  the Art. 34(3)(a) exemption. The supersession history recorded in the
+  2026-06-14 entry above is unchanged.
 - **Reviewer:** *(pending)*
 
 ---
@@ -302,7 +313,8 @@ threshold may be met").
 
 - **Applies?** **Yes — to Art. 34 individual notification only.** Same legal
   structure as EU GDPR (the UK retained Art. 34 unchanged on Brexit).
-- **Mechanism in the data model:** `obligationExemptedByUnintelligibility`.
+- **Mechanism in the data model:** a per-obligation `conditionalGates`
+  safe-harbor gate driven by the `gdprUnintelligibility` input.
 - **Citation:** Art. 34(3)(a) UK GDPR
 - **Statutory text:** Identical to EU GDPR's Art. 34(3)(a) (the UK GDPR
   retains the same wording, with "the Commissioner" substituted for "the
@@ -394,6 +406,15 @@ UK in parallel).
   is a qualitative standard; Art. 33 is unaffected (never encryption-exempt). No
   change to any deadline, citation, or prose; the exemption outcome is unchanged.
   Build-of-record: the "Encryption gate build plan" addendum in `docs/todo.md`.
+- **Documentation reconciliation (2026-06-20):** The §2.5 encryption-subsection
+  label was reconciled to the current `data.js` mechanism. The present-tense
+  `obligationExemptedByUnintelligibility` field name — in the §2.5 "Mechanism in
+  the data model" line — was updated to name the per-obligation `conditionalGates`
+  safe-harbor gate driven by the `gdprUnintelligibility` input now in force,
+  catching the documentation up to the S5/S6 code change. Label/field-name
+  reconciliation only — no change to any rule, threshold, citation, deadline,
+  conditional language, or the substance of the Art. 34(3)(a) UK GDPR exemption.
+  The supersession history recorded in the 2026-06-14 entry above is unchanged.
 - **Reviewer:** *(pending)*
 
 ---
