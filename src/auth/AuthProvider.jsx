@@ -47,14 +47,16 @@ export function AuthProvider({ children }) {
       session,
       user: session?.user ?? null,
       loading,
-      // Passwordless magic-link sign-in. emailRedirectTo defaults to the
-      // current origin for now; this will be aligned with the Supabase
-      // redirect allowlist at the staging step.
+      // Passwordless magic-link sign-in. The link returns the user to
+      // /auth/callback, where detectSessionInUrl establishes the session.
+      // (The /auth/callback path must be on the Supabase redirect allowlist;
+      // that allowlist alignment happens at the staging step.)
       signInWithMagicLink(email, { emailRedirectTo } = {}) {
         return supabase.auth.signInWithOtp({
           email,
           options: {
-            emailRedirectTo: emailRedirectTo ?? window.location.origin,
+            emailRedirectTo:
+              emailRedirectTo ?? `${window.location.origin}/auth/callback`,
           },
         });
       },
