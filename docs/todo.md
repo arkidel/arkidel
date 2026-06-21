@@ -215,6 +215,19 @@ Neither item is `[substance]`.
 
 ---
 
+## Dependency audit — pre-existing vulnerabilities (logged 2026-06-21)
+
+Surfaced while scaffolding the Supabase client/auth layer; **not** introduced by
+that work. None block the current scaffolding.
+
+- `npm audit` reports 4 vulnerabilities (3 high, 1 low), all in pre-existing
+  transitive dependencies of `react-router-dom` / `vite` / `@babel/core`. Action:
+  run `npm audit`, evaluate the upgrades (prioritise the high-severity
+  `react-router-dom` / `vite` items), and resolve before the app holds real
+  client data.
+
+---
+
 ## Risk-assessment follow-ups (queued 2026-06-08)
 
 Surfaced after the EU/UK risk-assessment feature shipped (`be2f252` engine/data,
