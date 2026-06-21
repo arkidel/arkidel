@@ -805,3 +805,8 @@ break the audit trail.
 that doesn't reconcile, copy that contradicts a previous decision, a
 brand-identity treatment that conflicts with this file — flag it rather than
 silently choose. The user can adjudicate.
+
+**Supabase CLI auth comes from the `SUPABASE_ACCESS_TOKEN` env var** (set in
+`~/.zshenv`) — never disable the bash sandbox and never run `supabase login` to
+work around keychain access under the sandbox; the env var supplies auth with
+the sandbox left on.
