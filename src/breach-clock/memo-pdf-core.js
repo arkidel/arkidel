@@ -475,7 +475,7 @@ function attachLink(page, url, x, bottomY, height, width) {
 
 function deadlineBlocks(d) {
   return [
-    { type: "topRow", left: `${d.jurisdiction} — ${d.authority}`, right: formatDeadline(d.deadline) },
+    { type: "topRow", left: d.authority, right: formatDeadline(d.deadline) },
     { type: "labelBody", label: "Basis", body: d.basis || "—" },
     ...(d.conditional ? [{ type: "labelBody", label: "Conditional", body: d.conditional }] : []),
     ...(d.source_url ? [{ type: "url", label: "Source", url: d.source_url }] : []),
@@ -499,7 +499,7 @@ function suppressedBlocks(s) {
 
 function reviewBlocks(r) {
   return [
-    { type: "topRow", left: `${r.jurisdiction} — ${r.authority}` },
+    { type: "topRow", left: r.authority },
     ...(r.original_citation ? [{ type: "labelMono", label: "Obligation", body: r.original_citation }] : []),
     ...(r.review_citation ? [{ type: "labelMono", label: "Requires review under", body: r.review_citation }] : []),
     ...(r.review_reason ? [{ type: "body", text: r.review_reason }] : []),
