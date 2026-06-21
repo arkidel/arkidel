@@ -8,7 +8,7 @@ import Privacy from "./pages/Privacy.jsx";
 import Terms from "./pages/Terms.jsx";
 import SignIn from "./pages/SignIn.jsx";
 import AuthCallback from "./pages/AuthCallback.jsx";
-import AppHome from "./pages/AppHome.jsx";
+import AppArea from "./pages/AppArea.jsx";
 import BreachClock from "./breach-clock/BreachClock.jsx";
 
 export default function App() {
@@ -24,12 +24,12 @@ export default function App() {
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/sign-in" element={<SignIn />} />
-            {/* Authenticated stub — gated. */}
+            {/* Authenticated area — gated on auth, then on org membership. */}
             <Route
               path="/app"
               element={
                 <RequireAuth>
-                  <AppHome />
+                  <AppArea />
                 </RequireAuth>
               }
             />

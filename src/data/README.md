@@ -31,5 +31,6 @@ The boundary is enforced mechanically, not just by convention: an ESLint
 
 ## Status
 
-No domain functions live here yet — they arrive with the Map module's schema.
-For now this directory establishes the directory and the convention only.
+`organizations.js` is the first domain module (`getMyOrganizations`,
+`createOrganization`) — org onboarding for the authenticated area. More arrive
+with the Map module's schema.
