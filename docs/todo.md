@@ -227,11 +227,6 @@ Surfaced after the EU/UK risk-assessment feature shipped (`be2f252` engine/data,
   review the category descriptions for accuracy. This changes the categories the
   engine and UI reason about, so it is a design exercise **plus** formal sign-off
   through the intake process before any `data.js` touch. `[substance]`
-- Review-page artifact controls in a rail. Move **Download memo** / **Edit
-  answers** off the top of the review content into a right rail on the review
-  page. There is no rail on the review today — the entry-form rail renders only
-  pre-submit — so this likely means a new right column; decide whether it is
-  pinned/sticky or flows with the page.
 - "SUGGESTED" tag treatment. Revisit the non-selecting hint on the risk
   section's "high" option — placement, wording, visual weight, and colour (today
   a parchment mono chip). Purely presentational; the hint logic
@@ -495,7 +490,42 @@ disclosure gate will also produce `review`.
 
 ---
 
+## Backlog — forward features (queued 2026-06-21)
+
+Forward features captured for after the Phase 4 launch-readiness work. None
+block launch; all are post-launch scope. The account system and saved-incident
+history share a Supabase backend and should be sequenced together.
+
+- **Account system — magic-link login.** Passwordless magic-link
+  authentication. Newsletter opt-in must be decoupled from account creation —
+  no consent-coupling: creating an account must not bundle marketing-list
+  consent (GDPR).
+- **Saved-incident history (persistence).** Let users save and revisit prior
+  Breach Clock incidents. Introduce Supabase at the **start** of this work, not
+  after — it bundles Postgres, auth, and storage in a single backend. Stand up
+  a Vercel staging environment once Supabase is in, so the auth flows can be
+  tested against a real URL. Shares the Supabase backend with the magic-link
+  account system above; sequence the two together.
+- **Standalone `/compare` (or `/vs`) page.** A dedicated competitive-
+  positioning page carrying comparison copy, kept separate from About — About
+  stays the brand/mission page; `/compare` carries the competitive positioning.
+
+---
+
 ## Completed
+
+### 2026-06-21
+
+- Review-page artifact controls in a rail — **done**, reconciling the follow-up
+  queued 2026-06-08 (now removed from the risk-assessment block above).
+  **Download memo** / **Edit answers** live in a sticky right-hand actions rail
+  on the review page (wide layout), pinned via `position: sticky` inside the
+  right grid column (the same pattern as the form's section index); below the
+  `md` breakpoint they collapse to a row at the top of the review content.
+  Shipped 2026-06-13 in commit `13b846d` ("feat(review): sticky right-hand
+  actions rail on the review screen"); this entry is the doc reconciliation
+  only — no code change. File: `src/breach-clock/BreachClock.jsx`
+  (`renderReviewActionsRail`).
 
 ### 2026-06-07
 
