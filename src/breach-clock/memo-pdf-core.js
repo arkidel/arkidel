@@ -487,7 +487,9 @@ function suppressedBlocks(s) {
     ? "breach-definition exclusion"
     : "unintelligibility exemption";
   return [
-    { type: "topRow", left: `${s.jurisdiction} — ${s.authority}` },
+    // Jurisdiction is carried by the block heading / running header, so the
+    // not-required card titles by authority alone (matching the screen).
+    { type: "topRow", left: s.authority },
     ...(s.original_citation ? [{ type: "labelMono", label: "Original obligation", body: s.original_citation }] : []),
     ...(s.suppression_citation ? [{ type: "labelMono", label: "Suppressed by", body: `${s.suppression_citation} (${mech})` }] : []),
     ...(s.suppression_description ? [{ type: "body", text: s.suppression_description }] : []),

@@ -1419,7 +1419,6 @@ export default function BreachClock() {
 
     const renderSuppressedCard = (s, i) => (
       <div key={i} style={{ background: "#fff", borderLeft: "4px solid #5A6E4A", padding: "20px 24px", borderRadius: "0 12px 12px 0" }}>
-        <div className="section-mark" style={{ marginBottom: "8px" }}>{s.jurisdiction}</div>
         <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
           {s.authority}
         </div>
