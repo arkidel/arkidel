@@ -525,6 +525,25 @@ history share a Supabase backend and should be sequenced together.
 
 ---
 
+## Deferred — revisit when membership revocation / role management lands
+
+- **Widened `organizations` SELECT policy trade-off.** The
+  `organizations_select_member` policy was widened (migration
+  20260622204148) to `is_org_member(id) or created_by = (select auth.uid())`
+  so a creator can read back a just-created org before the AFTER INSERT
+  trigger's membership row is visible (fixes the insert().select() 42501).
+  Consequence: a user removed from an org they originally created could still
+  read that org's row via the `created_by` branch. Harmless until membership
+  revocation or role management exists; revisit the SELECT policy at that
+  point. Full context in the migration file and CLAUDE.md.
+
+- **Working-tree noise needs a .gitignore decision.** `.claude/*`,
+  `scripts/*`, and `sample-incident-memo.pdf` sit untracked and clutter every
+  `git status`. Decide per item whether it belongs in `.gitignore` or in the
+  repo, so the tree reads clean.
+
+---
+
 ## Completed
 
 ### 2026-06-21
