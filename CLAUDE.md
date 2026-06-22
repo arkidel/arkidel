@@ -773,6 +773,23 @@ typeface is intentional.
 - The waitlist email form uses a placeholder submit handler that logs to
   console. A real backend (Buttondown, ConvertKit, or a Vercel-hosted
   endpoint) is pending.
+- **RLS + `insert().select()` read-back (Supabase/Postgres).** A chained
+  `.insert(...).select(...)` compiles to `INSERT … RETURNING`, and Postgres
+  applies the table's **SELECT** policy to the returned row — surfacing a
+  blocked read-back as a misleading `42501` ("new row violates row-level
+  security policy") that looks like an insert rejection (the bare insert
+  actually succeeds). This bit `organizations`: the owner-membership written by
+  the `on_organization_created` AFTER INSERT trigger isn't visible to the
+  read-back in time, so a membership-only SELECT policy failed. Fix (migration
+  `20260622204148_widen_organizations_select_for_creator`): the SELECT policy is
+  `is_org_member(id) OR created_by = (select auth.uid())`, so a creator can
+  always read their own org row. **Convention:** when a table is written via
+  `insert().select()`, its SELECT policy must admit the creator on a column
+  available at insert time (e.g. `created_by`), not solely on membership a
+  trigger backfills. Recorded trade-off: a user later removed from an org they
+  created could still read that org's row via `created_by`; revisit when
+  membership revocation / role management lands (`created_by` only ever matches
+  the caller's own rows, so no other tenant's org is exposed).
 
 ---
 
