@@ -56,7 +56,7 @@ const MODULE_FIGURES = {
   // share:  <>…</>,  // figure not yet designed — add the entry when locked.
 };
 
-export default function ArkidelGlyph({ module, className, frame = true, title }) {
+export default function ArkidelGlyph({ module, className, style, frame = true, title }) {
   const key = typeof module === "string" ? module.toLowerCase() : module;
   const figure = MODULE_FIGURES[key];
 
@@ -73,7 +73,7 @@ export default function ArkidelGlyph({ module, className, frame = true, title })
   const a11yProps = title ? { role: "img" } : { "aria-hidden": "true" };
 
   return (
-    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" {...a11yProps} className={className}>
+    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" {...a11yProps} className={className} style={style}>
       {title ? <title>{title}</title> : null}
       {frame && (
         <rect x="10" y="10" width="80" height="80" rx="8" fill="none" stroke="currentColor" strokeWidth="6" strokeLinejoin="round" />

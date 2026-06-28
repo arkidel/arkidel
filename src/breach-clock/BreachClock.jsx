@@ -74,26 +74,6 @@ const ALL_SECTION_IDS = [...FORM_SECTIONS.map((s) => s.id), "form-risk"];
 // viewport edge. (If that nav is ever made sticky, bump this to ~its height.)
 const NAV_CLEARANCE = 32;
 
-// The Respond masthead lozenge — a Midnight (#1B2A3F) pill with Parchment
-// (#E8DDC4) Merriweather text and a 999px radius (the one deliberate pill in the
-// UI; see CLAUDE.md). Defined once and reused by both the masthead and the
-// Tests-page header so the treatment can't drift. Relies on the `.serif` class,
-// which is present in every view's <style> block.
-const BRAND_PILL_STYLE = {
-  margin: 0,
-  fontWeight: 400,
-  fontSize: "18px",
-  background: "#1B2A3F",
-  color: "#E8DDC4",
-  padding: "7px 20px",
-  borderRadius: "999px",
-  letterSpacing: "0.01em",
-  display: "inline-block",
-};
-const BrandPill = ({ children }) => (
-  <h1 className="serif" style={BRAND_PILL_STYLE}>{children}</h1>
-);
-
 // Q1 personal-data categories — these ARE the engine `sensitivity` input; IDs
 // must match what engine.js treats as high-risk. location/communications are
 // kept for record completeness; the engine ignores ids outside its high-risk set.
@@ -716,7 +696,7 @@ export default function BreachClock() {
                 at narrow widths (the button drops below if cramped). */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
-                <BrandPill>Respond</BrandPill>
+                <span className="serif" style={{ fontSize: "18px", fontWeight: 400, color: "#1B2A3F", letterSpacing: "0.01em" }}>Respond</span>
                 <span className="section-mark">Rules Engine Tests</span>
               </div>
               <button
@@ -1032,7 +1012,7 @@ export default function BreachClock() {
   const renderSectionIndex = () => (
     <nav
       aria-label="Form sections"
-      style={{ position: "sticky", top: `${NAV_CLEARANCE}px`, width: "104px", marginLeft: "auto", marginRight: "24px", paddingTop: "60px" }}
+      style={{ position: "sticky", top: `${NAV_CLEARANCE}px`, width: "104px", marginLeft: "auto", marginRight: "24px", paddingTop: "32px" }}
     >
       <div
         style={{
@@ -2281,16 +2261,15 @@ export default function BreachClock() {
             {showSectionIndex && renderSectionIndex()}
           </div>
         )}
-      <div style={{ maxWidth: "1180px", margin: "0 auto", padding: isNarrow ? "40px 20px" : "60px 40px" }}>
+      <div style={{ maxWidth: "1180px", margin: "0 auto", padding: isNarrow ? "24px 20px 40px" : "32px 40px 60px" }}>
         {/* Header */}
         <header style={{ marginBottom: "20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "16px" }}>
-            <BrandPill>Respond</BrandPill>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "24px" }}>
+            <p style={{ margin: 0, fontFamily: "Inter, system-ui, sans-serif", fontSize: "14px", color: "#2C2418", maxWidth: "640px", lineHeight: 1.5 }}>
+              A triage tool that helps you record incident details, calculate deadlines, and produce an audit-ready memo
+            </p>
             <span className="section-mark">Preliminary — Not Legal Advice</span>
           </div>
-          <p style={{ fontSize: "15px", marginTop: "12px", maxWidth: "640px", lineHeight: 1.6, fontWeight: 400, color: "#2C2418" }}>
-            A triage tool that helps you record incident details, calculate deadlines, and produce an audit-ready memo
-          </p>
         </header>
 
         {/* Single hairline between the masthead and the form. The
