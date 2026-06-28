@@ -2249,7 +2249,7 @@ export default function BreachClock() {
           1180px width (the index lives in the margin and never narrows it), and
           a 1fr right gutter balances it. On narrow screens the grid collapses
           to the single content column. */}
-      <div style={{ display: isNarrow ? "block" : "grid", gridTemplateColumns: isNarrow ? undefined : "1fr minmax(0, 1180px) 1fr" }}>
+      <div style={{ display: isNarrow ? "block" : "grid", gridTemplateColumns: isNarrow ? undefined : "160px minmax(0, 1180px) 1fr" }}>
         {/* Left track: a plain block grid item. It stretches to the full grid
             row height (the form column), giving the sticky index a tall
             containing block. Deliberately NOT a flex container — position:sticky
