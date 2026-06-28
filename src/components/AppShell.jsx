@@ -13,7 +13,7 @@
 // ArkidelLogo and ArkidelGlyph are consumed, never redrawn — they own the rune
 // and the module figures respectively; color flows in via `currentColor`.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { ChevronsRight, ChevronsLeft } from "lucide-react";
 import ArkidelLogo from "./ArkidelLogo.jsx";
@@ -31,6 +31,10 @@ const AVATAR_BG = "#2C3E55"; // lightened Midnight, per palette
 const COLLAPSED_WIDTH = 72;
 const EXPANDED_WIDTH = 210;
 
+// Per-browser UI preference — purely client-side (no Supabase, no auth
+// coupling). Survives reloads; resets only if the user clears storage.
+const RAIL_EXPANDED_KEY = "arkidel.shell.railExpanded";
+
 // Module rail entries. Respond navigates to its live route; Map is rendered as
 // a non-navigating placeholder until the Map route lands (phase 4) — `to: null`.
 // TODO(phase 4): give Map a real `to` once the Map route exists.
@@ -40,9 +44,27 @@ const MODULES = [
 ];
 
 export default function AppShell() {
-  const [expanded, setExpanded] = useState(false); // default COLLAPSED; phase 2 persists this
+  // Lazy initializer reads the stored preference synchronously, so the rail
+  // paints in its saved state on the first render with no collapsed→expanded
+  // flash. Defaults to collapsed when absent or unreadable (private mode, etc.).
+  const [expanded, setExpanded] = useState(() => {
+    try {
+      return localStorage.getItem(RAIL_EXPANDED_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
   const location = useLocation();
   const { user } = useAuth();
+
+  // Persist on change. Wrapped so a storage failure can never break the toggle.
+  useEffect(() => {
+    try {
+      localStorage.setItem(RAIL_EXPANDED_KEY, String(expanded));
+    } catch {
+      // ignore — storage disabled or full; the rail still works in-session.
+    }
+  }, [expanded]);
 
   // Avatar initial: full_name doesn't exist yet (phase 3), so derive from the
   // email when one is trivially in scope, else a neutral placeholder glyph.
