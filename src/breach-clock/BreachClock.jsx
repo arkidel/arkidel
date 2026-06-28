@@ -1012,7 +1012,7 @@ export default function BreachClock() {
   const renderSectionIndex = () => (
     <nav
       aria-label="Form sections"
-      style={{ position: "sticky", top: `${NAV_CLEARANCE}px`, width: "104px", marginLeft: "auto", marginRight: "24px", paddingTop: "32px" }}
+      style={{ position: "sticky", top: `${NAV_CLEARANCE}px`, width: "104px", marginLeft: "auto", marginRight: "24px", paddingTop: 0 }}
     >
       <div
         style={{
@@ -2257,7 +2257,7 @@ export default function BreachClock() {
             child the nav sticks reliably. The nav right-aligns itself with
             margin-left:auto so it hugs the content's left edge. */}
         {!isNarrow && (
-          <div>
+          <div style={{ paddingLeft: "32px" }}>
             {showSectionIndex && renderSectionIndex()}
           </div>
         )}
