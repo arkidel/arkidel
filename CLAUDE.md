@@ -240,7 +240,7 @@ information, (2) how & when discovered, (3) when the incident occurred,
   so the sentence-case rail-title convention does not apply; do not "correct" it.
   The masthead above the form ends in a **single hairline rule** (the former
   on-ramp disclaimer sentence — "For preliminary triage purposes only…" — was
-  removed; the "PRELIMINARY — NOT LEGAL ADVICE" eyebrow on the lozenge row and
+  removed; the "PRELIMINARY — NOT LEGAL ADVICE" eyebrow on the descriptor row and
   the global footer disclaimer in `Layout.jsx` now carry that function).
 - **Checkbox-row selection idiom.** Every selection control — jurisdictions, Q1,
   type-of-incident, the CIA data-security principles, the data-element
@@ -542,12 +542,15 @@ bottom-right corners round to 12px. (This was "Option B" in the rounding
 review; the symmetric alternative, where the stripe curves with the corners,
 was "Option A" and was not chosen.)
 
-**Pill (999px) — one deliberate exception.** The Respond module masthead's `<h1>`
-lozenge in `BreachClock.jsx` uses a fully-rounded `border-radius: 999px` pill
-(Midnight chip, Parchment serif text). This is a new radius value, distinct from
-the 8px button/input and 12px card tokens above, and is intentional: a compact
-brand chip rather than a boxed control or surface. Confined to that lozenge — do
-not generalize the 999px pill to buttons, inputs, or cards.
+**Respond masthead — no pill (removed; was the 999px exception).** The Respond
+masthead's `<h1>` lozenge in `BreachClock.jsx` is gone. The masthead is now
+type-only — a descriptor line plus the "PRELIMINARY — NOT LEGAL ADVICE" eyebrow
+over a single hairline rule, with no title, no chip, and no module glyph. So
+`border-radius: 999px` is no longer used anywhere; do not reintroduce it. (A
+framed module glyph beside a serif title was briefly tried and pulled — two
+framed marks, the glyph and the masthead Arkidel rune, read as duplicates;
+module identity now lives in the nav and is slated for the module switcher.) The
+asymmetric left-accent card above is now the only deliberate radius exception.
 
 ### Landing page composition
 
