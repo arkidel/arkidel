@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider.jsx";
 import RequireAuth from "./auth/RequireAuth.jsx";
 import Layout from "./components/Layout.jsx";
+import AppShell from "./components/AppShell.jsx";
 import Landing from "./pages/Landing.jsx";
 import About from "./pages/About.jsx";
 import Privacy from "./pages/Privacy.jsx";
@@ -16,10 +17,15 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Respond runs inside the signed-in app shell (left module rail),
+              not the marketing masthead/footer. No auth gating yet (phase 1) —
+              the route stays as reachable as before, only its chrome changes. */}
+          <Route element={<AppShell />}>
+            <Route path="/breach-clock" element={<BreachClock />} />
+          </Route>
           <Route element={<Layout />}>
             {/* Public routes — open, never wrapped in RequireAuth. */}
             <Route path="/" element={<Landing />} />
-            <Route path="/breach-clock" element={<BreachClock />} />
             <Route path="/about" element={<About />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
