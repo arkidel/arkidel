@@ -11,6 +11,7 @@ import SignIn from "./pages/SignIn.jsx";
 import AuthCallback from "./pages/AuthCallback.jsx";
 import AppArea from "./pages/AppArea.jsx";
 import BreachClock from "./breach-clock/BreachClock.jsx";
+import Account from "./pages/Account.jsx";
 
 export default function App() {
   return (
@@ -22,6 +23,9 @@ export default function App() {
               the route stays as reachable as before, only its chrome changes. */}
           <Route element={<AppShell />}>
             <Route path="/breach-clock" element={<BreachClock />} />
+            {/* Account self-gates (redirects to /sign-in when signed out);
+                no router-level RequireAuth here. */}
+            <Route path="/account" element={<Account />} />
           </Route>
           <Route element={<Layout />}>
             {/* Public routes — open, never wrapped in RequireAuth. */}

@@ -16,6 +16,11 @@ export function AuthProvider({ children }) {
   // Tracks only the initial session load, so consumers can distinguish
   // "still checking" from "checked, no session".
   const [loading, setLoading] = useState(true);
+  // The signed-in user's own profile row (full_name only — the rest of the
+  // row isn't needed in-app). Null when signed out or not yet fetched. The
+  // row already exists (created by the signup trigger), so the app only ever
+  // selects and updates it — never inserts.
+  const [profile, setProfile] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -42,10 +47,52 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  // Fetch the profile row whenever the signed-in user changes. maybeSingle so
+  // a missing row reads as null rather than throwing. Mirrors the session
+  // effect's `active` race-guard so a resolved fetch from a stale user is
+  // discarded.
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setProfile(null);
+      return;
+    }
+
+    let active = true;
+    supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!active) return;
+        setProfile(data ?? null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [session?.user?.id]);
+
+  // Update the signed-in user's own profile row. RLS scopes the write to the
+  // caller's row; the app never inserts (the row already exists).
+  async function updateProfile(patch) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq("id", session.user.id)
+      .select("full_name")
+      .maybeSingle();
+    if (!error && data) setProfile(data);
+    return { error };
+  }
+
   const value = useMemo(
     () => ({
       session,
       user: session?.user ?? null,
+      profile,
+      updateProfile,
       loading,
       // Passwordless magic-link sign-in. The link returns the user to
       // /auth/callback, where detectSessionInUrl establishes the session.
@@ -64,7 +111,7 @@ export function AuthProvider({ children }) {
         return supabase.auth.signOut();
       },
     }),
-    [session, loading]
+    [session, profile, loading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

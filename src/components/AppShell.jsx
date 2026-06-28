@@ -55,7 +55,7 @@ export default function AppShell() {
     }
   });
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   // Persist on change. Wrapped so a storage failure can never break the toggle.
   useEffect(() => {
@@ -66,9 +66,12 @@ export default function AppShell() {
     }
   }, [expanded]);
 
-  // Avatar initial: full_name doesn't exist yet (phase 3), so derive from the
-  // email when one is trivially in scope, else a neutral placeholder glyph.
-  const avatarInitial = user?.email ? user.email.trim().charAt(0).toUpperCase() : "·";
+  // Identity shown in the foot. Prefer the profile's full name: first+last
+  // initials when it has two or more words ("James Cormier" → "JC"), else its
+  // first letter; fall back to the email's first letter, then a neutral glyph.
+  const avatarInitial = initialsFor(profile?.full_name, user?.email);
+  // Primary name line: full name when set, else the sign-in email.
+  const displayName = profile?.full_name || user?.email || "Not signed in";
 
   const railWidth = expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
 
@@ -220,7 +223,7 @@ export default function AppShell() {
                   textOverflow: "ellipsis",
                 }}
               >
-                {user?.email ?? "Not signed in"}
+                {displayName}
               </div>
               <div
                 style={{
@@ -248,6 +251,21 @@ export default function AppShell() {
       </div>
     </div>
   );
+}
+
+// Avatar initials. From a full name: first + last initial when it has two or
+// more words ("James Cormier" → "JC"), else the single first letter. Falls back
+// to the email's first letter, then a neutral placeholder glyph. Always upper.
+function initialsFor(fullName, email) {
+  const name = (fullName ?? "").trim();
+  if (name) {
+    const words = name.split(/\s+/);
+    const letters =
+      words.length >= 2 ? words[0][0] + words[words.length - 1][0] : words[0][0];
+    return letters.toUpperCase();
+  }
+  if (email) return email.trim().charAt(0).toUpperCase();
+  return "·";
 }
 
 function RailDivider() {
