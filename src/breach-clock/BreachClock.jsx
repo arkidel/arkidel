@@ -2261,7 +2261,7 @@ export default function BreachClock() {
             {showSectionIndex && renderSectionIndex()}
           </div>
         )}
-      <div style={{ maxWidth: "1180px", margin: "0 auto", padding: isNarrow ? "24px 20px 40px" : "32px 40px 60px" }}>
+      <div style={{ maxWidth: "1180px", margin: "0 auto", padding: isNarrow ? "24px 20px 40px" : "32px 40px 60px 8px" }}>
         {/* Header */}
         <header style={{ marginBottom: "20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "24px" }}>
