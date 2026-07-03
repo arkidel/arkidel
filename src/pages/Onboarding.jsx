@@ -1,18 +1,22 @@
 // Organization onboarding.
 //
 // Shown by the authenticated-area gate when the signed-in user belongs to no
-// organization yet. Creating one (via the data layer) and refreshing the org
-// context flips the gate to the app — there's no manual redirect here; the gate
-// re-renders once activeOrg is set.
+// organization yet. Creating one (via the data layer) and adopting the returned
+// row into the org context flips the gate to the app — there's no manual
+// redirect here; the gate re-renders once activeOrg is set. Adoption replaces
+// the old post-create refresh(): a re-select under fresh-sign-in auth flux
+// could return [] and strand the user here even though the org was created.
 
 import { useState } from "react";
 import usePageTitle from "../usePageTitle.js";
+import { useAuth } from "../auth/AuthProvider.jsx";
 import { useOrg } from "../org/OrgProvider.jsx";
 import { createOrganization } from "../data/organizations.js";
 
 export default function Onboarding() {
   usePageTitle("Create your organization");
-  const { refresh } = useOrg();
+  const { user } = useAuth();
+  const { adoptOrganization } = useOrg();
 
   const [name, setName] = useState("");
   // "idle" | "saving" | "error"
@@ -27,10 +31,10 @@ export default function Onboarding() {
     setStatus("saving");
     setErrorMessage("");
     try {
-      await createOrganization(trimmed);
-      // Pulls the new org; the gate then shows the app. This component unmounts,
-      // so there's no need to reset status.
-      await refresh();
+      const org = await createOrganization(trimmed, user.id);
+      // Adopt the returned row; the gate then shows the app. This component
+      // unmounts, so there's no need to reset status.
+      adoptOrganization(org);
     } catch (error) {
       setErrorMessage(
         error?.message ||

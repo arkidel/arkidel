@@ -24,8 +24,8 @@ export function OrgProvider({ children }) {
   const [organizations, setOrganizations] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Reload the org list. Also used as the public refresh() so onboarding can
-  // pull the just-created org and flip the gate to the app.
+  // Reload the org list from the data layer. Public for future consumers;
+  // onboarding deliberately does NOT use it after create (see adoptOrganization).
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
@@ -41,11 +41,26 @@ export function OrgProvider({ children }) {
     refresh();
   }, [refresh]);
 
+  // Adopt a just-created org into state without a re-select. Onboarding uses
+  // this instead of refresh(): under the auth-state flux of a fresh sign-in,
+  // re-running getMyOrganizations() can return [] (RLS sees an unsettled
+  // context) even though the insert succeeded, which would strand the user on
+  // onboarding. The insert's returned row is authoritative — adopt it directly.
+  const adoptOrganization = useCallback((org) => {
+    setOrganizations((prev) => {
+      if (prev.some((o) => o.id === org.id)) return prev;
+      const next = [...prev, org];
+      next.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      return next;
+    });
+  }, []);
+
   const value = {
     organizations,
     activeOrg: organizations[0] ?? null,
     loading,
     refresh,
+    adoptOrganization,
   };
 
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>;

@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const { supabaseMock } = vi.hoisted(() => ({
   supabaseMock: {
     from: vi.fn(),
-    auth: { getUser: vi.fn() },
   },
 }));
 vi.mock("../lib/supabase.js", () => ({ supabase: supabaseMock }));
@@ -26,7 +25,6 @@ function makeQuery(result) {
 
 beforeEach(() => {
   supabaseMock.from.mockReset();
-  supabaseMock.auth.getUser.mockReset();
 });
 
 afterEach(() => {
@@ -63,18 +61,13 @@ describe("getMyOrganizations", () => {
 });
 
 describe("createOrganization", () => {
-  it("inserts with created_by = the signed-in user's id and returns the row", async () => {
-    supabaseMock.auth.getUser.mockResolvedValue({
-      data: { user: { id: "user-123" } },
-      error: null,
-    });
+  it("inserts with created_by = the caller's user id and returns the row", async () => {
     const created = { id: "org-9", name: "New Co", created_by: "user-123" };
     const query = makeQuery({ data: created, error: null });
     supabaseMock.from.mockReturnValue(query);
 
-    const result = await createOrganization("New Co");
+    const result = await createOrganization("New Co", "user-123");
 
-    expect(supabaseMock.auth.getUser).toHaveBeenCalledTimes(1);
     expect(supabaseMock.from).toHaveBeenCalledWith("organizations");
     expect(query.insert).toHaveBeenCalledWith({
       name: "New Co",
@@ -85,12 +78,7 @@ describe("createOrganization", () => {
     expect(result).toEqual(created);
   });
 
-  it("throws when there is no signed-in user", async () => {
-    supabaseMock.auth.getUser.mockResolvedValue({
-      data: { user: null },
-      error: null,
-    });
-
+  it("throws when no user id is supplied", async () => {
     await expect(createOrganization("Nope")).rejects.toThrow(/signed in/i);
     expect(supabaseMock.from).not.toHaveBeenCalled();
   });

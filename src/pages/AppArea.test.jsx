@@ -25,7 +25,10 @@ vi.mock("../data/organizations.js", () => ({ createOrganization }));
 import AppArea from "./AppArea.jsx";
 
 beforeEach(() => {
-  mockAuth.value = { user: { email: "lawyer@example.com" }, signOut: vi.fn() };
+  mockAuth.value = {
+    user: { id: "user-1", email: "lawyer@example.com" },
+    signOut: vi.fn(),
+  };
   createOrganization.mockReset().mockResolvedValue({ id: "org-1", name: "Acme" });
 });
 
@@ -43,8 +46,15 @@ describe("AppArea gate", () => {
   });
 
   it("renders onboarding when the user has no org, and creates one on submit", async () => {
-    const refresh = vi.fn().mockResolvedValue([{ id: "org-1", name: "Acme" }]);
-    mockOrg.value = { organizations: [], activeOrg: null, loading: false, refresh };
+    const refresh = vi.fn();
+    const adoptOrganization = vi.fn();
+    mockOrg.value = {
+      organizations: [],
+      activeOrg: null,
+      loading: false,
+      refresh,
+      adoptOrganization,
+    };
     const user = userEvent.setup();
     render(<AppArea />);
 
@@ -54,8 +64,10 @@ describe("AppArea gate", () => {
     await user.click(screen.getByRole("button", { name: /create organization/i }));
 
     expect(createOrganization).toHaveBeenCalledTimes(1);
-    expect(createOrganization).toHaveBeenCalledWith("Acme");
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(createOrganization).toHaveBeenCalledWith("Acme", "user-1");
+    // The returned row is adopted directly; no post-create re-select.
+    expect(adoptOrganization).toHaveBeenCalledWith({ id: "org-1", name: "Acme" });
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("renders the app with the active org's name when one exists", () => {

@@ -27,31 +27,23 @@ export async function getMyOrganizations() {
   return data ?? [];
 }
 
-// Create an organization owned by the signed-in user.
+// Create an organization owned by the given user.
 //
-// created_by is set to the current user's id so the step-3 WITH CHECK
-// (created_by = auth.uid()) passes. The handle_new_organization AFTER INSERT
-// trigger then writes the creator's 'owner' membership in the same transaction,
-// which is why the insert-returning select below is readable: by the time the
-// RETURNING row is evaluated, the membership exists and the is_org_member SELECT
-// policy passes.
-export async function createOrganization(name) {
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError) throw userError;
-  if (!user) {
+// The caller supplies the signed-in user's id (from the auth context) rather
+// than this module round-tripping supabase.auth.getUser() — under the
+// auth-state flux of a fresh sign-in that round-trip is another moving part,
+// and the caller already holds the user. created_by must equal auth.uid() for
+// the step-3 WITH CHECK to pass; the read-back is admitted by the SELECT
+// policy's created_by arm.
+export async function createOrganization(name, userId) {
+  if (!userId) {
     throw new Error("You must be signed in to create an organization.");
   }
-
   const { data, error } = await supabase
     .from("organizations")
-    .insert({ name, created_by: user.id })
+    .insert({ name, created_by: userId })
     .select(ORG_COLUMNS)
     .single();
-
   if (error) throw error;
   return data;
 }
