@@ -793,6 +793,20 @@ typeface is intentional.
   created could still read that org's row via `created_by`; revisit when
   membership revocation / role management lands (`created_by` only ever matches
   the caller's own rows, so no other tenant's org is exposed).
+- profiles, organizations, org_members, the own-row RLS policies, and the
+  signup/org triggers (on_auth_user_created → handle_new_user;
+  on_organization_created → handle_new_organization) all already exist from the
+  foundation migration 20260621112854_multitenant_foundation.sql. Profile and
+  org schema work is `alter`, never `create`. (on_organization_created is the
+  trigger; handle_new_organization is the function it calls — not a naming
+  conflict.)
+- After creating an org, adopt the row the insert returns into OrgProvider
+  state via adoptOrganization — do not re-select with getMyOrganizations to
+  recognize it. Under the auth-state flux of a fresh sign-in, a re-select
+  immediately after the write can return [] and strand the user on onboarding.
+  Do not fire a background refresh() after adopt; it reintroduces that stall.
+  createOrganization takes (name, userId) from the auth context — no
+  supabase.auth.getUser() round-trip.
 
 ---
 
