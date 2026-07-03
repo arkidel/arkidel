@@ -22,3 +22,38 @@ body {
   color: var(--color-midnight);
   background-color: var(--color-bone);
 }
+
+/* Landing hero — rune-at-seed emanation (src/pages/Landing.jsx). Four emit
+   rings ripple outward once on load (staggered via inline animation-delay),
+   then the composition settles onto the static rings. `r` here is the SVG
+   circle geometry property animated in CSS: px units map to viewBox user
+   units, so the keyframes stay in the composition's 720-unit reference frame
+   regardless of rendered size. Base opacity 0 keeps each ring invisible both
+   before its delayed start and after `forwards` holds the final frame — the
+   animation plays once and does not loop. */
+@keyframes hero-emanate {
+  0% {
+    r: 46px;
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.48;
+  }
+  100% {
+    r: 360px;
+    opacity: 0;
+  }
+}
+
+.hero-emit-ring {
+  opacity: 0;
+  animation: hero-emanate 12s linear forwards;
+}
+
+/* No motion at all under reduced motion: the emit rings simply never appear,
+   leaving only the static composition. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-emit-ring {
+    animation: none;
+  }
+}

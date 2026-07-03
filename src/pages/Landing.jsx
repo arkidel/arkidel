@@ -3,10 +3,38 @@ import { Link } from "react-router-dom";
 import usePageTitle from "../usePageTitle.js";
 import ArkidelLogo from "../components/ArkidelLogo.jsx";
 
+// Rune-at-seed composition, in reference units on a 720×720 canvas with the
+// seed rune (~90-unit box) at center. Six static rings step outward, fading;
+// the outer ones bleed off the hero's edges. Radii/opacities are the agreed
+// reference ramp — scale happens by sizing the whole square container.
+const HERO_RING_CANVAS = 720;
+const HERO_RING_CENTER = HERO_RING_CANVAS / 2;
+const HERO_STATIC_RINGS = [
+  { r: 42, opacity: 0.85 },
+  { r: 80, opacity: 0.6 },
+  { r: 124, opacity: 0.42 },
+  { r: 174, opacity: 0.28 },
+  { r: 232, opacity: 0.17 },
+  { r: 298, opacity: 0.09 },
+];
+// Staggered starts for the four one-shot "emit" ripples (see .hero-emit-ring
+// in index.css for the keyframes: r 46 → 360, opacity 0 → 0.48 → 0, 12s).
+const HERO_EMIT_DELAYS = [0, 3, 6, 9];
+
 export default function Landing() {
   usePageTitle();
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  // Bumping this key remounts the emit-ring group, restarting its one-shot
+  // CSS animations from the beginning — the click-to-replay mechanism.
+  const [emitEpoch, setEmitEpoch] = useState(0);
+
+  function handleHeroClick(e) {
+    // Replay only on background clicks: let the CTAs (and any other real
+    // controls) do their job untouched.
+    if (e.target.closest("a, button")) return;
+    setEmitEpoch((k) => k + 1);
+  }
 
   function handleWaitlistSubmit(e) {
     e.preventDefault();
@@ -18,21 +46,66 @@ export default function Landing() {
     <div className="text-midnight">
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden px-8 pt-20 pb-24">
-        {/* Rune-at-scale brand texture. The actual Arkidel mark, framed box
-            dropped so only the inner glyph (stem, diagonals, arrow) shows —
-            rendered as vector so it stays crisp at large size. Enlarged and
-            pushed hard off the right edge so it crops to a partial mark, reading
-            as brand texture rather than a contained logo; the left-pointing
-            arrow stays inside the visible area. Parchment on the Bone hero reads
-            as a quiet watermark at full strength. Hidden below md so it never
-            crowds the stacked mobile text; quieter (smaller, pushed further off)
-            on tablet. */}
+      {/* The section-level click handler replays the decorative emanation on
+          background clicks (guarded so CTA clicks pass through untouched). It
+          is deliberately a plain section — no role, no tabIndex — so the
+          replay is pointer-only: not keyboard-focusable, not announced. */}
+      <section className="relative overflow-hidden px-8 pt-20 pb-24" onClick={handleHeroClick}>
+        {/* Rune-at-seed brand composition. The frameless Arkidel glyph (the
+            framed box's square corners would cut through the innermost ring,
+            so the bare mark serves as the seed) anchored toward the right of
+            the hero, vertically centered, with six static concentric rings
+            fading outward plus four one-shot "emit" ripples on load. All
+            Parchment on the Bone canvas — deliberately quiet. The section's
+            overflow-hidden clips the outer rings at the hero's edges. Hidden
+            below md so it never crowds the stacked mobile text; smaller,
+            slightly faded, and pushed further off on tablet — matching how
+            the previous watermark handled small screens. */}
         <div
           aria-hidden="true"
-          className="hidden md:block absolute top-1/2 right-0 -translate-y-1/2 translate-x-[36%] lg:translate-x-[30%] w-[520px] lg:w-[840px] text-parchment pointer-events-none select-none z-0"
+          className="hidden md:block absolute top-1/2 left-[84%] lg:left-[77%] -translate-x-1/2 -translate-y-1/2 w-[840px] lg:w-[1080px] opacity-80 lg:opacity-100 text-parchment pointer-events-none select-none z-0"
         >
-          <ArkidelLogo frame={false} className="w-full h-auto" />
+          <div className="relative w-full aspect-square">
+            <svg
+              viewBox={`0 0 ${HERO_RING_CANVAS} ${HERO_RING_CANVAS}`}
+              className="absolute inset-0 w-full h-full"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              {HERO_STATIC_RINGS.map(({ r, opacity }) => (
+                <circle
+                  key={r}
+                  cx={HERO_RING_CENTER}
+                  cy={HERO_RING_CENTER}
+                  r={r}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  opacity={opacity}
+                />
+              ))}
+              {/* Key bump remounts the group so the one-shot animations
+                  restart on replay. */}
+              <g key={emitEpoch}>
+                {HERO_EMIT_DELAYS.map((delay) => (
+                  <circle
+                    key={delay}
+                    className="hero-emit-ring"
+                    cx={HERO_RING_CENTER}
+                    cy={HERO_RING_CENTER}
+                    r="46"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    style={{ animationDelay: `${delay}s` }}
+                  />
+                ))}
+              </g>
+            </svg>
+            {/* Seed: 90 of 720 reference units = 12.5% of the container. */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[12.5%]">
+              <ArkidelLogo frame={false} className="w-full h-auto" />
+            </div>
+          </div>
         </div>
         <div className="relative z-10 max-w-3xl mx-auto w-full">
           <h1 className="font-serif text-4xl leading-snug mb-6 max-w-2xl">
