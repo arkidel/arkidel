@@ -1,19 +1,17 @@
-// Authenticated area: org context + gate.
+// Authenticated area: the org gate at /app.
 //
-// Rendered behind RequireAuth (so the user is signed in), this wraps the area
-// in OrgProvider and gates on the org state:
+// Rendered behind RequireAuth and inside the app-wide OrgProvider (the single
+// instance mounted at the authed boundary in App.jsx — this component no
+// longer mounts its own). It gates on the shared org state:
 //   loading  -> a quiet spinner (don't flash onboarding before orgs resolve)
 //   no org   -> onboarding
 //   has org  -> the app
-//
-// Keeping the provider here means it only mounts for signed-in users, and the
-// gate has a single place to live.
 
-import { OrgProvider, useOrg } from "../org/OrgProvider.jsx";
+import { useOrg } from "../org/OrgProvider.jsx";
 import Onboarding from "./Onboarding.jsx";
 import AppHome from "./AppHome.jsx";
 
-function AppGate() {
+export default function AppArea() {
   const { activeOrg, loading } = useOrg();
 
   if (loading) {
@@ -33,12 +31,4 @@ function AppGate() {
   }
 
   return <AppHome />;
-}
-
-export default function AppArea() {
-  return (
-    <OrgProvider>
-      <AppGate />
-    </OrgProvider>
-  );
 }

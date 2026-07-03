@@ -116,17 +116,11 @@ export default function Landing() {
           </p>
           <div className="flex flex-wrap gap-4">
             <Link
-              to="/breach-clock"
+              to="/sign-in"
               className="inline-block bg-midnight text-bone px-6 py-3 text-sm font-medium no-underline rounded-lg hover:opacity-90 transition-opacity"
             >
-              Try Respond
+              Get Started
             </Link>
-            <a
-              href="#waitlist"
-              className="inline-block border border-midnight text-midnight px-6 py-3 text-sm font-medium no-underline rounded-lg hover:bg-parchment transition-colors"
-            >
-              Join the waiting list
-            </a>
           </div>
         </div>
       </section>
@@ -193,10 +187,10 @@ export default function Landing() {
             </p>
           </div>
           <Link
-            to="/breach-clock"
+            to="/sign-in"
             className="inline-block mt-8 text-sm text-midnight font-medium no-underline border-b border-midnight/30 hover:border-midnight pb-px transition-colors"
           >
-            Try Respond →
+            Get Started →
           </Link>
         </div>
       </section>
