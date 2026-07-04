@@ -15,6 +15,14 @@
   box-sizing: border-box;
 }
 
+/* Reserve the scrollbar gutter on every page, so centered content (the header
+   lockup) sits at the same x whether or not the page scrolls — otherwise the
+   logo shifts between scrolling pages (/, /about) and non-scrolling ones
+   (/app). */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   padding: 0;

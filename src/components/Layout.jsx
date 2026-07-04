@@ -1,5 +1,6 @@
 import { Link, Outlet } from "react-router-dom";
 import ArkidelLogo from "./ArkidelLogo.jsx";
+import AccountMenu from "./AccountMenu.jsx";
 
 export default function Layout() {
   return (
@@ -10,13 +11,13 @@ export default function Layout() {
             <ArkidelLogo className="w-[39px] h-[39px]" />
             <span className="font-serif text-[28px] leading-9 tracking-[1.2px]" style={{ transform: "translateY(2.6px)" }}>Arkidel</span>
           </Link>
-          <nav className="flex items-center gap-8 text-sm">
-            <Link to="/breach-clock" className="text-bone hover:text-parchment transition-colors no-underline whitespace-nowrap">
-              Respond
-            </Link>
+          {/* gap-4 below sm: the avatar trigger made the full gap-8 nav
+              overflow a ~380px viewport; desktop spacing is unchanged. */}
+          <nav className="flex items-center gap-4 sm:gap-8 text-sm">
             <Link to="/about" className="text-bone hover:text-parchment transition-colors no-underline whitespace-nowrap">
               About
             </Link>
+            <AccountMenu />
           </nav>
         </div>
       </header>

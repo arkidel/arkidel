@@ -6,19 +6,22 @@
 // marketing masthead/footer Layout for those routes. The route is slotted via
 // <Outlet/>, mirroring how Layout wraps the public routes in App.jsx.
 //
-// The account foot is now a menu trigger (phase 3b): signed in, it opens an
-// upward popover with Account + Sign out; signed out, it routes straight to
-// /sign-in. Still out of scope: the org switcher + the Map route (phase 4).
+// The account foot is the shared AccountMenu (AvatarCircle trigger + popover):
+// signed in, it opens an upward menu with Account + Sign out; signed out, the
+// menu offers Sign in. The menu component owns its own session state and a11y
+// contract. Still out of scope: the org switcher + the Map route (phase 4).
 //
 // ArkidelLogo and ArkidelGlyph are consumed, never redrawn — they own the rune
 // and the module figures respectively; color flows in via `currentColor`.
 
-import { forwardRef, useEffect, useRef, useState } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { ChevronsRight, ChevronsLeft, ChevronsUp } from "lucide-react";
 import ArkidelLogo from "./ArkidelLogo.jsx";
 import ArkidelGlyph from "./ArkidelGlyph.jsx";
+import AccountMenu from "./AccountMenu.jsx";
 import { useAuth } from "../auth/AuthProvider.jsx";
+import { useOrg } from "../org/OrgProvider.jsx";
 
 // Brand palette (named tokens from CLAUDE.md). Inlined here because the rail is
 // product chrome styled like BreachClock — inline styles, not Tailwind.
@@ -26,9 +29,6 @@ const MIDNIGHT = "#1B2A3F";
 const BONE = "#FAF8F2";
 const PARCHMENT = "#E8DDC4";
 const MIST = "#9FAEC2";
-const AVATAR_BG = "#2C3E55"; // lightened Midnight, per palette
-const MENU_BG = "#2C3E55"; // popover panel — one shade above the rail
-const MENU_ITEM_HOVER = "#35495F"; // subtle lift for hovered/focused items
 
 const COLLAPSED_WIDTH = 72;
 const EXPANDED_WIDTH = 210;
@@ -57,15 +57,15 @@ export default function AppShell() {
     }
   });
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile } = useAuth();
+  // The shell renders inside the authed boundary's OrgProvider (App.jsx), so
+  // the shared org context is available here; passing the name spares the
+  // menu its lazy fetch.
+  const { activeOrg } = useOrg();
 
-  // Account menu (signed-in only). Refs on the trigger and the panel drive
-  // click-outside detection and focus return on Escape.
-  const [menuOpen, setMenuOpen] = useState(false);
-  const triggerRef = useRef(null);
-  const menuRef = useRef(null);
-  const firstItemRef = useRef(null);
+  // Primary name line in the expanded foot: full name when set, else the
+  // sign-in email. The menu's identity line derives the same way internally.
+  const displayName = profile?.full_name || user?.email || "Not signed in";
 
   // Persist on change. Wrapped so a storage failure can never break the toggle.
   useEffect(() => {
@@ -75,43 +75,6 @@ export default function AppShell() {
       // ignore — storage disabled or full; the rail still works in-session.
     }
   }, [expanded]);
-
-  // Dismiss listeners live only while the menu is open. Escape closes and
-  // returns focus to the trigger; a mousedown outside both the panel and the
-  // trigger closes (the trigger is excluded so its own click stays a toggle,
-  // not a close-then-reopen).
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onKeyDown(e) {
-      if (e.key === "Escape") {
-        setMenuOpen(false);
-        triggerRef.current?.focus();
-      }
-    }
-    function onMouseDown(e) {
-      if (menuRef.current?.contains(e.target)) return;
-      if (triggerRef.current?.contains(e.target)) return;
-      setMenuOpen(false);
-    }
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("mousedown", onMouseDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("mousedown", onMouseDown);
-    };
-  }, [menuOpen]);
-
-  // On open, move focus to the first menuitem (Account).
-  useEffect(() => {
-    if (menuOpen) firstItemRef.current?.focus();
-  }, [menuOpen]);
-
-  // Identity shown in the foot. Prefer the profile's full name: first+last
-  // initials when it has two or more words ("James Cormier" → "JC"), else its
-  // first letter; fall back to the email's first letter, then a neutral glyph.
-  const avatarInitial = initialsFor(profile?.full_name, user?.email);
-  // Primary name line: full name when set, else the sign-in email.
-  const displayName = profile?.full_name || user?.email || "Not signed in";
 
   const railWidth = expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
 
@@ -219,203 +182,69 @@ export default function AppShell() {
 
         <RailDivider />
 
-        {/* ACCOUNT FOOT — menu trigger when signed in, direct /sign-in link
-            when signed out. Resting layout matches the former static stub. */}
-        <button
-          ref={triggerRef}
-          type="button"
-          onClick={() => {
-            if (user) setMenuOpen((v) => !v);
-            else navigate("/sign-in");
-          }}
-          aria-haspopup={user ? "menu" : undefined}
-          aria-expanded={user ? menuOpen : undefined}
-          aria-label={expanded ? undefined : user ? "Account menu" : "Sign in"}
-          style={{
+        {/* ACCOUNT FOOT — the shared AccountMenu, with the trigger widened to
+            the full foot row: AvatarCircle takes the old initials dot's place
+            at 34px, and when expanded the pre-avatar-unification layout is
+            restored via trigger children — name/"Account" text row plus the
+            open-state chevron. The popover self-places upward off the foot's
+            viewport position (still position:fixed, so the rail's
+            overflow:hidden never clips it). displayName passes the
+            profile-derived name so the menu's identity line matches the foot. */}
+        <AccountMenu
+          displayName={profile?.full_name || undefined}
+          orgName={activeOrg?.name || undefined}
+          triggerStyle={{
             display: "flex",
-            alignItems: "center",
             gap: 12,
             height: 64,
             padding: expanded ? "0 16px" : 0,
             justifyContent: expanded ? "flex-start" : "center",
             flexShrink: 0,
             width: "100%",
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            textAlign: "left",
-            font: "inherit",
-            // No `outline: none` — the UA focus ring stays as the visible
-            // keyboard-focus affordance on the Midnight rail.
+            borderRadius: 0,
           }}
         >
-          <span
-            aria-hidden="true"
-            style={{
-              flexShrink: 0,
-              width: 34,
-              height: 34,
-              borderRadius: "50%",
-              background: AVATAR_BG,
-              border: "1.5px solid rgba(232,221,196,.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: PARCHMENT,
-              fontFamily: "Merriweather, serif",
-              fontSize: 14,
-            }}
-          >
-            {avatarInitial}
-          </span>
-          {expanded && (
-            <div style={{ minWidth: 0, flex: 1, lineHeight: 1.25 }}>
-              <div
-                style={{
-                  color: BONE,
-                  fontFamily: "Inter, sans-serif",
-                  fontSize: 13,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {user ? displayName : "Sign in"}
-              </div>
-              {user && (
-                <div
-                  style={{
-                    color: MIST,
-                    fontFamily: "Inter, sans-serif",
-                    fontSize: 11,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  Account
-                </div>
-              )}
-            </div>
-          )}
-          {expanded &&
-            (menuOpen ? (
-              <ChevronsUp size={16} aria-hidden="true" style={{ color: MIST, flexShrink: 0 }} />
-            ) : (
-              <ChevronsRight size={16} aria-hidden="true" style={{ color: MIST, flexShrink: 0 }} />
-            ))}
-        </button>
-
-        {/* ACCOUNT MENU — opens upward from the foot. Rendered position:fixed
-            because the rail's overflow:hidden (needed for the width transition)
-            would clip an absolutely-positioned fly-out in the collapsed state;
-            the rail is sticky at full viewport height, so the foot's geometry
-            is deterministic. Expanded: above the foot, inside the rail width.
-            Collapsed: up-and-right past the rail's edge (72px can't hold it). */}
-        {user && menuOpen && (
-          <div
-            ref={menuRef}
-            role="menu"
-            aria-label="Account"
-            style={{
-              position: "fixed",
-              zIndex: 40,
-              ...(expanded
-                ? { left: 10, bottom: 70, width: EXPANDED_WIDTH - 20 }
-                : { left: COLLAPSED_WIDTH + 8, bottom: 12, width: 220 }),
-              background: MENU_BG,
-              border: "1px solid rgba(159,174,194,.25)",
-              borderRadius: 12,
-              boxShadow: "0 10px 28px rgba(0,0,0,.35)",
-              padding: 7,
-            }}
-          >
-            {/* Identity header — presentational, not a menuitem. */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "6px 8px 10px",
-              }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  flexShrink: 0,
-                  width: 30,
-                  height: 30,
-                  borderRadius: "50%",
-                  background: MIDNIGHT,
-                  border: "1.5px solid rgba(232,221,196,.5)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: PARCHMENT,
-                  fontFamily: "Merriweather, serif",
-                  fontSize: 12,
-                }}
-              >
-                {avatarInitial}
-              </span>
-              <div style={{ minWidth: 0, lineHeight: 1.3 }}>
-                <div
-                  style={{
-                    color: BONE,
-                    fontFamily: "Inter, sans-serif",
-                    fontSize: 13,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {displayName}
-                </div>
-                {user.email && (
+          {(menuOpen) => (
+            <>
+              {expanded && (
+                <div style={{ minWidth: 0, flex: 1, lineHeight: 1.25 }}>
                   <div
                     style={{
-                      color: MIST,
+                      color: BONE,
                       fontFamily: "Inter, sans-serif",
-                      fontSize: 11,
+                      fontSize: 13,
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                     }}
                   >
-                    {user.email}
+                    {user ? displayName : "Sign in"}
                   </div>
-                )}
-              </div>
-            </div>
-
-            <AccountMenuItem
-              ref={firstItemRef}
-              to="/account"
-              onClick={() => setMenuOpen(false)}
-            >
-              Account
-            </AccountMenuItem>
-
-            <div
-              role="separator"
-              style={{
-                height: 1,
-                background: "rgba(159,174,194,.15)",
-                margin: "5px 2px",
-              }}
-            />
-
-            <AccountMenuItem
-              onClick={async () => {
-                setMenuOpen(false);
-                await signOut();
-                navigate("/");
-              }}
-            >
-              Sign out
-            </AccountMenuItem>
-          </div>
-        )}
+                  {user && (
+                    <div
+                      style={{
+                        color: MIST,
+                        fontFamily: "Inter, sans-serif",
+                        fontSize: 11,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      Account
+                    </div>
+                  )}
+                </div>
+              )}
+              {expanded &&
+                (menuOpen ? (
+                  <ChevronsUp size={16} aria-hidden="true" style={{ color: MIST, flexShrink: 0 }} />
+                ) : (
+                  <ChevronsRight size={16} aria-hidden="true" style={{ color: MIST, flexShrink: 0 }} />
+                ))}
+            </>
+          )}
+        </AccountMenu>
       </nav>
 
       {/* CONTENT REGION — renders the wrapped route. Keeps the Bone canvas. */}
@@ -425,67 +254,6 @@ export default function AppShell() {
     </div>
   );
 }
-
-// Avatar initials. From a full name: first + last initial when it has two or
-// more words ("James Cormier" → "JC"), else the single first letter. Falls back
-// to the email's first letter, then a neutral placeholder glyph. Always upper.
-function initialsFor(fullName, email) {
-  const name = (fullName ?? "").trim();
-  if (name) {
-    const words = name.split(/\s+/);
-    const letters =
-      words.length >= 2 ? words[0][0] + words[words.length - 1][0] : words[0][0];
-    return letters.toUpperCase();
-  }
-  if (email) return email.trim().charAt(0).toUpperCase();
-  return "·";
-}
-
-// One account-menu action. Renders a router <Link> when `to` is given, else a
-// <button>. Hover and keyboard focus share the same subtle background lift
-// (inline styles can't express :hover, so it's a small state). Deliberately no
-// roving tabindex / arrow keys — Escape + click-outside + Tab is the contract.
-const AccountMenuItem = forwardRef(function AccountMenuItem(
-  { to, onClick, children },
-  ref
-) {
-  const [lit, setLit] = useState(false);
-
-  const style = {
-    display: "block",
-    width: "100%",
-    padding: "8px 10px",
-    borderRadius: 8,
-    background: lit ? MENU_ITEM_HOVER : "transparent",
-    color: BONE,
-    fontFamily: "Inter, sans-serif",
-    fontSize: 13,
-    lineHeight: 1.3,
-    textAlign: "left",
-    textDecoration: "none",
-    border: "none",
-    cursor: "pointer",
-  };
-  const handlers = {
-    onMouseEnter: () => setLit(true),
-    onMouseLeave: () => setLit(false),
-    onFocus: () => setLit(true),
-    onBlur: () => setLit(false),
-  };
-
-  if (to) {
-    return (
-      <Link ref={ref} role="menuitem" to={to} onClick={onClick} style={style} {...handlers}>
-        {children}
-      </Link>
-    );
-  }
-  return (
-    <button ref={ref} type="button" role="menuitem" onClick={onClick} style={style} {...handlers}>
-      {children}
-    </button>
-  );
-});
 
 function RailDivider() {
   return (
