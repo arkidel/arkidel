@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider.jsx";
 import RequireAuth from "./auth/RequireAuth.jsx";
+import RedirectIfAuthed from "./auth/RedirectIfAuthed.jsx";
 import { OrgProvider } from "./org/OrgProvider.jsx";
 import RequireOrg from "./org/RequireOrg.jsx";
 import Layout from "./components/Layout.jsx";
@@ -55,8 +56,17 @@ export default function App() {
             </Route>
           </Route>
           <Route element={<Layout />}>
-            {/* Public routes — open, never wrapped in RequireAuth. */}
-            <Route path="/" element={<Landing />} />
+            {/* Public routes — open, never wrapped in RequireAuth. The landing
+                page alone is inverted: a signed-in visitor is forwarded into
+                the app instead of seeing the marketing front page. */}
+            <Route
+              path="/"
+              element={
+                <RedirectIfAuthed>
+                  <Landing />
+                </RedirectIfAuthed>
+              }
+            />
             <Route path="/about" element={<About />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
