@@ -57,8 +57,10 @@ export default function App() {
           </Route>
           <Route element={<Layout />}>
             {/* Public routes — open, never wrapped in RequireAuth. The landing
-                page alone is inverted: a signed-in visitor is forwarded into
-                the app instead of seeing the marketing front page. */}
+                and sign-in pages are inverted: a signed-in visitor is forwarded
+                to /app instead of seeing the marketing front page or the
+                sign-in form. /auth/callback deliberately stays unguarded — the
+                magic-link callback must run for the sign-in flow itself. */}
             <Route
               path="/"
               element={
@@ -70,7 +72,14 @@ export default function App() {
             <Route path="/about" element={<About />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
-            <Route path="/sign-in" element={<SignIn />} />
+            <Route
+              path="/sign-in"
+              element={
+                <RedirectIfAuthed>
+                  <SignIn />
+                </RedirectIfAuthed>
+              }
+            />
           </Route>
           {/* Magic-link landing, rendered bare (no marketing chrome). */}
           <Route path="/auth/callback" element={<AuthCallback />} />
