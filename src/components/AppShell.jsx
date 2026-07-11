@@ -20,6 +20,7 @@ import { ChevronsRight, ChevronsLeft, ChevronsUp, Search } from "lucide-react";
 import ArkidelLogo from "./ArkidelLogo.jsx";
 import ArkidelGlyph from "./ArkidelGlyph.jsx";
 import AccountMenu from "./AccountMenu.jsx";
+import TopBarContext from "./TopBarContext.jsx";
 import { useAuth } from "../auth/AuthProvider.jsx";
 import { useOrg } from "../org/OrgProvider.jsx";
 
@@ -63,6 +64,11 @@ export default function AppShell() {
   // menu its lazy fetch.
   const { activeOrg } = useOrg();
 
+  // Top-bar header slot ({ eyebrow, title } or null), set by the routed page
+  // via useTopBarHeader (TopBarContext). setHeader is referentially stable, so
+  // providing it directly re-renders no consumer except on header changes.
+  const [header, setHeader] = useState(null);
+
   // Primary name line in the expanded foot: full name when set, else the
   // sign-in email. The menu's identity line derives the same way internally.
   const displayName = profile?.full_name || user?.email || "Not signed in";
@@ -79,6 +85,7 @@ export default function AppShell() {
   const railWidth = expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
 
   return (
+    <TopBarContext.Provider value={setHeader}>
     <div style={{ display: "flex", minHeight: "100vh", background: BONE }}>
       <nav
         aria-label="Modules"
@@ -249,26 +256,66 @@ export default function AppShell() {
 
       {/* CONTENT REGION — renders the wrapped route. Keeps the Bone canvas. */}
       <div style={{ flex: 1, minWidth: 0, background: BONE, display: "flex", flexDirection: "column" }}>
-        {/* Slim app top bar — same Bone background as the page (no border), so
-            it reads as a quiet strip, not a header band. A visual-only search
-            stub sits centered in the content region (no backend yet — the form
-            exists solely to swallow Enter's default submit); a Mist
-            magnifying-glass icon inside the field stands in for placeholder
-            text. Deliberately tight: minimal height and no bottom padding, so
-            the content below shifts down by the bar height only. Future shell
-            features land here. */}
+        {/* Slim app top bar — same Bone background as the page, closed by a
+            bottom hairline in the tool's section-rule color. Left: the page's
+            header slot (small-caps eyebrow over a serif title), fed by the
+            routed page through TopBarContext; empty when no page sets it.
+            Right: a visual-only search stub (no backend yet — the form exists
+            solely to swallow Enter's default submit); a Mist magnifying-glass
+            icon inside the field stands in for placeholder text. Deliberately
+            tight: the bar grows only enough to fit the two-line title block.
+            Future shell features land here. */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            padding: "8px 24px 0",
+            gap: 24,
+            // Top stays tight; the 10px bottom gives the title block air
+            // before the hairline (paired with the content margin below it).
+            padding: "8px 24px 10px",
+            borderBottom: "1px solid rgba(27,42,63,0.18)",
             flexShrink: 0,
           }}
         >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {header?.eyebrow && (
+              <div
+                style={{
+                  fontFamily: "Inter, sans-serif",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  letterSpacing: "0.18em",
+                  textTransform: "uppercase",
+                  color: MIDNIGHT,
+                  opacity: 0.7,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {header.eyebrow}
+              </div>
+            )}
+            {header?.title && (
+              <div
+                style={{
+                  fontFamily: "Merriweather, serif",
+                  fontSize: 18,
+                  fontWeight: 400,
+                  letterSpacing: "-0.01em",
+                  color: MIDNIGHT,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {header.title}
+              </div>
+            )}
+          </div>
           <form
             onSubmit={(e) => e.preventDefault()}
-            style={{ margin: 0, position: "relative", width: 420, maxWidth: "100%" }}
+            style={{ margin: 0, position: "relative", flex: "0 1 420px", minWidth: 160 }}
           >
             <Search
               size={14}
@@ -299,9 +346,15 @@ export default function AppShell() {
             />
           </form>
         </div>
-        <Outlet />
+        {/* 16px below the hairline before the routed page begins — with the
+            bar's 10px bottom padding this puts ~26px between the title text
+            and the page's first content ("On this page" index level). */}
+        <div style={{ marginTop: 16 }}>
+          <Outlet />
+        </div>
       </div>
     </div>
+    </TopBarContext.Provider>
   );
 }
 

@@ -34,6 +34,7 @@ import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine
 import { groupResultsByJurisdiction } from "./results-grouping.js";
 import { generateMemoPdf } from "./memo-pdf.js";
 import usePageTitle from "../usePageTitle.js";
+import { useTopBarHeader } from "../components/TopBarContext.jsx";
 
 // Engine inputs. Grouped so quick mode (show only these) and the cross-check
 // can reference the operative set without re-listing it inline.
@@ -316,6 +317,14 @@ export default function BreachClock() {
   const [riskLevel, setRiskLevel] = useState("");
   const [now, setNow] = useState(new Date());
   const [downloadError, setDownloadError] = useState("");
+
+  // AppShell top-bar header slot. "Draft" is static for now (a real status
+  // model comes later); the title tracks the incident reference/title field
+  // live as the user types, falling back while it's empty.
+  useTopBarHeader({
+    eyebrow: "Draft",
+    title: record.incidentTitle.trim() || "New Incident",
+  });
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
