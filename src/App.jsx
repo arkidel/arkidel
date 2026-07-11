@@ -14,6 +14,7 @@ import SignIn from "./pages/SignIn.jsx";
 import AuthCallback from "./pages/AuthCallback.jsx";
 import AppArea from "./pages/AppArea.jsx";
 import BreachClock from "./breach-clock/BreachClock.jsx";
+import Incidents from "./pages/Incidents.jsx";
 import Account from "./pages/Account.jsx";
 
 export default function App() {
@@ -39,11 +40,23 @@ export default function App() {
                 behind RequireOrg (signed in, no org -> /app, which renders the
                 existing org-onboarding gate). */}
             <Route element={<AppShell />}>
+              {/* Optional :id? — blank form and saved incident share ONE route
+                  node, so the first save's navigate(/breach-clock/<id>) only
+                  changes params and never remounts the form (which would drop
+                  the just-entered state and the "Saved" confirmation). */}
               <Route
-                path="/breach-clock"
+                path="/breach-clock/:id?"
                 element={
                   <RequireOrg>
                     <BreachClock />
+                  </RequireOrg>
+                }
+              />
+              <Route
+                path="/incidents"
+                element={
+                  <RequireOrg>
+                    <Incidents />
                   </RequireOrg>
                 }
               />

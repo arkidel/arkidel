@@ -16,7 +16,7 @@
 
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { ChevronsRight, ChevronsLeft, ChevronsUp, Search } from "lucide-react";
+import { ChevronsRight, ChevronsLeft, ChevronsUp, Files, Search } from "lucide-react";
 import ArkidelLogo from "./ArkidelLogo.jsx";
 import ArkidelGlyph from "./ArkidelGlyph.jsx";
 import AccountMenu from "./AccountMenu.jsx";
@@ -41,8 +41,12 @@ const RAIL_EXPANDED_KEY = "arkidel.shell.railExpanded";
 // Module rail entries. Respond navigates to its live route; Map is rendered as
 // a non-navigating placeholder until the Map route lands (phase 4) — `to: null`.
 // TODO(phase 4): give Map a real `to` once the Map route exists.
+// Incidents is a page, not a module — it carries a lucide `icon` instead of an
+// ArkidelGlyph `module` figure, and sits right after Respond since it lists
+// Respond's saved work product.
 const MODULES = [
   { module: "respond", label: "Respond", to: "/breach-clock" },
+  { module: "incidents", label: "Incidents", to: "/incidents", icon: Files },
   { module: "map", label: "Map", to: null },
 ];
 
@@ -146,6 +150,7 @@ export default function AppShell() {
               module={m.module}
               label={m.label}
               to={m.to}
+              icon={m.icon}
               expanded={expanded}
               active={m.to != null && location.pathname.startsWith(m.to)}
             />
@@ -374,8 +379,11 @@ function RailDivider() {
 // One module rail item. Active = brighter glyph in Bone + a Parchment edge-bar
 // at the rail's left edge; inactive = Mist glyph, no bar. Respond links; Map is
 // a non-navigating placeholder (`to == null`) rendered as a plain element so it
-// carries no href until its route exists.
-function ModuleItem({ module, label, to, expanded, active }) {
+// carries no href until its route exists. An entry with `icon` (a lucide
+// component — page entries like Incidents) renders that instead of the framed
+// ArkidelGlyph module figure, centered in the same 36px footprint so the two
+// kinds align.
+function ModuleItem({ module, label, to, icon: Icon, expanded, active }) {
   const color = active ? BONE : MIST;
 
   const inner = (
@@ -403,9 +411,15 @@ function ModuleItem({ module, label, to, expanded, active }) {
           alignItems: "center",
           justifyContent: "center",
           color,
+          width: 36,
+          height: 36,
         }}
       >
-        <ArkidelGlyph module={module} frame style={{ width: 36, height: 36 }} />
+        {Icon ? (
+          <Icon size={22} strokeWidth={1.5} />
+        ) : (
+          <ArkidelGlyph module={module} frame style={{ width: 36, height: 36 }} />
+        )}
       </span>
       {expanded ? (
         <span

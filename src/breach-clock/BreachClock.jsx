@@ -27,12 +27,15 @@
 // (footer link) after any change near the wiring.
 // =============================================================================
 
-import React, { useState, useEffect } from "react";
-import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, X, ChevronDown } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, Save, X, ChevronDown } from "lucide-react";
 import { JURISDICTIONS } from "./data.js";
 import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine.js";
 import { groupResultsByJurisdiction } from "./results-grouping.js";
 import { generateMemoPdf } from "./memo-pdf.js";
+import { createIncident, updateIncident, getIncident } from "../data/incidents.js";
+import { useOrg } from "../org/OrgProvider.jsx";
 import usePageTitle from "../usePageTitle.js";
 import { useTopBarHeader } from "../components/TopBarContext.jsx";
 
@@ -317,6 +320,146 @@ export default function BreachClock() {
   const [riskLevel, setRiskLevel] = useState("");
   const [now, setNow] = useState(new Date());
   const [downloadError, setDownloadError] = useState("");
+
+  // ── Persistence (save/load against the incidents table) ──
+  // /breach-clock (no :id) is the blank new-incident form; /breach-clock/:id
+  // loads a saved incident. Both are ONE route (optional param), so the first
+  // save's navigate() only changes params — no remount, no state loss.
+  const { id: routeIncidentId } = useParams();
+  const navigate = useNavigate();
+  const { activeOrg } = useOrg();
+  // "loading" | "ready" | "notfound" | "loaderror". Only :id starts in loading.
+  const [loadState, setLoadState] = useState(routeIncidentId ? "loading" : "ready");
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
+  const [saveError, setSaveError] = useState("");
+  // The id created by this session's first save. The load effect skips the
+  // refetch for it — the form state IS the just-saved payload already.
+  const justCreatedRef = useRef(null);
+
+  // Hydrate every form state from a saved payload. Defensive on shape: each
+  // field falls back to its blank default, jurisdiction/count maps are rebuilt
+  // over the full JURISDICTIONS key set (so a later-added jurisdiction is never
+  // missing from an older payload), and data-subject blocks get fresh local
+  // ids (the saved ids came from a previous session's counter and could
+  // collide with ones this session mints). applyPayload({}) doubles as the
+  // full form reset.
+  const applyPayload = (p) => {
+    setQuickMode(!!p.quickMode);
+    setAwareness(typeof p.awareness === "string" ? p.awareness : "");
+    setJurisdictions({
+      ...Object.fromEntries(JURISDICTIONS.map((j) => [j.id, false])),
+      ...(p.jurisdictions && typeof p.jurisdictions === "object" ? p.jurisdictions : {}),
+    });
+    setResidentCounts({
+      ...Object.fromEntries(JURISDICTIONS.filter((j) => j.residentField).map((j) => [j.id, ""])),
+      ...(p.residentCounts && typeof p.residentCounts === "object" ? p.residentCounts : {}),
+    });
+    setSensitivity(Array.isArray(p.sensitivity) ? p.sensitivity : []);
+    setEncrypted(p.encrypted || "");
+    setEncryptionStrength(p.encryptionStrength || "");
+    setRedacted(p.redacted || "");
+    setKeyAcquired(p.keyAcquired || "");
+    setReidentificationAcquired(p.reidentificationAcquired || "");
+    setGdprUnintelligibility(p.gdprUnintelligibility || "");
+    // riskLevel passes through as-is — the engine fails safe on anything
+    // outside VALID_RISK_LEVELS (routes to pending, never suppression).
+    setRiskLevel(typeof p.riskLevel === "string" ? p.riskLevel : "");
+    const savedBlocks = Array.isArray(p.record?.dataSubjectBlocks) ? p.record.dataSubjectBlocks : [];
+    setRecord({
+      ...EMPTY_RECORD,
+      ...(p.record && typeof p.record === "object" ? p.record : {}),
+      dataSubjectBlocks: savedBlocks.length
+        ? savedBlocks.map((b) => {
+            const fresh = makeBlock();
+            return { ...fresh, ...b, id: fresh.id };
+          })
+        : [makeBlock()],
+    });
+    setSubmitted(false);
+    setAttemptedSubmit(false);
+  };
+
+  // Load the routed incident (or reset to blank when the param goes away, e.g.
+  // navigating from a saved incident to "New incident").
+  useEffect(() => {
+    setSaveError("");
+    if (!routeIncidentId) {
+      justCreatedRef.current = null;
+      setSavedAt(null);
+      applyPayload({});
+      setLoadState("ready");
+      return undefined;
+    }
+    // Just created by this session's save: state is already live — no refetch.
+    if (justCreatedRef.current === routeIncidentId) return undefined;
+    let cancelled = false;
+    setLoadState("loading");
+    (async () => {
+      try {
+        const incident = await getIncident(routeIncidentId);
+        if (cancelled) return;
+        if (!incident) {
+          setLoadState("notfound");
+          return;
+        }
+        applyPayload(incident.payload || {});
+        setSavedAt(null);
+        setLoadState("ready");
+      } catch (err) {
+        console.error("Incident load failed:", err);
+        if (!cancelled) setLoadState("loaderror");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // applyPayload is re-created per render but only reads setters + constants;
+    // the load is deliberately keyed on the route param alone.
+  }, [routeIncidentId]);
+
+  // The full form state — everything applyPayload can hydrate. Inputs only;
+  // deadlines and other derived values are recomputed on load, never stored.
+  const buildPayload = () => ({
+    quickMode,
+    awareness,
+    jurisdictions,
+    residentCounts,
+    sensitivity,
+    encrypted,
+    encryptionStrength,
+    redacted,
+    keyAcquired,
+    reidentificationAcquired,
+    gdprUnintelligibility,
+    riskLevel,
+    record,
+  });
+
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const title = record.incidentTitle.trim() || "Untitled incident";
+      if (routeIncidentId) {
+        await updateIncident(routeIncidentId, { title, payload: buildPayload() });
+      } else {
+        const row = await createIncident(activeOrg?.id, title, buildPayload());
+        justCreatedRef.current = row.id;
+        // replace: back from the saved URL should not land on the blank form
+        // and create a duplicate on the next save.
+        navigate(`/breach-clock/${row.id}`, { replace: true });
+      }
+      setSavedAt(new Date());
+    } catch (err) {
+      console.error("Incident save failed:", err);
+      // The form state is untouched on failure — the user can retry.
+      setSaveError(err?.message ? `Save failed: ${err.message}` : "Save failed. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // AppShell top-bar header slot. "Draft" is static for now (a real status
   // model comes later); the title tracks the incident reference/title field
@@ -830,6 +973,52 @@ export default function BreachClock() {
               {total} cases · pure rules engine · no UI assertions
             </div>
           </footer>
+        </div>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Saved-incident load states (/breach-clock/:id only). Inline-styled — the
+  // component's <style> classes live in the main return, not here.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (loadState === "loading") {
+    return (
+      <div style={{ minHeight: "50vh", background: "#FAF8F2", color: "#2C2418", fontFamily: "'Inter', system-ui, sans-serif" }}>
+        <div
+          style={{
+            maxWidth: "560px", margin: "0 auto", padding: "80px 40px",
+            fontSize: "11px", fontWeight: 500, letterSpacing: "0.18em",
+            textTransform: "uppercase", color: "#1B2A3F", opacity: 0.6,
+          }}
+        >
+          Loading incident…
+        </div>
+      </div>
+    );
+  }
+  if (loadState === "notfound" || loadState === "loaderror") {
+    return (
+      <div style={{ minHeight: "50vh", background: "#FAF8F2", color: "#2C2418", fontFamily: "'Inter', system-ui, sans-serif" }}>
+        <div style={{ maxWidth: "560px", margin: "0 auto", padding: "80px 40px" }}>
+          <div style={{ fontFamily: "Merriweather, Georgia, serif", fontSize: "24px", fontWeight: 400, color: "#1B2A3F" }}>
+            {loadState === "notfound" ? "Incident not found" : "Couldn't load this incident"}
+          </div>
+          <p style={{ fontSize: "15px", lineHeight: 1.6, margin: "14px 0 24px" }}>
+            {loadState === "notfound"
+              ? "It may have been deleted, or it may belong to a different organization."
+              : "Something went wrong while loading it. Reload the page to try again."}
+          </p>
+          <Link
+            to="/breach-clock"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "8px",
+              color: "#1B2A3F", fontSize: "14px", fontWeight: 500, textDecoration: "none",
+              border: "1px solid #1B2A3F", borderRadius: "8px", padding: "9px 16px",
+            }}
+          >
+            <ArrowLeft size={14} /> Back to Respond
+          </Link>
         </div>
       </div>
     );
@@ -1657,6 +1846,32 @@ export default function BreachClock() {
       </div>
     ) : null;
 
+  // ── Save cluster (button + quiet "Saved · time" / visible error). Lives in
+  //    the form's top control row — right-aligned, above the fold — in both
+  //    full mode (sharing the Expand all / Collapse all row) and quick mode. ──
+  const saveControls = () => (
+    <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+      {saveError ? (
+        <span role="alert" style={{ fontSize: "13px", color: "#C76E3A", lineHeight: 1.4 }}>
+          {saveError}
+        </span>
+      ) : savedAt ? (
+        <span style={{ fontSize: "13px", color: "#1B2A3F", opacity: 0.55, whiteSpace: "nowrap" }}>
+          Saved · {savedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        className="btn-ghost"
+        onClick={handleSave}
+        disabled={saving}
+        style={{ padding: "8px 16px", fontSize: "13px" }}
+      >
+        <Save size={13} /> {saving ? "Saving…" : "Save"}
+      </button>
+    </div>
+  );
+
   // ─────────────────────────────────────────────────────────────────────────
   // Form (full or quick) — rendered in the main column.
   // ─────────────────────────────────────────────────────────────────────────
@@ -1664,6 +1879,11 @@ export default function BreachClock() {
     <>
       {quickMode ? (
         <section style={{ marginBottom: "40px" }}>
+          {/* Quick mode has no Expand/Collapse row, so Save gets its own
+              right-aligned row in the same top position. */}
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: "16px" }}>
+            {saveControls()}
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "28px" }}>
             <h2 className="serif" style={{ fontSize: "24px", fontWeight: 400, margin: 0, color: "#1B2A3F", letterSpacing: "-0.01em" }}>
               Notification Inputs
@@ -1686,12 +1906,15 @@ export default function BreachClock() {
       ) : (
         <>
           {/* Quiet, understated expand/collapse-all control above the section
-              list. Always visible (the left index only renders on wide screens),
-              so it's the reliable global control on every width. */}
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+              list, sharing its row with Save (rightmost). Always visible (the
+              left index only renders on wide screens), so it's the reliable
+              global control on every width. */}
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "10px", marginBottom: "16px", flexWrap: "wrap" }}>
             <button type="button" className="btn-link" onClick={expandAll}>Expand all</button>
             <span style={{ opacity: 0.3, color: "#1B2A3F", userSelect: "none" }}>·</span>
             <button type="button" className="btn-link" onClick={collapseAll}>Collapse all</button>
+            <span style={{ width: "10px" }} aria-hidden="true" />
+            {saveControls()}
           </div>
 
           {/* 1. General information */}
@@ -2125,7 +2348,8 @@ export default function BreachClock() {
           letter-spacing: 0.01em; cursor: pointer; border-radius: 8px;
           transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 8px;
         }
-        .btn-ghost:hover { background: #1B2A3F; color: #FAF8F2; }
+        .btn-ghost:hover:not(:disabled) { background: #1B2A3F; color: #FAF8F2; }
+        .btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
         .btn-link {
           background: transparent; border: none; padding: 4px 0; cursor: pointer;
           font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; color: #1B2A3F;

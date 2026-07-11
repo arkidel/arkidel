@@ -1,0 +1,166 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Mock the Supabase client module: the data layer is the only place that
+// imports it, so we assert it calls the right client methods without a real DB.
+const { supabaseMock } = vi.hoisted(() => ({
+  supabaseMock: {
+    from: vi.fn(),
+  },
+}));
+vi.mock("../lib/supabase.js", () => ({ supabase: supabaseMock }));
+
+import {
+  createIncident,
+  updateIncident,
+  getIncident,
+  listIncidents,
+  deleteIncident,
+} from "./incidents.js";
+
+// A chainable query-builder stub. The non-terminal methods return the builder;
+// the terminal methods (order, single, maybeSingle) resolve to a
+// PostgREST-shaped result. eq is both: it chains, but delete().eq(...) is
+// awaited directly, so it must also be thenable — resolving via the result.
+function makeQuery(result) {
+  const q = {
+    select: vi.fn(() => q),
+    insert: vi.fn(() => q),
+    update: vi.fn(() => q),
+    delete: vi.fn(() => q),
+    eq: vi.fn(() => q),
+    order: vi.fn(() => Promise.resolve(result)),
+    single: vi.fn(() => Promise.resolve(result)),
+    maybeSingle: vi.fn(() => Promise.resolve(result)),
+    then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
+  };
+  return q;
+}
+
+beforeEach(() => {
+  supabaseMock.from.mockReset();
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+describe("createIncident", () => {
+  it("inserts org_id + title + payload and returns the row", async () => {
+    const created = { id: "inc-1", org_id: "org-1", title: "T", status: "draft" };
+    const query = makeQuery({ data: created, error: null });
+    supabaseMock.from.mockReturnValue(query);
+
+    const payload = { awareness: "2026-07-01T09:00" };
+    const result = await createIncident("org-1", "T", payload);
+
+    expect(supabaseMock.from).toHaveBeenCalledWith("incidents");
+    expect(query.insert).toHaveBeenCalledWith({
+      org_id: "org-1",
+      title: "T",
+      payload,
+    });
+    expect(query.select).toHaveBeenCalled();
+    expect(query.single).toHaveBeenCalled();
+    expect(result).toEqual(created);
+  });
+
+  it("throws when no org id is supplied", async () => {
+    await expect(createIncident("", "T", {})).rejects.toThrow(/organization/i);
+    expect(supabaseMock.from).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateIncident", () => {
+  it("updates title + payload by id and returns the row", async () => {
+    const updated = { id: "inc-1", title: "New title" };
+    const query = makeQuery({ data: updated, error: null });
+    supabaseMock.from.mockReturnValue(query);
+
+    const payload = { riskLevel: "high" };
+    const result = await updateIncident("inc-1", { title: "New title", payload });
+
+    expect(supabaseMock.from).toHaveBeenCalledWith("incidents");
+    expect(query.update).toHaveBeenCalledWith({ title: "New title", payload });
+    expect(query.eq).toHaveBeenCalledWith("id", "inc-1");
+    expect(result).toEqual(updated);
+  });
+});
+
+describe("getIncident", () => {
+  it("selects by id and returns the row", async () => {
+    const row = { id: "inc-1", payload: {} };
+    const query = makeQuery({ data: row, error: null });
+    supabaseMock.from.mockReturnValue(query);
+
+    const result = await getIncident("inc-1");
+
+    expect(query.eq).toHaveBeenCalledWith("id", "inc-1");
+    expect(query.maybeSingle).toHaveBeenCalled();
+    expect(result).toEqual(row);
+  });
+
+  it("returns null (not an error) when the row is missing or foreign", async () => {
+    const query = makeQuery({ data: null, error: null });
+    supabaseMock.from.mockReturnValue(query);
+
+    await expect(getIncident("inc-nope")).resolves.toBeNull();
+  });
+
+  it("returns null for a malformed (non-uuid) id", async () => {
+    const query = makeQuery({ data: null, error: { code: "22P02", message: "invalid input syntax for type uuid" } });
+    supabaseMock.from.mockReturnValue(query);
+
+    await expect(getIncident("not-a-uuid")).resolves.toBeNull();
+  });
+
+  it("throws on other query errors", async () => {
+    const query = makeQuery({ data: null, error: { code: "500", message: "boom" } });
+    supabaseMock.from.mockReturnValue(query);
+
+    await expect(getIncident("inc-1")).rejects.toMatchObject({ message: "boom" });
+  });
+});
+
+describe("listIncidents", () => {
+  it("selects the org's incidents ordered by updated_at desc", async () => {
+    const rows = [{ id: "inc-2" }, { id: "inc-1" }];
+    const query = makeQuery({ data: rows, error: null });
+    supabaseMock.from.mockReturnValue(query);
+
+    const result = await listIncidents("org-1");
+
+    expect(supabaseMock.from).toHaveBeenCalledWith("incidents");
+    // List view reads promoted columns only — never payload.
+    expect(query.select).toHaveBeenCalledWith(expect.not.stringContaining("payload"));
+    expect(query.eq).toHaveBeenCalledWith("org_id", "org-1");
+    expect(query.order).toHaveBeenCalledWith("updated_at", { ascending: false });
+    expect(result).toEqual(rows);
+  });
+
+  it("returns an empty list when the org has no incidents", async () => {
+    const query = makeQuery({ data: [], error: null });
+    supabaseMock.from.mockReturnValue(query);
+
+    await expect(listIncidents("org-1")).resolves.toEqual([]);
+  });
+});
+
+describe("deleteIncident", () => {
+  it("deletes by id", async () => {
+    const query = makeQuery({ error: null });
+    supabaseMock.from.mockReturnValue(query);
+
+    await deleteIncident("inc-1");
+
+    expect(supabaseMock.from).toHaveBeenCalledWith("incidents");
+    expect(query.delete).toHaveBeenCalled();
+    expect(query.eq).toHaveBeenCalledWith("id", "inc-1");
+  });
+
+  it("throws when the delete errors", async () => {
+    const query = makeQuery({ error: { message: "boom" } });
+    supabaseMock.from.mockReturnValue(query);
+
+    await expect(deleteIncident("inc-1")).rejects.toMatchObject({ message: "boom" });
+  });
+});
