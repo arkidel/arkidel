@@ -488,10 +488,20 @@ export default function BreachClock() {
   const hasSensitivity = sensitivity.length > 0;
   const canCompute = hasAwareness && hasJurisdiction && hasSensitivity;
 
+  // A future-dated awareness gets its own specific message; only a truly
+  // missing/unparseable value gets the generic "provide" prompt.
+  const awarenessInFuture = !!awarenessDate && awarenessDate > now;
+
   const missingInputs = [];
-  if (!hasAwareness) missingInputs.push("the date & time of awareness");
-  if (!hasJurisdiction) missingInputs.push("at least one affected jurisdiction");
-  if (!hasSensitivity) missingInputs.push("at least one type of personal data involved");
+  if (!hasAwareness) {
+    missingInputs.push(
+      awarenessInFuture
+        ? "The date and time of awareness is in the future — check the date."
+        : "Provide the date and time of awareness."
+    );
+  }
+  if (!hasJurisdiction) missingInputs.push("Provide at least one affected jurisdiction.");
+  if (!hasSensitivity) missingInputs.push("Provide at least one type of personal data involved.");
 
   // ── Q1 ⇄ data-element cross-check ──
   const selectedTags = new Set();
@@ -1874,7 +1884,7 @@ export default function BreachClock() {
         <div role="alert" style={{ marginBottom: "20px", padding: "16px 20px", background: "#FBF5EE", borderLeft: "4px solid #C76E3A", borderRadius: "0 12px 12px 0" }}>
           <div className="section-mark" style={{ color: "#C76E3A", opacity: 1, marginBottom: "8px" }}>Before submitting</div>
           <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 8px", color: "#2C2418" }}>
-            To compute notification requirements and timing, provide:
+            To compute notification requirements and timing:
           </p>
           <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "14px", lineHeight: 1.7, color: "#2C2418" }}>
             {missingInputs.map((m) => <li key={m}>{m}</li>)}
@@ -2262,19 +2272,12 @@ export default function BreachClock() {
           </div>
         )}
       <div style={{ maxWidth: "1180px", margin: "0 auto", padding: isNarrow ? "24px 20px 40px" : "32px 40px 60px 8px" }}>
-        {/* Header */}
-        <header style={{ marginBottom: "20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "24px" }}>
-            <p style={{ margin: 0, fontFamily: "Inter, system-ui, sans-serif", fontSize: "14px", color: "#2C2418", maxWidth: "640px", lineHeight: 1.5 }}>
-              A triage tool that helps you record incident details, calculate deadlines, and produce an audit-ready memo
-            </p>
-            <span className="section-mark">Preliminary — Not Legal Advice</span>
-          </div>
-        </header>
-
-        {/* Single hairline between the masthead and the form. The
-            "incident vs. breach" note moved into the rail (renderIncidentVsBreachNote). */}
-        <div style={{ borderTop: "1px solid rgba(27,42,63,0.18)", marginBottom: "36px" }} />
+        {/* The former masthead strip (descriptor line + "PRELIMINARY — NOT
+            LEGAL ADVICE" eyebrow + hairline) was removed; the tool content now
+            starts directly under the AppShell top bar. The disclaimer function
+            lives in the footer ("Preliminary triage only") and the global
+            footer disclaimer. The "incident vs. breach" note lives in the rail
+            (renderIncidentVsBreachNote). */}
 
         {/* Two-column shell (collapses to one column on narrow screens).
             Nothing is pinned: the whole page scrolls as one. On desktop the

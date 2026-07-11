@@ -16,7 +16,7 @@
 
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { ChevronsRight, ChevronsLeft, ChevronsUp } from "lucide-react";
+import { ChevronsRight, ChevronsLeft, ChevronsUp, Search } from "lucide-react";
 import ArkidelLogo from "./ArkidelLogo.jsx";
 import ArkidelGlyph from "./ArkidelGlyph.jsx";
 import AccountMenu from "./AccountMenu.jsx";
@@ -248,7 +248,57 @@ export default function AppShell() {
       </nav>
 
       {/* CONTENT REGION — renders the wrapped route. Keeps the Bone canvas. */}
-      <div style={{ flex: 1, minWidth: 0, background: BONE }}>
+      <div style={{ flex: 1, minWidth: 0, background: BONE, display: "flex", flexDirection: "column" }}>
+        {/* Slim app top bar — same Bone background as the page (no border), so
+            it reads as a quiet strip, not a header band. A visual-only search
+            stub sits centered in the content region (no backend yet — the form
+            exists solely to swallow Enter's default submit); a Mist
+            magnifying-glass icon inside the field stands in for placeholder
+            text. Deliberately tight: minimal height and no bottom padding, so
+            the content below shifts down by the bar height only. Future shell
+            features land here. */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "8px 24px 0",
+            flexShrink: 0,
+          }}
+        >
+          <form
+            onSubmit={(e) => e.preventDefault()}
+            style={{ margin: 0, position: "relative", width: 420, maxWidth: "100%" }}
+          >
+            <Search
+              size={14}
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                left: 10,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: MIST,
+                pointerEvents: "none",
+              }}
+            />
+            <input
+              type="search"
+              aria-label="Search"
+              style={{
+                fontFamily: "Inter, sans-serif",
+                fontSize: 13,
+                color: "#2C2418",
+                background: "#FFFFFF",
+                border: "1px solid rgba(27,42,63,0.25)",
+                borderRadius: 8,
+                padding: "4px 10px 4px 32px",
+                width: "100%",
+                outline: "none",
+              }}
+            />
+          </form>
+        </div>
         <Outlet />
       </div>
     </div>
