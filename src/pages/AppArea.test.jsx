@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 
 // Control the org context: OrgProvider passes through, useOrg returns our value.
 const { mockOrg } = vi.hoisted(() => ({ mockOrg: { value: null } }));
@@ -10,7 +11,7 @@ vi.mock("../org/OrgProvider.jsx", () => ({
   useOrg: () => mockOrg.value,
 }));
 
-// Control auth (AppHome reads user/signOut).
+// Control auth (Onboarding reads user; AppHome reads profile).
 const { mockAuth } = vi.hoisted(() => ({ mockAuth: { value: null } }));
 vi.mock("../auth/AuthProvider.jsx", () => ({
   useAuth: () => mockAuth.value,
@@ -22,14 +23,30 @@ const { createOrganization } = vi.hoisted(() => ({
 }));
 vi.mock("../data/organizations.js", () => ({ createOrganization }));
 
+// Mock incidents so AppHome's recent-work list resolves without a DB call.
+const { listIncidents } = vi.hoisted(() => ({
+  listIncidents: vi.fn(),
+}));
+vi.mock("../data/incidents.js", () => ({ listIncidents }));
+
 import AppArea from "./AppArea.jsx";
+
+// AppHome renders router Links, so the gate is rendered inside a MemoryRouter.
+const renderArea = () =>
+  render(
+    <MemoryRouter>
+      <AppArea />
+    </MemoryRouter>
+  );
 
 beforeEach(() => {
   mockAuth.value = {
     user: { id: "user-1", email: "lawyer@example.com" },
+    profile: { full_name: "Jane Counsel" },
     signOut: vi.fn(),
   };
   createOrganization.mockReset().mockResolvedValue({ id: "org-1", name: "Acme" });
+  listIncidents.mockReset().mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -40,7 +57,7 @@ afterEach(() => {
 describe("AppArea gate", () => {
   it("shows a spinner while orgs are loading", () => {
     mockOrg.value = { organizations: [], activeOrg: null, loading: true, refresh: vi.fn() };
-    render(<AppArea />);
+    renderArea();
     expect(screen.getByRole("status")).toBeTruthy();
     expect(screen.queryByText(/create your organization/i)).toBeNull();
   });
@@ -56,7 +73,7 @@ describe("AppArea gate", () => {
       adoptOrganization,
     };
     const user = userEvent.setup();
-    render(<AppArea />);
+    renderArea();
 
     expect(screen.getByText(/create your organization/i)).toBeTruthy();
 
@@ -70,20 +87,58 @@ describe("AppArea gate", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("renders the app with the active org's name when one exists", () => {
+  it("renders the app home when an org exists: greeting, tool cards, recent work", async () => {
     mockOrg.value = {
       organizations: [{ id: "org-1", name: "Acme Legal" }],
       activeOrg: { id: "org-1", name: "Acme Legal" },
       loading: false,
       refresh: vi.fn(),
     };
-    render(<AppArea />);
+    listIncidents.mockResolvedValue([
+      { id: "inc-1", title: "Vendor laptop theft", status: "draft", updated_at: "2026-07-08T14:00:00Z" },
+      { id: "inc-2", title: "Phishing follow-up", status: "draft", updated_at: "2026-07-07T09:30:00Z" },
+      { id: "inc-3", title: "S3 exposure review", status: "draft", updated_at: "2026-07-06T18:15:00Z" },
+      { id: "inc-4", title: "Should not appear", status: "draft", updated_at: "2026-07-01T12:00:00Z" },
+    ]);
+    renderArea();
 
-    // Active org name shown, plus the signed-in email.
-    expect(screen.getAllByText(/acme legal/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/lawyer@example\.com/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /sign out/i })).toBeTruthy();
-    // Not onboarding.
+    // Greeting: first token of the profile full name.
+    expect(screen.getByRole("heading", { name: /welcome back, jane/i })).toBeTruthy();
+
+    // Tool cards: Respond links to the tool, Map is a non-link placeholder.
+    expect(screen.getByRole("link", { name: /respond/i }).getAttribute("href")).toBe("/breach-clock");
+    expect(screen.getByText("Map")).toBeTruthy();
+    expect(screen.getByText(/in development/i)).toBeTruthy();
+    expect(screen.getByText(/coming soon/i)).toBeTruthy();
+
+    // Recent work: the 3 newest incidents render, the 4th is sliced off.
+    expect(await screen.findByRole("link", { name: "Vendor laptop theft" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Phishing follow-up" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "S3 exposure review" })).toBeTruthy();
+    expect(screen.queryByText("Should not appear")).toBeNull();
+    expect(listIncidents).toHaveBeenCalledWith("org-1");
+
+    // View-all link into the incidents list.
+    expect(screen.getByRole("link", { name: /view all/i }).getAttribute("href")).toBe("/incidents");
+
+    // The stub's sign-out button is gone (the account menu owns that now),
+    // and this isn't onboarding.
+    expect(screen.queryByRole("button", { name: /sign out/i })).toBeNull();
     expect(screen.queryByText(/create your organization/i)).toBeNull();
+  });
+
+  it("shows the empty recent-work state when no incidents are saved", async () => {
+    mockOrg.value = {
+      organizations: [{ id: "org-1", name: "Acme Legal" }],
+      activeOrg: { id: "org-1", name: "Acme Legal" },
+      loading: false,
+      refresh: vi.fn(),
+    };
+    renderArea();
+
+    expect(await screen.findByText(/nothing saved yet/i)).toBeTruthy();
+    // "Respond" in the empty-state line links to the tool (alongside the card link).
+    const respondLinks = screen.getAllByRole("link", { name: /respond/i });
+    expect(respondLinks.every((a) => a.getAttribute("href") === "/breach-clock")).toBe(true);
   });
 });

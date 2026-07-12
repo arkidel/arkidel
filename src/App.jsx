@@ -62,9 +62,10 @@ export default function App() {
               />
               {/* Account needs a session but not an org — no RequireOrg. */}
               <Route path="/account" element={<Account />} />
-            </Route>
-            {/* /app keeps the marketing masthead/footer chrome. */}
-            <Route element={<Layout />}>
+              {/* /app renders inside the shell so the top bar can carry the
+                  org name and the rail's AccountMenu owns sign-out. AppArea
+                  keeps its own org gate (loading / onboarding / home), so no
+                  RequireOrg here. */}
               <Route path="/app" element={<AppArea />} />
             </Route>
           </Route>
