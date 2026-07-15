@@ -102,7 +102,7 @@ describe("AppArea gate", () => {
     ]);
     renderArea();
 
-    // Greeting: first token of the profile full name.
+    // Greeting: no nickname set, so the first token of the full name.
     expect(screen.getByRole("heading", { name: /welcome back, jane/i })).toBeTruthy();
 
     // Tool cards: Respond links to the tool, Map is a non-link placeholder.
@@ -125,6 +125,37 @@ describe("AppArea gate", () => {
     // and this isn't onboarding.
     expect(screen.queryByRole("button", { name: /sign out/i })).toBeNull();
     expect(screen.queryByText(/create your organization/i)).toBeNull();
+  });
+
+  it("greets with the nickname when one is set, beating the full name", async () => {
+    mockAuth.value = {
+      ...mockAuth.value,
+      profile: { full_name: "Jane Counsel", nickname: "  JC  " },
+    };
+    mockOrg.value = {
+      organizations: [{ id: "org-1", name: "Acme Legal" }],
+      activeOrg: { id: "org-1", name: "Acme Legal" },
+      loading: false,
+      refresh: vi.fn(),
+    };
+    renderArea();
+
+    // Nickname wins (trimmed); the full name's first token is not used.
+    expect(await screen.findByRole("heading", { name: "Welcome back, JC" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /welcome back, jane/i })).toBeNull();
+  });
+
+  it("greets plainly when neither nickname nor full name is set", async () => {
+    mockAuth.value = { ...mockAuth.value, profile: null };
+    mockOrg.value = {
+      organizations: [{ id: "org-1", name: "Acme Legal" }],
+      activeOrg: { id: "org-1", name: "Acme Legal" },
+      loading: false,
+      refresh: vi.fn(),
+    };
+    renderArea();
+
+    expect(await screen.findByRole("heading", { name: "Welcome back" })).toBeTruthy();
   });
 
   it("shows the empty recent-work state when no incidents are saved", async () => {

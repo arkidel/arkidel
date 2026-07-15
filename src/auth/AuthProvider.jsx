@@ -16,8 +16,9 @@ export function AuthProvider({ children }) {
   // Tracks only the initial session load, so consumers can distinguish
   // "still checking" from "checked, no session".
   const [loading, setLoading] = useState(true);
-  // The signed-in user's own profile row (full_name only — the rest of the
-  // row isn't needed in-app). Null when signed out or not yet fetched. The
+  // The signed-in user's own profile row (full_name + nickname only — the
+  // rest of the row isn't needed in-app). Null when signed out or not yet
+  // fetched. The
   // row already exists (created by the signup trigger), so the app only ever
   // selects and updates it — never inserts.
   const [profile, setProfile] = useState(null);
@@ -61,7 +62,7 @@ export function AuthProvider({ children }) {
     let active = true;
     supabase
       .from("profiles")
-      .select("full_name")
+      .select("full_name, nickname")
       .eq("id", userId)
       .maybeSingle()
       .then(({ data }) => {
@@ -81,7 +82,7 @@ export function AuthProvider({ children }) {
       .from("profiles")
       .update({ ...patch, updated_at: new Date().toISOString() })
       .eq("id", session.user.id)
-      .select("full_name")
+      .select("full_name, nickname")
       .maybeSingle();
     if (!error && data) setProfile(data);
     return { error };

@@ -123,7 +123,10 @@ export default function AppHome() {
     };
   }, [orgId]);
 
-  const firstName = profile?.full_name?.trim().split(/\s+/)[0];
+  // Greeting name: nickname wins, else the first token of the full name,
+  // else the plain greeting.
+  const firstName =
+    profile?.nickname?.trim() || profile?.full_name?.trim().split(/\s+/)[0];
   const today = new Date().toLocaleDateString([], {
     weekday: "long",
     month: "long",
