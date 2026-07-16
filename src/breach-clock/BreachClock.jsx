@@ -1468,7 +1468,7 @@ export default function BreachClock() {
                 style={{
                   fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase",
                   color: "#1B2A3F", opacity: 0.6, background: "#E8DDC4",
-                  padding: "2px 8px", borderRadius: "999px",
+                  padding: "2px 8px", borderRadius: "6px",
                 }}
               >
                 Suggested

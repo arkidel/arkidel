@@ -546,7 +546,10 @@ was "Option A" and was not chosen.)
 masthead's `<h1>` lozenge in `BreachClock.jsx` is gone. The masthead is now
 type-only — a descriptor line plus the "PRELIMINARY — NOT LEGAL ADVICE" eyebrow
 over a single hairline rule, with no title, no chip, and no module glyph. So
-`border-radius: 999px` is no longer used anywhere; do not reintroduce it. (A
+`border-radius: 999px` is no longer used anywhere; do not reintroduce it. Chips
+and badges use `border-radius: 6px` (ruled 2026-07-16). Radius scale: cards
+12px, buttons/tiles 8px, chips/badges 6px. True circles (avatar) use 50% and
+are exempt. (A
 framed module glyph beside a serif title was briefly tried and pulled — two
 framed marks, the glyph and the masthead Arkidel rune, read as duplicates;
 module identity now lives in the nav and is slated for the module switcher.) The

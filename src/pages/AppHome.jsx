@@ -214,7 +214,7 @@ export default function AppHome() {
                   opacity: 0.6,
                   background: PARCHMENT,
                   padding: "2px 8px",
-                  borderRadius: 999,
+                  borderRadius: 6,
                   whiteSpace: "nowrap",
                 }}
               >
