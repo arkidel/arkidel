@@ -817,6 +817,9 @@ typeface is intentional.
   cross-tenant RLS (both directions) and onboarding-in-shell. Reuse for
   invite-flow testing and RLS re-verification after schema changes. Its data
   must never appear in Arkidel, LLC queries — if it ever does, RLS is broken.
+- docs/account-maintenance.md is the runbook for back-end account changes and
+  deletions; follow it and append to its request log rather than improvising
+  SQL against user or org data.
 
 ---
 
