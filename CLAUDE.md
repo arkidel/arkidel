@@ -807,6 +807,13 @@ typeface is intentional.
   Do not fire a background refresh() after adopt; it reintroduces that stall.
   createOrganization takes (name, userId) from the auth context — no
   supabase.auth.getUser() round-trip.
+- Scratch test account (parked, do not delete): jacksonjcormier12@gmail.com,
+  user id caa9adba-f284-4b22-9ebf-18a16fedcbab, org "Scratch Test Org" id
+  92b7e5d7-0ac1-4606-8017-526ece131c54, contains one probe incident
+  (6efcc804-6d75-4711-9533-be57604d4ff7). Used 2026-07-16 to verify
+  cross-tenant RLS (both directions) and onboarding-in-shell. Reuse for
+  invite-flow testing and RLS re-verification after schema changes. Its data
+  must never appear in Arkidel, LLC queries — if it ever does, RLS is broken.
 
 ---
 

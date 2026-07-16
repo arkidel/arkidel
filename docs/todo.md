@@ -525,6 +525,15 @@ history share a Supabase backend and should be sequenced together.
 
 ---
 
+## Backlog — UI polish (queued 2026-07-16)
+
+- Rail shows live Respond/Incidents links to an org-less user (gated,
+  harmless, but consider dimming pre-org).
+- Home heading "Welcome back" shows for brand-new users on first visit;
+  consider a first-visit variant.
+
+---
+
 ## Deferred — revisit when membership revocation / role management lands
 
 - **Widened `organizations` SELECT policy trade-off.** The
@@ -545,6 +554,18 @@ history share a Supabase backend and should be sequenced together.
 ---
 
 ## Completed
+
+### 2026-07-16
+
+- Cross-tenant RLS verification — **done** (2026-07-16). Verified in both
+  directions via authenticated REST under each user's own session (reads bare +
+  explicitly cross-filtered, org_members, profiles, cross-tenant insert
+  rejected 42501, own-org insert OK). Policies introspected from pg_policies,
+  not assumed.
+- Onboarding-in-shell check — **done** (2026-07-16). Org-less user lands on
+  onboarding inside AppShell; top bar title slot empty-safe; AccountMenu falls
+  back to email; RequireOrg bounces /breach-clock back to /app; org creation
+  adopts in place without reload.
 
 ### 2026-06-21
 
