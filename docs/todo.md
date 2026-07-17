@@ -192,6 +192,21 @@ No item here is `[substance]`.
   and excluded here.
 - 2026-07-17 — sign-out destination is /sign-in (was specced as /); made
   deterministic by awaiting signOut before navigating.
+- 2026-07-17 — Auth roadmap (settled direction, do not re-litigate): magic
+  link stays the spine; passwords will not be added (credential-store
+  liability is disproportionate for a breach-notification vendor; "we cannot
+  leak your password because we have never held one" is part of the
+  positioning). Ladder, each rung on pull rather than speculation: (1)
+  six-digit OTP code alongside the magic link — small, adopt when
+  link-burning by corporate mail scanners (Outlook SafeLinks etc.) generates
+  friction, or preemptively; (2) Google + Microsoft OAuth sign-in — identity
+  scopes only (email, name), free on both platforms for these scopes, no
+  schema or data-layer changes; sequence AFTER arkidel.com and the privacy
+  policy since both provider consoles want the real domain and policy URL;
+  before shipping, test account linking against the parked scratch account
+  (Gmail-based, existing magic-link identity — confirms same-email OAuth
+  sign-in links rather than duplicates); (3) passkeys and SAML SSO when
+  customer pull demands them.
 
 ## Phase 5 — post-launch
 
