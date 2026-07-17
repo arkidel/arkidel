@@ -539,6 +539,14 @@ history share a Supabase backend and should be sequenced together.
 - **Standalone `/compare` (or `/vs`) page.** A dedicated competitive-
   positioning page carrying comparison copy, kept separate from About — About
   stays the brand/mission page; `/compare` carries the competitive positioning.
+- **Category-conditioned engine outputs (design pass required BEFORE
+  Connecticut)** `[substance]` (queued 2026-07-17): engine gates currently
+  read scalar inputs only; sensitivity categories cannot condition obligations
+  or notes. Needed: input-model decision (standalone SSN element vs. gov_id
+  sub-element), array-membership gate semantics, rendering for computed
+  conditional obligations. When it lands: upgrade DE § 12B-102(e)/(f) and MA
+  c. 93H § 3A standing notes to computed outputs. Identified 2026-07-17 during
+  Delaware intake (CC blocked-report; JDC ruled standing notes interim).
 
 ---
 
