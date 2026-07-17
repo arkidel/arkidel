@@ -420,6 +420,14 @@ const JURISDICTIONS = [
         citation: "M.G.L. c. 93H §§ 1, 3(b)",
         source_url: "https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93h/Section3",
       },
+      {
+        id: "ma-credit-monitoring-93h-3a",
+        placement: "sectoral",
+        title: "Credit monitoring when Social Security numbers are involved — c. 93H § 3A",
+        content: "If the breach includes Social Security numbers, Massachusetts requires the notifying person to contract with a third party to offer each affected resident credit monitoring services at no cost for not less than 18 months — not less than 42 months if the notifying person is a consumer reporting agency — with all information necessary to enroll and information on placing a security freeze. The contract may not include reciprocal agreements for services in lieu of payment, and the offer may not be conditioned on the resident waiving the right to a private action. Mass. Gen. Laws ch. 93H, § 3A.",
+        citation: "M.G.L. c. 93H § 3A",
+        source_url: "https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93H/Section3A",
+      },
     ],
   },
   {

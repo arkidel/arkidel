@@ -982,7 +982,8 @@ the model to support an `authorities[]` array on a single obligation.
   vendor and file a separate certification with AG/OCABR. This is a substantive
   remedial duty rather than a notification deadline; not currently modelled.
   Worth surfacing in a Counsel's Note when SSN is among the sensitivity
-  categories selected.
+  categories selected. *(Implemented 2026-07-17 as a standing counsel note,
+  id `ma-credit-monitoring-93h-3a`; see Sign-off.)*
 - **CRA / state-agency follow-up notification** — driven by OCABR's response
   identifying the relevant CRAs/agencies. Not deterministic from input facts;
   not modelled.
@@ -1040,7 +1041,11 @@ the model to support an `authorities[]` array on a single obligation.
 - The § 3A SSN credit-monitoring obligation is meaningful and substantive;
   consider adding a counsel note that fires when SSN is among the selected
   sensitivity categories. *(Currently not implemented; sensitivity-conditional
-  counsel notes are a future model extension.)*
+  counsel notes are a future model extension.)* *(Update 2026-07-17:
+  implemented as a **standing** note with conditional wording, id
+  `ma-credit-monitoring-93h-3a`, per JDC ruling — the sensitivity-conditional
+  upgrade rides with the category-conditioned engine work queued in
+  `docs/todo.md`; see Sign-off.)*
 - 201 CMR 17.00 is a separate, proactive, ongoing security-program requirement
   worth mentioning in the memo's Further Considerations section.
 
@@ -1088,6 +1093,21 @@ the model to support an `authorities[]` array on a single obligation.
   the harbor (unencrypted, below-128-bit, unknown/unset strength, or key acquired)
   → MA fires. No deadline, threshold, or citation changed. Build-of-record: the
   "Encryption gate build plan" addendum in `docs/todo.md`.
+- **§ 3A credit-monitoring counsel note added (2026-07-17):** c. 93H § 3A added
+  as a **standing** counsel note (id: `ma-credit-monitoring-93h-3a`, placement:
+  sectoral) with conditional wording — 18-month third-party credit-monitoring
+  offer (42 months for consumer reporting agencies) when Social Security
+  numbers are involved, with enrollment information and security-freeze
+  information; no reciprocal-agreement contracts in lieu of payment; the offer
+  may not be conditioned on waiving the right to a private action. The gap was
+  identified 2026-07-17 during the Delaware intake (§ 9), whose analogous
+  § 12B-102(e) duty surfaced it; Sections 6.6 and 6.9 had carried the note as
+  a candidate since the pilot intake, pending sensitivity-conditional notes.
+  Primary source:
+  `https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93H/Section3A`
+  (verified 2026-07-17). Reviewed and signed off: JDC, 2026-07-17. To be
+  upgraded to a computed, SSN-conditioned obligation when category-conditioned
+  engine work lands (queued in `docs/todo.md`).
 - **Reviewer:** *(pending)*
 
 ---
@@ -1839,7 +1859,7 @@ authorized engine change.)*
 - `gating: { residentThreshold, comparator }` — gates obligations on resident count, with `gt` / `gte` precision
 - `breachDefinitionExcludesEncrypted: { applies, citation, description }` — for jurisdictions whose statutory definition of "breach" excludes encrypted data with uncompromised key (per-se rule). Used by CA, TX, CO, MA.
 - Per-obligation `conditionalGates` safe-harbor gate keyed to the `gdprUnintelligibility` input (`role: "safeHarbor"`, `onSatisfied: "suppress"`, `suppressionType: "unintelligibility_exemption"`, with `citation` and `description`) — for jurisdictions where the obligation exists but is conditionally exempted when appropriate technical and organisational measures rendered the data unintelligible (judgment-based, with the supervisory authority retaining override power). Used by EU GDPR Art. 34(3)(a) and UK GDPR Art. 34(3)(a).
-- `counselNotes: [{ id, title, content, citation, source_url }]` — jurisdiction-level prose flags rendered on the results page and in the downloadable memo. Used for substantive judgments, sectoral overlays, definitional nuances, and obligations that the engine cannot model. Currently used by CA (1 note: § 1280.15 healthcare regime), MA (1 note: § 3(b) dual trigger), NY (3 notes: NYDFS sectoral overlay, HIPAA / HITECH cross-link, inadvertent-disclosure exception (§ 899-aa(2)(a))), VA (4 notes: substantive harm threshold under § 18.2-186.6, § 32.1-127.1:05 medical-information regime, § 18.2-186.6(M) employer/payroll tax-data regime, good-faith employee/agent carve-out), and DE (5 notes: § 12B-102(a) risk-of-harm exception, § 12B-101(5) notice methods / substitute notice, § 12B-102(f) email-credential notice restriction (standing), § 12B-102(e) credit monitoring (standing), § 12B-100 security duty (standing)). Pattern available for other substantive judgments and sectoral overlays.
+- `counselNotes: [{ id, title, content, citation, source_url }]` — jurisdiction-level prose flags rendered on the results page and in the downloadable memo. Used for substantive judgments, sectoral overlays, definitional nuances, and obligations that the engine cannot model. Currently used by CA (1 note: § 1280.15 healthcare regime), MA (2 notes: § 3(b) dual trigger; § 3A credit monitoring (standing, added 2026-07-17)), NY (3 notes: NYDFS sectoral overlay, HIPAA / HITECH cross-link, inadvertent-disclosure exception (§ 899-aa(2)(a))), VA (4 notes: substantive harm threshold under § 18.2-186.6, § 32.1-127.1:05 medical-information regime, § 18.2-186.6(M) employer/payroll tax-data regime, good-faith employee/agent carve-out), and DE (5 notes: § 12B-102(a) risk-of-harm exception, § 12B-101(5) notice methods / substitute notice, § 12B-102(f) email-credential notice restriction (standing), § 12B-102(e) credit monitoring (standing), § 12B-100 security duty (standing)). Pattern available for other substantive judgments and sectoral overlays.
 
 # Appendix: Model gaps (not yet hit by current jurisdictions)
 
