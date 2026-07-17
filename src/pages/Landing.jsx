@@ -183,7 +183,7 @@ export default function Landing() {
               Respond is built for that moment: it's 4:47 p.m. on a Friday. You're in compliance, or maybe in-house counsel. Your mind's already in weekend mode. An email pops up: security incident, personal data involved. Before the clock hits 5:00 p.m., you're sure you've got a personal data breach. Everyone's looking to you. What do we do? Which laws apply? How much time do we have? That's where we come in. Know your deadline before it knows you.
             </p>
             <p>
-              The rules engine ships with a public test harness — fifty-one cases covering threshold boundaries, dependent deadlines, and encryption suppression — that you can run yourself. Eight jurisdictions are modeled today: EU GDPR, UK GDPR, California, Texas, Colorado, Massachusetts, New York, and Virginia. More are on the way.
+              The rules engine ships with a public test harness — fifty-one cases covering threshold boundaries, dependent deadlines, and encryption suppression — that you can run yourself. Nine jurisdictions are modeled today: EU GDPR, UK GDPR, California, Texas, Colorado, Massachusetts, New York, Virginia, and Delaware. More are on the way.
             </p>
           </div>
           <Link

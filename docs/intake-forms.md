@@ -57,6 +57,17 @@ medical-information regime, the subsection (M) employer/payroll tax-data
 regime, and the good-faith employee/agent carve-out; IAPP chart is the
 source of truth for U.S. state rules going forward).
 
+**Delaware added** (July 17, 2026 update). Delaware (6 Del. C. ch. 12B) drafted
+through formal intake as the ninth jurisdiction — see § 9. Determination-based
+clock (§ 12B-101(2)) modelled per the TX/CO awareness-anchor convention; AG
+notification gated `gt 500` ("exceeds 500") with its timing cascaded to the
+resident-notification deadline via `deadline_relative_to` (second use of the
+cascading mechanism, after California); encryption carve-out per the
+breach-definition exclusion. The § 12B-102(e) credit-monitoring duty, the
+§ 12B-102(f) email-credential notice restriction, and the § 12B-100 security
+duty are surfaced as standing counsel notes per JDC ruling of 2026-07-17,
+pending category-conditioned engine work (queued in `docs/todo.md`).
+
 **Label reconciliation** (June 20, 2026 update). Following the prior-commit
 EU/UK §1.5 / §2.5 reconciliation, this pass reconciled the GDPR
 unintelligibility mechanism name in the preamble encryption-suppression
@@ -1552,6 +1563,260 @@ multi-authority array.
 
 ---
 
+# 9. Delaware — 6 Del. C. ch. 12B
+
+## 9.1 Identifier & display
+
+- **Internal ID:** `de`
+- **Display name:** Delaware
+- **Short form:** Delaware
+- **Statute name (subtitle):** 6 Del. C. ch. 12B (§§ 12B-100 to 12B-104)
+
+## 9.2 Resident-count input
+
+- **Required?** Yes — the AG notification depends on count (>500). The
+  individual obligation has no threshold.
+- **Label:** "Delaware residents affected"
+- **Placeholder:** "e.g. 600"
+
+## 9.3 Resident notification (§ 12B-102(a), (c))
+
+- **Required?** Yes, where personal information of a Delaware resident was
+  breached, subject to the § 12B-102(a) risk-of-harm exception (substantive
+  judgment; surfaced as counsel note `de-risk-of-harm-12b-102-a`, not modelled
+  as a gate). Covered entity: any person conducting business in Delaware that
+  owns or licenses computerized data including personal information of a
+  Delaware resident (§ 12B-102(a)); "person" is defined broadly at
+  § 12B-101(6) and includes governmental entities.
+- **Personal information (§ 12B-101(7)a):** first name or first initial and
+  last name in combination with any of: (1) Social Security number;
+  (2) driver's license number or state or federal identification card number;
+  (3) financial account number, credit card number, or debit card number, in
+  combination with any required security code, access code, or password that
+  would permit access to the account; (4) passport number; (5) username or
+  email address, in combination with a password or security question and
+  answer that would permit access to an online account; (6) medical history,
+  medical treatment by a health-care professional, diagnosis of mental or
+  physical condition by a health-care professional, or DNA profile;
+  (7) health-insurance policy number, subscriber identification number, or
+  any other unique identifier used by a health insurer; (8) unique biometric
+  data generated from measurements or analysis of human body characteristics
+  for authentication purposes; (9) individual taxpayer identification number.
+  Exclusion (§ 12B-101(7)b): publicly available information lawfully made
+  available from federal, state, or local government records or
+  widely-distributed media.
+- **Deadline:** 60 days (outer limit) — "without unreasonable delay but not
+  later than 60 days after determination of the breach of security."
+- **Trigger event:** Determination of the breach of security — a defined term
+  (§ 12B-101(2)): the point at which the person has sufficient evidence to
+  conclude that a breach of security occurred. NOT discovery. Modelled per the
+  determination-clock convention (TX/CO shape): the engine anchors all
+  deadlines to `awarenessDate`, which is at-or-before determination, so the
+  computed deadline is never later than the statute allows.
+- **Authority name:** Affected Delaware Residents
+- **Citation:** 6 Del. C. § 12B-102(c)
+- **Source URL:** `https://delcode.delaware.gov/title6/c012b/index.html`
+- **Conditional / exception language:** Without unreasonable delay but not
+  later than 60 days after determination. Exceptions: (1) if a shorter
+  notification timeframe applies under federal law, the shorter federal
+  timeframe controls; (2) delay permitted at the request of a law-enforcement
+  agency if notice would impede a criminal investigation — notice is then due
+  after the agency determines it will no longer impede the investigation;
+  (3) if affected residents cannot be identified within the 60-day period
+  despite reasonable diligence, notice is due as soon as practicable after
+  identification, unless substitute notice was provided under § 12B-101(5)d.
+
+## 9.4 Regulator notification — Delaware Attorney General (§ 12B-102(d))
+
+- **Required?** Conditional — where the number of affected Delaware residents
+  to be notified exceeds 500.
+- **Authority name:** Delaware Attorney General
+- **Threshold:** 500 (gt — "exceeds 500"). **JDC ruling (2026-07-17):**
+  rendered ">500" — the statute says "exceeds," not "500 or more."
+- **Deadline:** `deadline_relative_to: { parent_authority: "Affected Delaware
+  Residents" }` with a 0-hour offset — "not later than the time when notice is
+  provided to the resident." Second use of the cascading-deadline mechanism,
+  after California's AG obligation. The rendered basis line reads "0 days from
+  notification of Affected Delaware Residents" (an artifact of the shared
+  basis-text builder); the condition text carries the statutory phrasing.
+- **Trigger event:** Resident notification (dependent — if the resident
+  obligation does not fire, the AG obligation does not fire).
+- **Citation:** 6 Del. C. § 12B-102(d)
+- **Source URL:** `https://delcode.delaware.gov/title6/c012b/index.html`
+- **Conditional language:** Required where the number of affected Delaware
+  residents to be notified exceeds 500. Notice to the Delaware Attorney
+  General not later than the time when notice is provided to the resident.
+
+## 9.5 Encryption suppression — breach-definition exclusion
+
+- **Mechanism:** `breachDefinitionExcludesEncrypted`, expressed as
+  per-obligation `conditionalGates` safe-harbor gates (`role: "safeHarbor"`,
+  `onSatisfied: "suppress"`, `suppressionType: "breach_definition"`,
+  `defeatedBy: keyAcquired`) on both obligations.
+- **Citation:** 6 Del. C. § 12B-101(1)
+- **Description:** The breach definition covers unauthorized acquisition of
+  computerized data compromising the security, confidentiality, or integrity
+  of personal information; acquisition of encrypted data is not a breach of
+  security unless the unauthorized person also acquired, or is reasonably
+  believed to have acquired, the encryption key and there is a reasonable
+  belief that the key could render the personal information readable or
+  usable (§ 12B-101(1)b). Same per-se shape as CA, TX, CO, NY.
+- **Specific encryption standard, if any:** None — no bit-strength floor
+  (unlike Massachusetts's 128-bit requirement).
+
+## 9.6 Other obligations not modelled (handled via counsel notes or out of scope)
+
+- **Risk-of-harm exception (§ 12B-102(a))** — no notice required if, after an
+  appropriate investigation, the person reasonably determines the breach is
+  unlikely to result in harm to affected individuals. Substantive judgment,
+  not modelled as a gate. Surfaced as counsel note
+  (id: `de-risk-of-harm-12b-102-a`), following the VA harm-threshold pattern.
+- **Credit monitoring (§ 12B-102(e))** — when Social Security numbers are
+  involved: one year of credit monitoring at no cost, enrollment information,
+  and credit-freeze instructions; excused by the same risk-of-harm
+  determination as notice. Surfaced as a **standing** counsel note
+  (id: `de-credit-monitoring-12b-102-e`) with conditional wording — JDC ruling
+  2026-07-17, pending category-conditioned engine work (queued in
+  `docs/todo.md`).
+- **Email-credential notice restriction (§ 12B-102(f))** — where breached
+  credentials are for an email account furnished by the notifying person,
+  notice may not go to that email address; another § 12B-101(5) method or
+  conspicuous online notice at the resident's customary access point is
+  required. Content/method rule, not a deadline. Surfaced as a **standing**
+  counsel note (id: `de-email-credential-notice-12b-102-f`) with conditional
+  wording — same JDC ruling as above.
+- **Security duty (§ 12B-100)** — independent duty to implement and maintain
+  reasonable procedures and practices to protect personal information,
+  separate from and predating any breach. Surfaced as a standing counsel note
+  (id: `de-security-duty-12b-100`) per JDC ruling.
+- **Notice methods and substitute notice (§ 12B-101(5))** — written,
+  telephonic, or electronic (E-SIGN-consistent, or where electronic is the
+  primary means of communication with the resident); substitute notice if
+  cost > $75,000 OR affected residents > 100,000 OR insufficient contact
+  information, requiring ALL of email-where-held, conspicuous website
+  posting, and statewide media including the person's major social-media
+  platforms. Surfaced as counsel note (id: `de-notice-methods-12b-101-5`).
+- **Vendor/maintainer duty (§ 12B-102(b))** — a person maintaining
+  computerized data it does not own or license must notify and cooperate with
+  the owner or licensee immediately following determination of a breach.
+  Entity-role-dependent; not modelled (consistent with other states'
+  owner/licensee provisions).
+- **Deemed compliance (§ 12B-103)** — a person is deemed compliant if it
+  maintains its own notice procedures consistent with the chapter's timing
+  requirements, or follows the breach rules of its primary or functional
+  state or federal regulator (HIPAA and GLBA regimes named). Entity-type
+  dependent; not modelled — sectoral-exemption gating is a recorded model
+  gap (see Appendix: Model gaps).
+- **Enforcement (§ 12B-104)** — AG enforcement via the Director of Consumer
+  Protection (29 Del. C. ch. 25); action in law or equity including direct
+  economic damages; the chapter is non-exclusive and preserves existing
+  common-law and statutory rights; no new private right of action.
+  Enforcement mechanism, not a notification deadline. Out of scope,
+  consistent with existing states' enforcement capture.
+- **Good-faith employee/agent acquisition exclusion (§ 12B-101(1)a)** —
+  good-faith acquisition by an employee or agent is not a breach absent
+  unauthorized use or further unauthorized disclosure. Substantive judgment;
+  recorded here (no dedicated counsel note requested in the signed-off
+  substance; compare VA, which carries one).
+
+## 9.7 Trigger nuances
+
+- **Determination-based clock, defined term.** § 12B-101(2) defines
+  "determination of the breach of security" as the point at which the person
+  has sufficient evidence to conclude a breach occurred — later than (or equal
+  to) discovery. The engine's awareness-anchor is conservative for this shape,
+  same as TX and CO.
+- **Shorter-federal-timeframe override.** § 12B-102(c) yields to a shorter
+  federal notification timeframe where one applies to the entity.
+- **Law-enforcement delay** — on request, where notice would impede a
+  criminal investigation; notice due after clearance.
+- **Unidentifiable residents** — the 60-day limit relaxes to
+  as-soon-as-practicable-after-identification where residents cannot be
+  identified despite reasonable diligence, unless substitute notice was
+  given under § 12B-101(5)d.
+- **AG timing is dependent, not an independent clock** — "not later than the
+  time when notice is provided to the resident."
+
+## 9.8 Model fit
+
+- [x] `deadline_hours: number | null` — 60-day individual outer limit
+- [x] `deadline_relative_to: { parent_authority }` — AG cascade (second use,
+  after CA), 0-hour offset
+- [ ] `gating: { highRiskRequired }` — not applicable
+- [x] `gating: { residentThreshold, comparator }` — AG `gt 500`
+- [x] `breachDefinitionExcludesEncrypted` — per-obligation `conditionalGates`
+  suppress harbors on both obligations
+- [ ] `gdprUnintelligibility` gate — not applicable
+- [x] `counselNotes` — five notes (see 9.9)
+- **New features needed (if any):** None for the modelled rules.
+  Category-conditioned outputs (needed to compute § 12B-102(e)/(f) from the
+  SSN / credential data categories) deliberately deferred per JDC ruling —
+  design pass queued in `docs/todo.md` (2026-07-17), required before the
+  Connecticut intake.
+
+## 9.9 Counsel notes
+
+- **In-app counsel note: risk-of-harm exception.** Note id:
+  `de-risk-of-harm-12b-102-a` (placement: caveat). Flags the § 12B-102(a)
+  exception — the most consequential note for Delaware, since it can excuse
+  the modelled obligations entirely; also notes it excuses the § 12B-102(e)
+  credit-monitoring offer.
+- **In-app counsel note: notice methods and substitute notice.** Note id:
+  `de-notice-methods-12b-101-5` (placement: caveat). Records the § 12B-101(5)
+  methods and the substitute-notice gates ($75,000 / 100,000 / insufficient
+  contact information; all three substitute components required).
+- **In-app counsel note: email-credential notice restriction.** Note id:
+  `de-email-credential-notice-12b-102-f` (placement: caveat). **Standing**
+  note with conditional wording per JDC ruling 2026-07-17; to be upgraded to
+  a category-conditioned output when the engine work lands.
+- **In-app counsel note: credit monitoring.** Note id:
+  `de-credit-monitoring-12b-102-e` (placement: sectoral). **Standing** note
+  with conditional wording per JDC ruling 2026-07-17; to be upgraded to a
+  category-conditioned output when the engine work lands.
+- **In-app counsel note: § 12B-100 security duty.** Note id:
+  `de-security-duty-12b-100` (placement: sectoral). Standing note per JDC
+  ruling — flags the independent, breach-independent safeguards duty.
+
+## 9.10 Recommended test cases
+
+| Fact pattern | Expected outcome |
+|---|---|
+| 1 DE resident, identifiers | Individual fires (60d from determination-as-awareness); AG does NOT (1 not >500) |
+| 500 DE residents | Individual fires; AG does NOT (500 not >500 — gt boundary) |
+| 501 DE residents | Both fire; AG deadline equals the resident-notification deadline (0-hour cascade) |
+| Any count, encrypted, key not acquired | Both suppressed (breach-definition exclusion) |
+| Encrypted, key acquired | Both fire (harbor defeated) |
+| Missing resident count | Individual fires; AG does not (threshold-gated, no count) |
+
+*(Documentation only in this change — `engine.js` was not authorized and is
+untouched; adding these as executable engine tests rides with the next
+authorized engine change.)*
+
+## 9.11 Sign-off
+
+- **Rules verification:** Drafted through formal intake on 2026-07-17, with
+  primary-source verification of 6 Del. C. §§ 12B-100 to 12B-104 via the
+  Delaware Code online (chapter current through 81 Del. Laws, c. 425).
+- **IAPP chart consistency:** Cross-checked against the IAPP US State Breach
+  Notification Chart (version: February 2026 update) on 2026-07-17.
+  **Status: fully consistent** on all overlapping points — statute,
+  determination trigger, 60-day individual outer limit, AG threshold
+  ("exceeds 500") and resident-notice-tied timing, and encryption treatment.
+- **Sources confirmed via web search:** 6 Del. C. ch. 12B at
+  `https://delcode.delaware.gov/title6/c012b/index.html` (verified
+  2026-07-17; current through 81 Del. Laws, c. 425).
+- **Sources confirmed via project knowledge base:** IAPP US State Breach
+  Notification Chart, February 2026 update.
+- **Material change since prior draft:** First draft.
+- **Rulings (JDC, 2026-07-17):** AG threshold rendered ">500" (statute says
+  "exceeds," not "500 or more"); §§ 12B-102(e)/(f) implemented as standing
+  conditional counsel notes pending category-conditioned engine work (queued
+  in `docs/todo.md`); § 12B-100 security duty surfaced as a standing note.
+- **Reviewer:** JDC, 2026-07-17 (substance reviewed and signed off; see
+  Rulings line).
+
+---
+
 # Appendix: Cross-jurisdiction summary
 
 | Jurisdiction | Resident clock | Regulator clock | Threshold | Encryption suppression mechanism |
@@ -1564,16 +1829,17 @@ multi-authority array.
 | Massachusetts | No clock | No clock (AG + OCABR) | None | Breach-definition exclusion |
 | New York | 30 days from discovery | No clock (AG + Dept of State + State Police); no clock for CRA | None for AG/DOS/State Police; >5,000 (gt) for CRA | Breach-definition exclusion |
 | Virginia | No clock | No clock (AG); no clock for CRA | None for AG; >1,000 (gt) for CRA | Breach-definition exclusion |
+| Delaware | 60 days from determination | Not later than resident notice (cascaded, AG) | >500 (gt) for AG | Breach-definition exclusion |
 
 # Appendix: Model features used
 
 - `deadline_hours: number | null` — fixed-clock or unfixed-clock deadlines
-- `deadline_relative_to: { parent_authority }` — cascading deadlines (CA only so far)
+- `deadline_relative_to: { parent_authority }` — cascading deadlines (CA; DE as of 2026-07-17, with a 0-hour offset)
 - `gating: { highRiskRequired }` — gates obligations on sensitivity categories
 - `gating: { residentThreshold, comparator }` — gates obligations on resident count, with `gt` / `gte` precision
 - `breachDefinitionExcludesEncrypted: { applies, citation, description }` — for jurisdictions whose statutory definition of "breach" excludes encrypted data with uncompromised key (per-se rule). Used by CA, TX, CO, MA.
 - Per-obligation `conditionalGates` safe-harbor gate keyed to the `gdprUnintelligibility` input (`role: "safeHarbor"`, `onSatisfied: "suppress"`, `suppressionType: "unintelligibility_exemption"`, with `citation` and `description`) — for jurisdictions where the obligation exists but is conditionally exempted when appropriate technical and organisational measures rendered the data unintelligible (judgment-based, with the supervisory authority retaining override power). Used by EU GDPR Art. 34(3)(a) and UK GDPR Art. 34(3)(a).
-- `counselNotes: [{ id, title, content, citation, source_url }]` — jurisdiction-level prose flags rendered on the results page and in the downloadable memo. Used for substantive judgments, sectoral overlays, definitional nuances, and obligations that the engine cannot model. Currently used by CA (1 note: § 1280.15 healthcare regime), MA (1 note: § 3(b) dual trigger), NY (3 notes: NYDFS sectoral overlay, HIPAA / HITECH cross-link, inadvertent-disclosure exception (§ 899-aa(2)(a))), and VA (4 notes: substantive harm threshold under § 18.2-186.6, § 32.1-127.1:05 medical-information regime, § 18.2-186.6(M) employer/payroll tax-data regime, good-faith employee/agent carve-out). Pattern available for other substantive judgments and sectoral overlays.
+- `counselNotes: [{ id, title, content, citation, source_url }]` — jurisdiction-level prose flags rendered on the results page and in the downloadable memo. Used for substantive judgments, sectoral overlays, definitional nuances, and obligations that the engine cannot model. Currently used by CA (1 note: § 1280.15 healthcare regime), MA (1 note: § 3(b) dual trigger), NY (3 notes: NYDFS sectoral overlay, HIPAA / HITECH cross-link, inadvertent-disclosure exception (§ 899-aa(2)(a))), VA (4 notes: substantive harm threshold under § 18.2-186.6, § 32.1-127.1:05 medical-information regime, § 18.2-186.6(M) employer/payroll tax-data regime, good-faith employee/agent carve-out), and DE (5 notes: § 12B-102(a) risk-of-harm exception, § 12B-101(5) notice methods / substitute notice, § 12B-102(f) email-credential notice restriction (standing), § 12B-102(e) credit monitoring (standing), § 12B-100 security duty (standing)). Pattern available for other substantive judgments and sectoral overlays.
 
 # Appendix: Model gaps (not yet hit by current jurisdictions)
 
