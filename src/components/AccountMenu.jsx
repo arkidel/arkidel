@@ -265,8 +265,13 @@ export default function AccountMenu({ size = 34, displayName, orgName, triggerSt
               <AccountMenuItem
                 onClick={async () => {
                   setOpen(false);
+                  // Await the session clear before navigating: /sign-in
+                  // forwards signed-in users to /app, so navigating while the
+                  // session is still live would bounce through /app first
+                  // (ruled 2026-07-17: sign-out lands on /sign-in,
+                  // deterministically).
                   await signOut();
-                  navigate("/");
+                  navigate("/sign-in");
                 }}
               >
                 Sign out

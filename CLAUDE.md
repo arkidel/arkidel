@@ -820,6 +820,11 @@ typeface is intentional.
 - docs/account-maintenance.md is the runbook for back-end account changes and
   deletions; follow it and append to its request log rather than improvising
   SQL against user or org data.
+- Account-menu sign-out awaits signOut() completion, then navigates to
+  /sign-in (ruled 2026-07-17). The old navigate('/') raced the signed-in
+  forwarding and ended on /sign-in anyway via double redirect; awaiting the
+  session clear first makes the destination deterministic. Do not navigate
+  before the signOut promise resolves.
 
 ---
 

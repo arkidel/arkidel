@@ -166,7 +166,7 @@ Cross-surface re-read:
 ### Phase 4 — recorded design decisions
 
 Settled directions captured so future sessions don't re-open them.
-Neither item is `[substance]`.
+No item here is `[substance]`.
 
 - Landing-page hero direction — decided. The hero will use a "rune at
   scale" backdrop: the Arkidel rune-glyph enlarged and bled off one edge
@@ -190,6 +190,8 @@ Neither item is `[substance]`.
   Bone working canvas by design. If a future session is tempted to add
   the motif to the Breach Clock UI, the answer is no — it was considered
   and excluded here.
+- 2026-07-17 — sign-out destination is /sign-in (was specced as /); made
+  deterministic by awaiting signOut before navigating.
 
 ## Phase 5 — post-launch
 
