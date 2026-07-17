@@ -6,14 +6,14 @@
 // and returns focus to the trigger; click-outside closes; first item focused
 // on open; Tab is the only traversal). Signed out: a single Sign in link.
 //
-// Session state is read directly from the Supabase client (getSession on
-// mount + an onAuthStateChange subscription, unsubscribed on unmount) so the
-// component works standalone on pages with no OrgProvider — it deliberately
-// depends on neither OrgProvider nor useAuth. The identity block shows the
-// profile full name (email only as a fallback) over the org name. Both prefer
-// caller props (the rail passes what it already holds); whatever isn't passed
-// is fetched lazily on first menu open — profile via the client, org via the
-// data layer — and cached per user id, so re-opens never refetch.
+// Session state is read via the provider-independent auth/session helpers
+// (getSession on mount + an onAuthStateChange subscription, unsubscribed on
+// unmount) so the component works standalone on pages with no OrgProvider — it
+// deliberately depends on neither OrgProvider nor useAuth. The identity block
+// shows the profile full name (email only as a fallback) over the org name.
+// Both prefer caller props (the rail passes what it already holds); whatever
+// isn't passed is fetched lazily on first menu open through the data layer —
+// and cached per user id, so re-opens never refetch.
 //
 // The popover self-places off the trigger's viewport position: upward when
 // the trigger sits in the lower half (rail foot), downward otherwise (header),
@@ -21,8 +21,9 @@
 
 import { forwardRef, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabase.js";
+import { getSession, onAuthStateChange, signOut } from "../auth/session.js";
 import { getMyOrganizations } from "../data/organizations.js";
+import { getProfile } from "../data/profiles.js";
 import AvatarCircle from "./AvatarCircle.jsx";
 
 // Brand palette (named tokens from CLAUDE.md), matching the rail's inline
@@ -55,12 +56,12 @@ export default function AccountMenu({ size = 34, displayName, orgName, triggerSt
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getSession().then(({ data }) => {
+    getSession().then(({ data }) => {
       if (active) setSession(data.session ?? null);
     });
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = onAuthStateChange((_event, nextSession) => {
       if (active) setSession(nextSession ?? null);
     });
     return () => {
@@ -81,10 +82,10 @@ export default function AccountMenu({ size = 34, displayName, orgName, triggerSt
   // the cache above.
   async function loadIdentity(u) {
     setIdentity({ userId: u.id, name: null, orgName: null });
-    const [profileRes, orgs] = await Promise.all([
+    const [profile, orgs] = await Promise.all([
       displayName
         ? Promise.resolve(null)
-        : supabase.from("profiles").select("full_name").eq("id", u.id).maybeSingle(),
+        : getProfile(u.id).catch(() => null),
       orgName ? Promise.resolve([]) : getMyOrganizations().catch(() => []),
     ]);
     setIdentity((prev) =>
@@ -92,7 +93,7 @@ export default function AccountMenu({ size = 34, displayName, orgName, triggerSt
       prev.userId === u.id
         ? {
             userId: u.id,
-            name: profileRes?.data?.full_name ?? null,
+            name: profile?.full_name ?? null,
             orgName: orgs[0]?.name ?? null,
           }
         : prev
@@ -264,7 +265,7 @@ export default function AccountMenu({ size = 34, displayName, orgName, triggerSt
               <AccountMenuItem
                 onClick={async () => {
                   setOpen(false);
-                  await supabase.auth.signOut();
+                  await signOut();
                   navigate("/");
                 }}
               >
