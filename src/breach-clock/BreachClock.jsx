@@ -609,7 +609,7 @@ export default function BreachClock() {
     parts.push(`${hours.toString().padStart(2, "0")}h`);
     parts.push(`${mins.toString().padStart(2, "0")}m`);
     parts.push(`${secs.toString().padStart(2, "0")}s`);
-    return (neg ? "−" : "") + parts.join(" ");
+    return parts.join(" ") + (neg ? " overdue" : "");
   };
 
   // ── Deadlines — same pure engine the test harness calls ──
@@ -1581,7 +1581,9 @@ export default function BreachClock() {
                   <div className="section-mark" style={{ marginBottom: "6px" }}>
                     {isMissed ? "Overdue by" : "Time remaining"}
                   </div>
-                  <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em" }}>
+                  {/* Overdue countdown renders in Ember; the inline color deliberately
+                      overrides the .deadline-card.missed .mono Bone rule. */}
+                  <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em", ...(isMissed ? { color: "#C76E3A" } : {}) }}>
                     {formatDuration(timeRemaining)}
                   </div>
                   <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "6px" }}>
