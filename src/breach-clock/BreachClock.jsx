@@ -36,6 +36,7 @@ import { groupResultsByJurisdiction } from "./results-grouping.js";
 import { generateMemoPdf } from "./memo-pdf.js";
 import { createIncident, updateIncident, getIncident } from "../data/incidents.js";
 import { useOrg } from "../org/OrgProvider.jsx";
+import ArkidelCaret from "../components/ArkidelCaret.jsx";
 import usePageTitle from "../usePageTitle.js";
 import { useTopBarHeader } from "../components/TopBarContext.jsx";
 
@@ -279,6 +280,17 @@ export default function BreachClock() {
   const [showTests, setShowTests] = useState(false);
   const [quickMode, setQuickMode] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  // Caveat-note disclosure state (results page). Collapsed by default; reset
+  // on every submit so a fresh results render always starts collapsed. Keyed
+  // by note id. Caveat placement only — sectoral notes are never collapsible.
+  const [expandedCaveats, setExpandedCaveats] = useState(() => new Set());
+  const toggleCaveat = (id) =>
+    setExpandedCaveats((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false);
   const [isWide, setIsWide] = useState(false);
@@ -800,6 +812,7 @@ export default function BreachClock() {
       scrollToSection(firstId);
       return;
     }
+    setExpandedCaveats(new Set());
     setSubmitted(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -1678,7 +1691,7 @@ export default function BreachClock() {
     // clearance on the edge a card laps (16 lap − 8) so the text margin there
     // matches the panel's other edges. Cards overhang the panel ~10px each side,
     // so the panel is inset 10px left/right.
-    const renderParchmentPanel = ({ key, notes, eyebrow, perNoteLead, lapEdge, marginTop, zIndex = 0 }) => (
+    const renderParchmentPanel = ({ key, notes, eyebrow, perNoteLead, lapEdge, marginTop, zIndex = 0, collapsible = false }) => (
       <div
         key={key}
         style={{
@@ -1695,38 +1708,73 @@ export default function BreachClock() {
           zIndex,
         }}
       >
-        {notes.map(({ jurShort, note }, i) => (
-          <div
-            key={note.id}
-            style={{ padding: "12px 17px", borderTop: i > 0 ? "1px solid rgba(176,160,122,0.5)" : undefined }}
-          >
-            {(perNoteLead || (i === 0 && eyebrow)) && (
-              <div
-                className="mono"
-                style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#9b8e6c", marginBottom: "8px" }}
-              >
-                {perNoteLead || eyebrow}
-              </div>
-            )}
-            <div className="serif" style={{ fontSize: "17px", fontWeight: 400, lineHeight: 1.3, marginBottom: "8px", letterSpacing: "-0.005em", color: "#2C2418" }}>
+        {notes.map(({ jurShort, note }, i) => {
+          // Collapsible (caveat placement only): the whole title row is a
+          // disclosure <button> with a brand-derived caret; body + citation
+          // render only when expanded. Non-collapsible panels are unchanged.
+          const isExpanded = !collapsible || expandedCaveats.has(note.id);
+          const titleText = (
+            <span className="serif" style={{ fontSize: "17px", fontWeight: 400, lineHeight: 1.3, letterSpacing: "-0.005em", color: "#2C2418" }}>
               {note.title}
+            </span>
+          );
+          return (
+            <div
+              key={note.id}
+              style={{ padding: "12px 17px", borderTop: i > 0 ? "1px solid rgba(176,160,122,0.5)" : undefined }}
+            >
+              {(perNoteLead || (i === 0 && eyebrow)) && (
+                <div
+                  className="mono"
+                  style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.06em", color: "#9b8e6c", marginBottom: "8px" }}
+                >
+                  {perNoteLead || eyebrow}
+                </div>
+              )}
+              {collapsible ? (
+                <button
+                  type="button"
+                  aria-expanded={isExpanded}
+                  onClick={() => toggleCaveat(note.id)}
+                  style={{
+                    display: "flex", alignItems: "baseline", gap: "10px", width: "100%",
+                    background: "none", border: "none", padding: 0, margin: 0,
+                    textAlign: "left", cursor: "pointer", font: "inherit",
+                    marginBottom: isExpanded ? "8px" : 0,
+                  }}
+                >
+                  <ArkidelCaret
+                    style={{
+                      width: "13px", height: "12px", flexShrink: 0, color: "#C76E3A",
+                      transform: isExpanded ? "rotate(90deg)" : "none",
+                    }}
+                  />
+                  {titleText}
+                </button>
+              ) : (
+                <div style={{ marginBottom: "8px" }}>{titleText}</div>
+              )}
+              {isExpanded && (
+                <>
+                  <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 8px", color: "#2C2418" }}>{note.content}</p>
+                  {note.citation && (
+                    <div className="mono" style={{ fontSize: "11px", opacity: 0.7, color: "#2C2418" }}>
+                      {note.citation}
+                      {note.source_url && (
+                        <>
+                          {" — "}
+                          <a href={note.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "#2C2418", textDecoration: "underline" }}>
+                            primary source
+                          </a>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-            <p style={{ fontSize: "14px", lineHeight: 1.6, margin: "0 0 8px", color: "#2C2418" }}>{note.content}</p>
-            {note.citation && (
-              <div className="mono" style={{ fontSize: "11px", opacity: 0.7, color: "#2C2418" }}>
-                {note.citation}
-                {note.source_url && (
-                  <>
-                    {" — "}
-                    <a href={note.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "#2C2418", textDecoration: "underline" }}>
-                      primary source
-                    </a>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
 
@@ -1740,7 +1788,7 @@ export default function BreachClock() {
       const out = [];
       const hasCaveat = block.caveatNotes.length > 0;
       if (hasCaveat) {
-        out.push(renderParchmentPanel({ key: "caveat", notes: block.caveatNotes, eyebrow: "Pre-Notification Considerations", lapEdge: "bottom", marginTop: 16 }));
+        out.push(renderParchmentPanel({ key: "caveat", notes: block.caveatNotes, eyebrow: "Pre-Notification Considerations", lapEdge: "bottom", marginTop: 16, collapsible: true }));
       }
       block.obligations.forEach((ob, idx) => {
         const first = idx === 0;
