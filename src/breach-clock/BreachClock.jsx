@@ -1578,9 +1578,13 @@ export default function BreachClock() {
             <div style={{ textAlign: "right", minWidth: "200px" }}>
               {d.deadline ? (
                 <>
-                  <div className="section-mark" style={{ marginBottom: "6px" }}>
-                    {isMissed ? "Overdue by" : "Time remaining"}
-                  </div>
+                  {/* Missed cards carry no section-mark: the Ember "…overdue"
+                      countdown is the whole overdue statement (ruled 2026-07-18). */}
+                  {!isMissed && (
+                    <div className="section-mark" style={{ marginBottom: "6px" }}>
+                      Time remaining
+                    </div>
+                  )}
                   {/* Overdue countdown renders in Ember; the inline color deliberately
                       overrides the .deadline-card.missed .mono Bone rule. */}
                   <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em", ...(isMissed ? { color: "#C76E3A" } : {}) }}>
