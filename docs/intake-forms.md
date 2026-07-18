@@ -1735,9 +1735,10 @@ multi-authority array.
   consistent with existing states' enforcement capture.
 - **Good-faith employee/agent acquisition exclusion (§ 12B-101(1)a)** —
   good-faith acquisition by an employee or agent is not a breach absent
-  unauthorized use or further unauthorized disclosure. Substantive judgment;
-  recorded here (no dedicated counsel note requested in the signed-off
-  substance; compare VA, which carries one).
+  unauthorized use or further unauthorized disclosure. Substantive judgment.
+  Surfaced as counsel note (id: `de-good-faith-12b-101-1a`), added 2026-07-17
+  per JDC ruling for parity with VA's treatment of the identical carve-out
+  (`va-good-faith-employee-agent-carve-out`).
 
 ## 9.7 Trigger nuances
 
@@ -1796,6 +1797,11 @@ multi-authority array.
 - **In-app counsel note: § 12B-100 security duty.** Note id:
   `de-security-duty-12b-100` (placement: sectoral). Standing note per JDC
   ruling — flags the independent, breach-independent safeguards duty.
+- **In-app counsel note: good-faith employee/agent carve-out.** Note id:
+  `de-good-faith-12b-101-1a` (placement: caveat, matching VA's
+  `va-good-faith-employee-agent-carve-out`). Flags the § 12B-101(1)a
+  exclusion for good-faith internal acquisition — a fact-specific judgment
+  the engine does not gate on. Added 2026-07-17 per JDC ruling for VA parity.
 
 ## 9.10 Recommended test cases
 
@@ -1831,7 +1837,9 @@ authorized engine change.)*
 - **Rulings (JDC, 2026-07-17):** AG threshold rendered ">500" (statute says
   "exceeds," not "500 or more"); §§ 12B-102(e)/(f) implemented as standing
   conditional counsel notes pending category-conditioned engine work (queued
-  in `docs/todo.md`); § 12B-100 security duty surfaced as a standing note.
+  in `docs/todo.md`); § 12B-100 security duty surfaced as a standing note;
+  good-faith carve-out surfaced as counsel note for VA parity (ruled
+  2026-07-17).
 - **Reviewer:** JDC, 2026-07-17 (substance reviewed and signed off; see
   Rulings line).
 
@@ -1859,7 +1867,7 @@ authorized engine change.)*
 - `gating: { residentThreshold, comparator }` — gates obligations on resident count, with `gt` / `gte` precision
 - `breachDefinitionExcludesEncrypted: { applies, citation, description }` — for jurisdictions whose statutory definition of "breach" excludes encrypted data with uncompromised key (per-se rule). Used by CA, TX, CO, MA.
 - Per-obligation `conditionalGates` safe-harbor gate keyed to the `gdprUnintelligibility` input (`role: "safeHarbor"`, `onSatisfied: "suppress"`, `suppressionType: "unintelligibility_exemption"`, with `citation` and `description`) — for jurisdictions where the obligation exists but is conditionally exempted when appropriate technical and organisational measures rendered the data unintelligible (judgment-based, with the supervisory authority retaining override power). Used by EU GDPR Art. 34(3)(a) and UK GDPR Art. 34(3)(a).
-- `counselNotes: [{ id, title, content, citation, source_url }]` — jurisdiction-level prose flags rendered on the results page and in the downloadable memo. Used for substantive judgments, sectoral overlays, definitional nuances, and obligations that the engine cannot model. Currently used by CA (1 note: § 1280.15 healthcare regime), MA (2 notes: § 3(b) dual trigger; § 3A credit monitoring (standing, added 2026-07-17)), NY (3 notes: NYDFS sectoral overlay, HIPAA / HITECH cross-link, inadvertent-disclosure exception (§ 899-aa(2)(a))), VA (4 notes: substantive harm threshold under § 18.2-186.6, § 32.1-127.1:05 medical-information regime, § 18.2-186.6(M) employer/payroll tax-data regime, good-faith employee/agent carve-out), and DE (5 notes: § 12B-102(a) risk-of-harm exception, § 12B-101(5) notice methods / substitute notice, § 12B-102(f) email-credential notice restriction (standing), § 12B-102(e) credit monitoring (standing), § 12B-100 security duty (standing)). Pattern available for other substantive judgments and sectoral overlays.
+- `counselNotes: [{ id, title, content, citation, source_url }]` — jurisdiction-level prose flags rendered on the results page and in the downloadable memo. Used for substantive judgments, sectoral overlays, definitional nuances, and obligations that the engine cannot model. Currently used by CA (1 note: § 1280.15 healthcare regime), MA (2 notes: § 3(b) dual trigger; § 3A credit monitoring (standing, added 2026-07-17)), NY (3 notes: NYDFS sectoral overlay, HIPAA / HITECH cross-link, inadvertent-disclosure exception (§ 899-aa(2)(a))), VA (4 notes: substantive harm threshold under § 18.2-186.6, § 32.1-127.1:05 medical-information regime, § 18.2-186.6(M) employer/payroll tax-data regime, good-faith employee/agent carve-out), and DE (6 notes: § 12B-102(a) risk-of-harm exception, § 12B-101(5) notice methods / substitute notice, § 12B-102(f) email-credential notice restriction (standing), § 12B-102(e) credit monitoring (standing), § 12B-100 security duty (standing), § 12B-101(1)a good-faith employee/agent carve-out (added 2026-07-17 for VA parity)). Pattern available for other substantive judgments and sectoral overlays.
 
 # Appendix: Model gaps (not yet hit by current jurisdictions)
 

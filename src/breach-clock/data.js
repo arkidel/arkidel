@@ -819,6 +819,14 @@ const JURISDICTIONS = [
         citation: "6 Del. C. § 12B-100",
         source_url: "https://delcode.delaware.gov/title6/c012b/index.html",
       },
+      {
+        id: "de-good-faith-12b-101-1a",
+        placement: "caveat",
+        title: "Good-faith employee/agent acquisition — § 12B-101(1)a",
+        content: "Good-faith acquisition of personal information by an employee or agent of the notifying entity for the purposes of the entity's business is not a breach of security, provided the personal information is not used for an unauthorized purpose or subject to further unauthorized disclosure. 6 Del. C. § 12B-101(1)a. Whether an insider's acquisition was in good faith and within business purposes is a fact-specific judgment; document the basis for that conclusion contemporaneously.",
+        citation: "6 Del. C. § 12B-101(1)a",
+        source_url: "https://delcode.delaware.gov/title6/c012b/index.html",
+      },
     ],
   },
 ];
