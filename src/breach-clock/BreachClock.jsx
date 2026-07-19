@@ -459,7 +459,7 @@ export default function BreachClock() {
     setSaving(true);
     setSaveError("");
     try {
-      const title = record.incidentTitle.trim() || "Untitled incident";
+      const title = record.incidentTitle.trim() || "Untitled Incident";
       if (routeIncidentId) {
         await updateIncident(routeIncidentId, { title, payload: buildPayload() });
       } else {
@@ -484,7 +484,7 @@ export default function BreachClock() {
   // live as the user types, falling back while it's empty.
   useTopBarHeader({
     eyebrow: "Draft",
-    title: record.incidentTitle.trim() || "New Incident",
+    title: record.incidentTitle.trim() || "Untitled Incident",
   });
 
   useEffect(() => {
