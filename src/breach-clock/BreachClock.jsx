@@ -27,7 +27,7 @@
 // (footer link) after any change near the wiring.
 // =============================================================================
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, Save, X, ChevronDown } from "lucide-react";
 import { JURISDICTIONS } from "./data.js";
@@ -342,6 +342,11 @@ export default function BreachClock() {
   const { activeOrg } = useOrg();
   // "loading" | "ready" | "notfound" | "loaderror". Only :id starts in loading.
   const [loadState, setLoadState] = useState(routeIncidentId ? "loading" : "ready");
+  // Saved incidents open at results: set in the SAME state batch as a genuine
+  // rehydrate (applyPayload), so the effect that consumes it runs against the
+  // fully hydrated state — rehydrate completion, not a timer. Never set for
+  // the blank form or the just-created-save early-return.
+  const [autoComputePending, setAutoComputePending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [saveError, setSaveError] = useState("");
@@ -417,6 +422,7 @@ export default function BreachClock() {
         }
         applyPayload(incident.payload || {});
         setSavedAt(null);
+        setAutoComputePending(true);
         setLoadState("ready");
       } catch (err) {
         console.error("Incident load failed:", err);
@@ -651,6 +657,24 @@ export default function BreachClock() {
   const hasJurisdiction = anyJurisdiction;
   const hasSensitivity = sensitivity.length > 0;
   const canCompute = hasAwareness && hasJurisdiction && hasSensitivity;
+
+  // Saved incidents open at results. Runs on the render AFTER a genuine
+  // rehydrate (the flag lands in the same batch as applyPayload's setters),
+  // so canCompute here is derived from the fully hydrated answers — the
+  // silent equivalent of pressing Submit. Valid → results, exactly as if
+  // submitted (same collapsed-caveat reset as handleSubmit). Invalid → stay
+  // on the form and show NO validation errors: attemptedSubmit is left
+  // untouched, so errors appear only when the user submits themselves.
+  // useLayoutEffect so the flip to results happens before paint — no
+  // one-frame flash of the form on the way to the results view.
+  useLayoutEffect(() => {
+    if (!autoComputePending) return;
+    setAutoComputePending(false);
+    if (canCompute) {
+      setExpandedCaveats(new Set());
+      setSubmitted(true);
+    }
+  }, [autoComputePending, canCompute]);
 
   // A future-dated awareness gets its own specific message; only a truly
   // missing/unparseable value gets the generic "provide" prompt.
@@ -1703,7 +1727,13 @@ export default function BreachClock() {
           marginRight: "10px",
           marginTop: typeof marginTop === "number" ? `${marginTop}px` : marginTop,
           paddingTop: lapEdge === "top" ? "8px" : undefined,
-          paddingBottom: lapEdge === "bottom" ? "8px" : undefined,
+          // Collapsible (caveat) panels: with note bodies hidden, the last
+          // title row needs the same visible space below it as the 12px above
+          // the eyebrow (the notes' own padding token). The following card
+          // laps 16px over the panel bottom, so symmetric visible space means
+          // padding equal to the full lap: 12 (note pad) + 16 − 16 (lap) = 12.
+          // Non-collapsible lapped panels keep the original 8px clearance.
+          paddingBottom: lapEdge === "bottom" ? (collapsible ? "16px" : "8px") : undefined,
           position: "relative",
           zIndex,
         }}
