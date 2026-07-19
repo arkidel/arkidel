@@ -539,6 +539,8 @@ history share a Supabase backend and should be sequenced together.
 - **Standalone `/compare` (or `/vs`) page.** A dedicated competitive-
   positioning page carrying comparison copy, kept separate from About — About
   stays the brand/mission page; `/compare` carries the competitive positioning.
+- **Top-bar search stub's designated job:** filtering the Respond incidents
+  list (recorded 2026-07-19; not yet built).
 - **Category-conditioned engine outputs (design pass required BEFORE
   Connecticut)** `[substance]` (queued 2026-07-17): engine gates currently
   read scalar inputs only; sensitivity categories cannot condition obligations

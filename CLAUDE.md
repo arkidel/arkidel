@@ -341,6 +341,54 @@ information, (2) how & when discovered, (3) when the incident occurred,
   makes `biometric` reachable here; `children` has no element and stays a
   Q1-only selection — do not invent one.
 
+### `src/breach-clock/facts.js` — shared facts mapping and completeness gate
+
+NOT a protected file — but changes to it affect what the engine receives, so
+treat it with corresponding care. It is the single source for (a) parsing the
+awareness datetime-local string (`parseAwareness`), (b) the completeness gate
+(`computableGate` — awareness parsed and non-future, ≥1 jurisdiction, ≥1 Q1
+type → `canCompute`; this IS the editor's submit gate), and (c) the
+payload→engine-facts mapping (`factsFromPayload`, over the exact shape
+`buildPayload` writes). Both the editor (`BreachClock.jsx`) and the Respond
+home list's Next-deadline column consume these — do not reintroduce local
+copies of any of the three; that divergence is what this file exists to
+prevent. Pure functions, no React, no engine imports.
+
+### Respond routing and information architecture (shipped 2026-07-19)
+
+- **`/breach-clock` is Respond's home: the saved-incidents list** (top-bar
+  title "Respond"; rendered by `src/pages/Incidents.jsx`). Layout: a filled
+  Midnight "+ New incident" primary action (left-aligned), a "Saved Incidents"
+  spaced-caps eyebrow, then a white card (1px Parchment border, 12px radius)
+  with columns Title / Jurisdictions / Status / Next deadline / Last updated /
+  Delete. Sorted last-updated descending — deliberately NOT deadline-sorted
+  (JDC ruling 2026-07-19).
+- **The Next deadline column is computed per row, never stored.** The list
+  fetches each incident's payload (`listIncidents` selects it now) and runs
+  the shared gate + engine client-side via `src/breach-clock/facts.js`;
+  the soonest fired obligation deadline renders as a plain date ("Feb 21,
+  2026"), an overdue one as static whole-days "Nd overdue" in semibold Ember
+  JetBrains Mono (the table-scale echo of the results page's ticking overdue
+  countdown — the list figure does not tick), and an incomplete draft as a
+  Mist em-dash. Jurisdictions render postal-style ("DE · MA · CA +2") from a
+  UI-side abbreviation map in `Incidents.jsx` — deliberately NOT in `data.js`.
+- **`/breach-clock/new` is the fresh intake form.** A static route segment, so
+  "new" is never captured as an `:id` param. `/new` and `/:id` render the same
+  element tree at the same route position, so the first save's
+  `navigate(/breach-clock/new → /breach-clock/<id>)` reconciles the form in
+  place — no remount, no loss of just-entered state or the "Saved"
+  confirmation. Do not restructure these routes in a way that breaks that
+  reconciliation.
+- **`/breach-clock/:id` is the saved-incident editor**, which auto-computes to
+  the results view when the saved answers pass the completeness gate (silent
+  submit on rehydrate completion; incomplete drafts open at the form with no
+  validation errors shown).
+- **`/incidents` is a route-level redirect to `/breach-clock`** (old links and
+  bookmarks keep working). There is no standalone Incidents page anymore.
+- **The rail is Respond + Map** — the former Incidents rail entry is removed
+  (the list IS Respond's home). `ModuleItem`'s lucide-`icon` mechanism for
+  non-module page entries is kept for future use.
+
 ### `src/breach-clock/memo-pdf.js` — PDF memo generation
 
 Generates the downloadable memo as a PDF using pdf-lib. The PDF layout,
