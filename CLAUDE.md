@@ -820,8 +820,10 @@ typeface is intentional.
 
 - `Scale` is imported but unused in `BreachClock.jsx` — safe to leave for
   now; tree-shaking handles it at build time.
-- No persistence (localStorage) for in-progress Breach Clock entries —
-  deliberate v1 decision. Refresh wipes user input.
+- No autosave for in-progress Respond form input — unsaved changes are lost on
+  refresh or HMR (deliberate; React state only). Explicit Save persists
+  incidents to Supabase (shipped 2026-07-11); saved incidents rehydrate at
+  /breach-clock/:id and auto-compute to results when complete.
 - The Breach Clock UI is desktop-first; mobile responsiveness needs
   verification before public launch.
 - The waitlist email form uses a placeholder submit handler that logs to
