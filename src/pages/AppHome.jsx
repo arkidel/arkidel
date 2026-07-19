@@ -160,9 +160,11 @@ export default function AppHome() {
             gap: 16,
           }}
         >
-          {/* Respond — live; the whole card links to the tool. */}
+          {/* Respond — live; the whole card is the "New incident →" action,
+              linking to the fresh intake form (the list lives at
+              /breach-clock, reachable via the rail and "View all"). */}
           <Link
-            to="/breach-clock"
+            to="/breach-clock/new"
             style={{
               display: "block",
               background: "#fff",
@@ -240,7 +242,7 @@ export default function AppHome() {
           }}
         >
           <div style={markStyle}>Recent work</div>
-          <Link to="/incidents" style={{ ...footerActionStyle, textDecoration: "none" }}>
+          <Link to="/breach-clock" style={{ ...footerActionStyle, textDecoration: "none" }}>
             View all →
           </Link>
         </div>

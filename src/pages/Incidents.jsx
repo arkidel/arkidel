@@ -1,27 +1,42 @@
-// Incidents list — the org's saved Respond incidents.
+// Respond home — the org's saved incidents list (JDC redesign 2026-07-19).
 //
-// Renders inside AppShell (behind RequireAuth + RequireOrg, so activeOrg is
-// always present). Reads through the data layer only; each row links to the
-// saved incident at /breach-clock/:id. Delete is a two-step confirm inline in
-// the row — no modal — and stays on the list after removing the row.
+// /breach-clock renders this page; the fresh intake form lives at
+// /breach-clock/new and each row links to the saved-incident editor at
+// /breach-clock/:id. Renders inside AppShell (behind RequireAuth + RequireOrg,
+// so activeOrg is always present). Reads through the data layer only. Delete
+// is a two-step confirm inline in the row — no modal — and stays on the list
+// after removing the row.
+//
+// The Next-deadline column computes client-side from each row's saved payload:
+// the SAME completeness gate the editor uses (computableGate in
+// src/breach-clock/facts.js — extracted, not duplicated) and the same pure
+// engine, taking the soonest fired obligation deadline. Static per load — no
+// ticking on this page.
 //
 // Product chrome styling: inline styles on the Bone canvas with the same
-// tokens as BreachClock (white card surface, 12px card radius, hairline rules,
-// .section-mark-style spaced caps done inline since BreachClock's <style>
-// block isn't in scope here).
+// tokens as BreachClock (white card surface, 12px card radius, Parchment card
+// border, .section-mark-style spaced caps done inline since BreachClock's
+// <style> block isn't in scope here).
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, X } from "lucide-react";
 import { listIncidents, deleteIncident } from "../data/incidents.js";
+import { JURISDICTIONS } from "../breach-clock/data.js";
+import { computeDeadlines } from "../breach-clock/engine.js";
+import { computableGate, factsFromPayload } from "../breach-clock/facts.js";
 import { useOrg } from "../org/OrgProvider.jsx";
 import usePageTitle from "../usePageTitle.js";
 import { useTopBarHeader } from "../components/TopBarContext.jsx";
 
 const MIDNIGHT = "#1B2A3F";
+const BONE = "#FAF8F2";
+const PARCHMENT = "#E8DDC4";
 const INK = "#2C2418";
 const EMBER = "#C76E3A";
+const MIST = "#9FAEC2";
 const HAIRLINE = "1px solid rgba(27,42,63,0.18)";
+const MONO_STACK = "'JetBrains Mono', ui-monospace, monospace";
 
 const markStyle = {
   fontFamily: "'Inter', sans-serif",
@@ -57,12 +72,74 @@ const fmtUpdated = (iso) => {
   return `${date} · ${time}`;
 };
 
-// Row grid shared by the header row and every incident row so columns align.
-const ROW_COLUMNS = "minmax(0, 1fr) 110px 190px 170px";
+// Postal-style jurisdiction abbreviations — UI display only, deliberately NOT
+// in data.js (presentation, not substance). EU/UK render as-is; an id missing
+// from the map falls back to its uppercased form so a future jurisdiction
+// degrades readably rather than disappearing.
+const JURISDICTION_ABBR = {
+  eu: "EU",
+  uk: "UK",
+  ca: "CA",
+  tx: "TX",
+  co: "CO",
+  ma: "MA",
+  ny: "NY",
+  va: "VA",
+  de: "DE",
+};
+
+// "DE" / "DE · MA" / "DE · MA · CA +2", in canonical data.js order.
+// Empty/absent selection → null (rendered as the Mist em-dash).
+const jurisdictionLabel = (payload) => {
+  const selected = payload?.jurisdictions || {};
+  const abbrs = JURISDICTIONS.filter((j) => selected[j.id]).map(
+    (j) => JURISDICTION_ABBR[j.id] || j.id.toUpperCase()
+  );
+  if (abbrs.length === 0) return null;
+  if (abbrs.length <= 3) return abbrs.join(" · ");
+  return `${abbrs.slice(0, 3).join(" · ")} +${abbrs.length - 3}`;
+};
+
+// Soonest fired obligation deadline across the incident's jurisdictions, or
+// null when the draft fails the editor's completeness gate or no fired
+// obligation carries a fixed-hour deadline.
+const nextDeadline = (payload, now) => {
+  const p = payload || {};
+  if (!computableGate(p, now).canCompute) return null;
+  const dated = computeDeadlines(factsFromPayload(p)).deadlines.filter((d) => d.deadline);
+  if (dated.length === 0) return null;
+  return new Date(Math.min(...dated.map((d) => d.deadline.getTime())));
+};
+
+// Next-deadline cell: upcoming → plain "Feb 21, 2026"; overdue → static
+// whole-days "Nd overdue" in semibold Ember mono (the table-scale echo of the
+// results page's overdue countdown); not computable → Mist em-dash.
+const NextDeadlineCell = ({ next, now }) => {
+  if (!next) return <span style={{ color: MIST }}>—</span>;
+  if (next.getTime() < now.getTime()) {
+    const days = Math.floor((now.getTime() - next.getTime()) / 86400000);
+    return (
+      <span style={{ fontFamily: MONO_STACK, fontWeight: 600, fontSize: 13, color: EMBER, whiteSpace: "nowrap" }}>
+        {days}d overdue
+      </span>
+    );
+  }
+  return (
+    <span style={{ fontSize: 13 }}>
+      {next.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+    </span>
+  );
+};
+
+// Row grid shared by the header row and every incident row so columns align:
+// Title | Jurisdictions | Status | Next deadline | Last updated | Delete.
+// The delete column keeps the previous 170px — the two-step confirm cluster
+// ("Delete? Yes, delete · Cancel") needs it.
+const ROW_COLUMNS = "minmax(0, 1fr) 110px 70px 110px 150px 170px";
 
 export default function Incidents() {
-  usePageTitle("Incidents");
-  useTopBarHeader({ title: "Incidents" });
+  usePageTitle("Respond");
+  useTopBarHeader({ title: "Respond" });
 
   const { activeOrg } = useOrg();
   const orgId = activeOrg?.id;
@@ -96,12 +173,25 @@ export default function Incidents() {
     };
   }, [orgId]);
 
+  // Derived per-row display data, computed once per list load (static "now" —
+  // the overdue figure deliberately does not tick here). Sort order is the
+  // data layer's updated_at desc; nothing re-sorts by deadline.
+  const rows = useMemo(() => {
+    const now = new Date();
+    return incidents.map((inc) => ({
+      ...inc,
+      _now: now,
+      _next: nextDeadline(inc.payload, now),
+      _jur: jurisdictionLabel(inc.payload),
+    }));
+  }, [incidents]);
+
   const handleDelete = async (id) => {
     setDeletingId(id);
     setError("");
     try {
       await deleteIncident(id);
-      setIncidents((rows) => rows.filter((r) => r.id !== id));
+      setIncidents((prev) => prev.filter((r) => r.id !== id));
       setConfirmingId(null);
     } catch (err) {
       console.error("Incident delete failed:", err);
@@ -112,18 +202,24 @@ export default function Incidents() {
   };
 
   return (
-    <div style={{ background: "#FAF8F2", color: INK, fontFamily: "'Inter', system-ui, sans-serif", minHeight: "60vh" }}>
+    <div style={{ background: BONE, color: INK, fontFamily: "'Inter', system-ui, sans-serif", minHeight: "60vh" }}>
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "16px 40px 60px" }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+        {/* Primary action — filled Midnight, Bone text, 8px radius, left-aligned. */}
+        <div style={{ marginBottom: 0 }}>
           <Link
-            to="/breach-clock"
+            to="/breach-clock/new"
             style={{
-              ...linkButtonStyle,
-              textDecoration: "none",
-              border: `1px solid ${MIDNIGHT}`,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: MIDNIGHT,
+              color: BONE,
               borderRadius: 8,
-              padding: "8px 16px",
-              opacity: 1,
+              padding: "10px 18px",
+              fontFamily: "'Inter', sans-serif",
+              fontSize: 13,
+              fontWeight: 500,
+              textDecoration: "none",
             }}
           >
             <Plus size={13} /> New incident
@@ -134,7 +230,7 @@ export default function Incidents() {
           <div
             role="alert"
             style={{
-              marginBottom: 20,
+              marginTop: 20,
               padding: "10px 14px",
               border: `1px solid ${EMBER}`,
               color: EMBER,
@@ -148,106 +244,119 @@ export default function Incidents() {
         )}
 
         {loading ? (
-          <div style={{ ...markStyle, padding: "24px 0" }}>Loading…</div>
+          <div style={{ ...markStyle, padding: "64px 0 24px" }}>Loading…</div>
         ) : incidents.length === 0 ? (
-          <div style={{ padding: "32px 0", fontSize: 15, lineHeight: 1.6 }}>
+          <div style={{ padding: "40px 0", fontSize: 15, lineHeight: 1.6 }}>
             No incidents saved yet.{" "}
-            <Link to="/breach-clock" style={{ color: MIDNIGHT, fontWeight: 500 }}>
+            <Link to="/breach-clock/new" style={{ color: MIDNIGHT, fontWeight: 500 }}>
               New incident
             </Link>
           </div>
         ) : (
-          <div style={{ background: "#fff", border: HAIRLINE, borderRadius: 12, overflow: "hidden" }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: ROW_COLUMNS,
-                gap: 16,
-                alignItems: "center",
-                padding: "12px 20px",
-                borderBottom: HAIRLINE,
-              }}
-            >
-              <div style={markStyle}>Title</div>
-              <div style={markStyle}>Status</div>
-              <div style={markStyle}>Last updated</div>
-              <div />
-            </div>
-            {incidents.map((inc, i) => (
+          <>
+            {/* Eyebrow for the saved stack — the RECENT WORK idiom: spaced
+                caps, muted, no rule, sitting directly above the card. */}
+            <div style={{ ...markStyle, marginTop: 40, marginBottom: 12 }}>Saved Incidents</div>
+            <div style={{ background: "#fff", border: `1px solid ${PARCHMENT}`, borderRadius: 12, overflow: "hidden" }}>
               <div
-                key={inc.id}
                 style={{
                   display: "grid",
                   gridTemplateColumns: ROW_COLUMNS,
                   gap: 16,
                   alignItems: "center",
-                  padding: "14px 20px",
-                  borderBottom: i < incidents.length - 1 ? "1px solid rgba(27,42,63,0.10)" : "none",
+                  padding: "12px 20px",
+                  borderBottom: HAIRLINE,
                 }}
               >
-                <div style={{ minWidth: 0 }}>
-                  <Link
-                    to={`/breach-clock/${inc.id}`}
-                    style={{
-                      color: MIDNIGHT,
-                      fontSize: 15,
-                      fontWeight: 500,
-                      textDecoration: "none",
-                      display: "block",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none"; }}
-                  >
-                    {inc.title}
-                  </Link>
-                </div>
-                <div style={{ ...markStyle, opacity: 0.6 }}>{inc.status}</div>
-                <div style={{ fontSize: 13, opacity: 0.7 }}>{fmtUpdated(inc.updated_at)}</div>
-                <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
-                  {confirmingId === inc.id ? (
-                    <>
-                      <span style={{ fontSize: 13, color: EMBER, whiteSpace: "nowrap" }}>Delete?</span>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(inc.id)}
-                        disabled={deletingId === inc.id}
-                        style={{
-                          ...linkButtonStyle,
-                          color: EMBER,
-                          opacity: deletingId === inc.id ? 0.45 : 1,
-                          cursor: deletingId === inc.id ? "default" : "pointer",
-                        }}
-                      >
-                        {deletingId === inc.id ? "Deleting…" : "Yes, delete"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmingId(null)}
-                        disabled={deletingId === inc.id}
-                        style={linkButtonStyle}
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmingId(inc.id)}
-                      aria-label={`Delete ${inc.title}`}
-                      style={{ ...linkButtonStyle, opacity: 0.6 }}
-                      onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.opacity = 0.6; }}
-                    >
-                      <X size={13} /> Delete
-                    </button>
-                  )}
-                </div>
+                <div style={markStyle}>Title</div>
+                <div style={markStyle}>Jurisdictions</div>
+                <div style={markStyle}>Status</div>
+                <div style={markStyle}>Next deadline</div>
+                <div style={markStyle}>Last updated</div>
+                <div />
               </div>
-            ))}
-          </div>
+              {rows.map((inc, i) => (
+                <div
+                  key={inc.id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: ROW_COLUMNS,
+                    gap: 16,
+                    alignItems: "center",
+                    padding: "14px 20px",
+                    borderBottom: i < rows.length - 1 ? "1px solid rgba(27,42,63,0.10)" : "none",
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <Link
+                      to={`/breach-clock/${inc.id}`}
+                      style={{
+                        color: MIDNIGHT,
+                        fontSize: 15,
+                        fontWeight: 500,
+                        textDecoration: "none",
+                        display: "block",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none"; }}
+                    >
+                      {inc.title}
+                    </Link>
+                  </div>
+                  <div style={{ fontSize: 13, opacity: 0.85, whiteSpace: "nowrap" }}>
+                    {inc._jur || <span style={{ color: MIST }}>—</span>}
+                  </div>
+                  <div style={{ ...markStyle, opacity: 0.6 }}>{inc.status}</div>
+                  <div>
+                    <NextDeadlineCell next={inc._next} now={inc._now} />
+                  </div>
+                  <div style={{ fontSize: 13, opacity: 0.7 }}>{fmtUpdated(inc.updated_at)}</div>
+                  <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
+                    {confirmingId === inc.id ? (
+                      <>
+                        <span style={{ fontSize: 13, color: EMBER, whiteSpace: "nowrap" }}>Delete?</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(inc.id)}
+                          disabled={deletingId === inc.id}
+                          style={{
+                            ...linkButtonStyle,
+                            color: EMBER,
+                            opacity: deletingId === inc.id ? 0.45 : 1,
+                            cursor: deletingId === inc.id ? "default" : "pointer",
+                          }}
+                        >
+                          {deletingId === inc.id ? "Deleting…" : "Yes, delete"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingId(null)}
+                          disabled={deletingId === inc.id}
+                          style={linkButtonStyle}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingId(inc.id)}
+                        aria-label={`Delete ${inc.title}`}
+                        style={{ ...linkButtonStyle, opacity: 0.6 }}
+                        onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.opacity = 0.6; }}
+                      >
+                        <X size={13} /> Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

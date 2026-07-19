@@ -130,8 +130,9 @@ describe("listIncidents", () => {
     const result = await listIncidents("org-1");
 
     expect(supabaseMock.from).toHaveBeenCalledWith("incidents");
-    // List view reads promoted columns only — never payload.
-    expect(query.select).toHaveBeenCalledWith(expect.not.stringContaining("payload"));
+    // The list reads payload too — the Respond home's Next-deadline column
+    // computes from the saved inputs at list time.
+    expect(query.select).toHaveBeenCalledWith(expect.stringContaining("payload"));
     expect(query.eq).toHaveBeenCalledWith("org_id", "org-1");
     expect(query.order).toHaveBeenCalledWith("updated_at", { ascending: false });
     expect(result).toEqual(rows);

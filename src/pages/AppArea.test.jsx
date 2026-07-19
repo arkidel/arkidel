@@ -105,8 +105,9 @@ describe("AppArea gate", () => {
     // Greeting: no nickname set, so the first token of the full name.
     expect(screen.getByRole("heading", { name: /welcome back, jane/i })).toBeTruthy();
 
-    // Tool cards: Respond links to the tool, Map is a non-link placeholder.
-    expect(screen.getByRole("link", { name: /respond/i }).getAttribute("href")).toBe("/breach-clock");
+    // Tool cards: the Respond card is the "New incident" action (fresh form);
+    // Map is a non-link placeholder.
+    expect(screen.getByRole("link", { name: /respond/i }).getAttribute("href")).toBe("/breach-clock/new");
     expect(screen.getByText("Map")).toBeTruthy();
     expect(screen.getByText(/in development/i)).toBeTruthy();
     expect(screen.getByText(/coming soon/i)).toBeTruthy();
@@ -118,8 +119,8 @@ describe("AppArea gate", () => {
     expect(screen.queryByText("Should not appear")).toBeNull();
     expect(listIncidents).toHaveBeenCalledWith("org-1");
 
-    // View-all link into the incidents list.
-    expect(screen.getByRole("link", { name: /view all/i }).getAttribute("href")).toBe("/incidents");
+    // View-all link into Respond home (the list lives at /breach-clock now).
+    expect(screen.getByRole("link", { name: /view all/i }).getAttribute("href")).toBe("/breach-clock");
 
     // The stub's sign-out button is gone (the account menu owns that now),
     // and this isn't onboarding.
@@ -168,8 +169,12 @@ describe("AppArea gate", () => {
     renderArea();
 
     expect(await screen.findByText(/nothing saved yet/i)).toBeTruthy();
-    // "Respond" in the empty-state line links to the tool (alongside the card link).
-    const respondLinks = screen.getAllByRole("link", { name: /respond/i });
-    expect(respondLinks.every((a) => a.getAttribute("href") === "/breach-clock")).toBe(true);
+    // The tool card targets the fresh form; the empty-state "Respond" link
+    // targets Respond home (the list at /breach-clock).
+    const respondHrefs = screen
+      .getAllByRole("link", { name: /respond/i })
+      .map((a) => a.getAttribute("href"));
+    expect(respondHrefs).toContain("/breach-clock/new");
+    expect(respondHrefs).toContain("/breach-clock");
   });
 });

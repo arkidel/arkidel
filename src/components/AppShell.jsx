@@ -16,7 +16,7 @@
 
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { ChevronsRight, ChevronsLeft, ChevronsUp, Files, Search } from "lucide-react";
+import { ChevronsRight, ChevronsLeft, ChevronsUp, Search } from "lucide-react";
 import ArkidelLogo from "./ArkidelLogo.jsx";
 import ArkidelGlyph from "./ArkidelGlyph.jsx";
 import AccountMenu from "./AccountMenu.jsx";
@@ -38,15 +38,16 @@ const EXPANDED_WIDTH = 210;
 // coupling). Survives reloads; resets only if the user clears storage.
 const RAIL_EXPANDED_KEY = "arkidel.shell.railExpanded";
 
-// Module rail entries. Respond navigates to its live route; Map is rendered as
-// a non-navigating placeholder until the Map route lands (phase 4) — `to: null`.
+// Module rail entries. Respond navigates to its live route — /breach-clock,
+// which is now the incidents list (Respond's home; the fresh form lives at
+// /breach-clock/new). Map is rendered as a non-navigating placeholder until
+// the Map route lands (phase 4) — `to: null`.
 // TODO(phase 4): give Map a real `to` once the Map route exists.
-// Incidents is a page, not a module — it carries a lucide `icon` instead of an
-// ArkidelGlyph `module` figure, and sits right after Respond since it lists
-// Respond's saved work product.
+// (The former standalone Incidents rail entry is gone — the list IS Respond's
+// home now. ModuleItem's lucide-`icon` mechanism for page entries is kept for
+// future non-module pages.)
 const MODULES = [
   { module: "respond", label: "Respond", to: "/breach-clock" },
-  { module: "incidents", label: "Incidents", to: "/incidents", icon: Files },
   { module: "map", label: "Map", to: null },
 ];
 

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider.jsx";
 import RequireAuth from "./auth/RequireAuth.jsx";
 import RedirectIfAuthed from "./auth/RedirectIfAuthed.jsx";
@@ -40,12 +40,25 @@ export default function App() {
                 behind RequireOrg (signed in, no org -> /app, which renders the
                 existing org-onboarding gate). */}
             <Route element={<AppShell />}>
-              {/* Optional :id? — blank form and saved incident share ONE route
-                  node, so the first save's navigate(/breach-clock/<id>) only
-                  changes params and never remounts the form (which would drop
-                  the just-entered state and the "Saved" confirmation). */}
+              {/* Respond's home is the incidents list. */}
               <Route
-                path="/breach-clock/:id?"
+                path="/breach-clock"
+                element={
+                  <RequireOrg>
+                    <Incidents />
+                  </RequireOrg>
+                }
+              />
+              {/* Fresh intake form. "new" is a static segment, which ranks
+                  above the dynamic :id — it is never captured as an :id param.
+                  The /new and /:id routes render the SAME element tree at the
+                  same route position, so the first save's
+                  navigate(/breach-clock/new -> /breach-clock/<id>) reconciles
+                  the BreachClock instance in place — no remount, no loss of
+                  the just-entered state or the "Saved" confirmation (the
+                  guarantee the former optional-:id single route provided). */}
+              <Route
+                path="/breach-clock/new"
                 element={
                   <RequireOrg>
                     <BreachClock />
@@ -53,13 +66,16 @@ export default function App() {
                 }
               />
               <Route
-                path="/incidents"
+                path="/breach-clock/:id"
                 element={
                   <RequireOrg>
-                    <Incidents />
+                    <BreachClock />
                   </RequireOrg>
                 }
               />
+              {/* The list moved to /breach-clock; old links and bookmarks
+                  keep working via a route-level redirect. */}
+              <Route path="/incidents" element={<Navigate to="/breach-clock" replace />} />
               {/* Account needs a session but not an org — no RequireOrg. */}
               <Route path="/account" element={<Account />} />
               {/* /app renders inside the shell so the top bar can carry the

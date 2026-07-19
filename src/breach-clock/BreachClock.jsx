@@ -33,6 +33,7 @@ import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileW
 import { JURISDICTIONS } from "./data.js";
 import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine.js";
 import { groupResultsByJurisdiction } from "./results-grouping.js";
+import { computableGate, factsFromPayload } from "./facts.js";
 import { generateMemoPdf } from "./memo-pdf.js";
 import { createIncident, updateIncident, getIncident } from "../data/incidents.js";
 import { useOrg } from "../org/OrgProvider.jsx";
@@ -607,12 +608,10 @@ export default function BreachClock() {
     return parts.length ? parts.join(" · ") : "Not reported";
   })();
 
-  const parseAwareness = () => {
-    if (!awareness) return null;
-    const d = new Date(awareness);
-    return isNaN(d.getTime()) ? null : d;
-  };
-  const awarenessDate = parseAwareness();
+  // Awareness parsing + completeness gate — shared with the incidents list's
+  // Next-deadline column via facts.js (one source, no divergent copies).
+  const gate = computableGate({ awareness, jurisdictions, sensitivity }, now);
+  const awarenessDate = gate.awarenessDate;
 
   const formatDuration = (ms) => {
     const neg = ms < 0;
@@ -638,25 +637,17 @@ export default function BreachClock() {
   // `review` (Stage 2 quad-state bucket) carries obligations whose outcome turns
   // on a substantive legal judgment the engine does not make. Empty until Stage 4
   // routes the MA second-trigger here.
-  const { deadlines, suppressed, pending, review } = computeDeadlines({
-    awarenessDate,
-    jurisdictions,
-    residentCounts,
-    sensitivity,
-    encrypted,
-    encryptionStrength,
-    redacted,
-    keyAcquired,
-    reidentificationAcquired,
-    gdprUnintelligibility,
-    riskLevel,
-  });
+  // Facts come from the SAME payload shape the save path writes
+  // (factsFromPayload over buildPayload), so the editor, the saved-incident
+  // rehydrate, and the incidents list all feed the engine identically.
+  const { deadlines, suppressed, pending, review } = computeDeadlines(factsFromPayload(buildPayload()));
 
-  // ── Minimal operative inputs required to submit (mirrors the old canAdvance) ──
-  const hasAwareness = !!awarenessDate && awarenessDate <= now;
-  const hasJurisdiction = anyJurisdiction;
-  const hasSensitivity = sensitivity.length > 0;
-  const canCompute = hasAwareness && hasJurisdiction && hasSensitivity;
+  // ── Minimal operative inputs required to submit (mirrors the old
+  //    canAdvance) — read from the shared gate above. ──
+  const hasAwareness = gate.hasAwareness;
+  const hasJurisdiction = gate.hasJurisdiction;
+  const hasSensitivity = gate.hasSensitivity;
+  const canCompute = gate.canCompute;
 
   // Saved incidents open at results. Runs on the render AFTER a genuine
   // rehydrate (the flag lands in the same batch as applyPayload's setters),

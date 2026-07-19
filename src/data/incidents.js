@@ -18,9 +18,12 @@ import { supabase } from "../lib/supabase.js";
 const INCIDENT_COLUMNS =
   "id, org_id, title, status, payload, schema_version, created_at, updated_at";
 
-// The list view reads only the promoted columns — never payload, which can be
-// large and is only needed when an incident is actually opened.
-const LIST_COLUMNS = "id, title, status, created_at, updated_at";
+// The list view reads the promoted columns PLUS payload: the Respond home
+// list computes each row's Next-deadline column client-side from the saved
+// inputs (same engine, same completeness gate as the editor — see
+// src/breach-clock/facts.js), so the payload is needed at list time now,
+// not only when an incident is opened.
+const LIST_COLUMNS = "id, title, status, payload, created_at, updated_at";
 
 // Create an incident in the given organization. org_id must be an org the
 // caller belongs to (RLS WITH CHECK); created_by defaults to auth.uid() in the
@@ -71,7 +74,8 @@ export async function getIncident(id) {
 }
 
 // The org's incidents, newest activity first (matches the DB's
-// (org_id, updated_at desc) index). List columns only — no payload.
+// (org_id, updated_at desc) index). Includes payload for the list's
+// Next-deadline column (see LIST_COLUMNS).
 export async function listIncidents(orgId) {
   const { data, error } = await supabase
     .from("incidents")
