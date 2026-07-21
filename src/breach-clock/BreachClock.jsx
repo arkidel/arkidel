@@ -864,6 +864,9 @@ export default function BreachClock() {
         sensitivityLabels: sensitivityLabelsForMemo,
         encryptionSummary: encryptionRecap,
         riskLevel,
+        // Lifecycle status for the memo's Analysis Inputs "Status" line —
+        // the record states what the matter was when the memo was cut.
+        status,
         incidentReport: quickMode ? null : buildIncidentReportSections(),
       };
       const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed, review);
@@ -1649,6 +1652,16 @@ export default function BreachClock() {
       const timeRemaining = d.deadline ? d.deadline.getTime() - now.getTime() : null;
       const isMissed = timeRemaining !== null && timeRemaining < 0;
       const isUrgent = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 3600 * 1000;
+      // Closed incidents render as record, not as live matter (JDC ruling
+      // 2026-07-21): no ticking countdown, no overdue/urgency treatment
+      // anywhere — every dated card shows a static Mist "Due {date}" in the
+      // countdown slot instead (a future deadline on a discharged matter is
+      // equally moot, so non-missed cards get the same treatment). Missed
+      // cards keep their dark record styling but the Ember stripe renders
+      // Mist; the urgent (Ember/cream) variant is neutralized entirely. Keys
+      // off the live status state, so flipping the top-bar dropdown restyles
+      // the cards immediately in both directions — no resubmit.
+      const isClosed = status === "closed";
       // Dependent ("cascading") deadline — read straight from the engine's basis
       // string. We confirm the named parent actually fired in the same
       // jurisdiction (now within this block's active cards) before labeling.
@@ -1660,7 +1673,11 @@ export default function BreachClock() {
         ? `${depMatch[1]} after notifying residents`
         : null;
       return (
-        <div key={i} className={`deadline-card ${isMissed ? "missed" : isUrgent ? "urgent" : ""}`} style={extraStyle}>
+        <div
+          key={i}
+          className={`deadline-card ${isMissed ? "missed" : isUrgent && !isClosed ? "urgent" : ""}`}
+          style={{ ...extraStyle, ...(isClosed && isMissed ? { borderLeftColor: "#9FAEC2" } : {}) }}
+        >
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
             <div>
               <div className="serif" style={{ fontSize: "26px", fontWeight: 400, lineHeight: 1.15, marginBottom: "12px", letterSpacing: "-0.01em" }}>
@@ -1688,20 +1705,33 @@ export default function BreachClock() {
               {d.deadline ? (
                 <>
                   {/* Missed cards carry no section-mark: the Ember "…overdue"
-                      countdown is the whole overdue statement (ruled 2026-07-18). */}
-                  {!isMissed && (
+                      countdown is the whole overdue statement (ruled 2026-07-18).
+                      Closed incidents suppress it on every card, mirroring that. */}
+                  {!isMissed && !isClosed && (
                     <div className="section-mark" style={{ marginBottom: "6px" }}>
                       Time remaining
                     </div>
                   )}
-                  {/* Overdue countdown renders in Ember; the inline color deliberately
-                      overrides the .deadline-card.missed .mono Bone rule. */}
-                  <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em", ...(isMissed ? { color: "#C76E3A" } : {}) }}>
-                    {formatDuration(timeRemaining)}
-                  </div>
-                  <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "6px" }}>
-                    Due {d.deadline.toLocaleString()}
-                  </div>
+                  {isClosed ? (
+                    /* Static record date in the countdown slot — same mono/size/
+                       placement, regular weight, Mist. The inline color overrides
+                       the .deadline-card.missed .mono Bone rule. */
+                    <div className="mono" style={{ fontSize: "26px", fontWeight: 400, letterSpacing: "-0.02em", color: "#9FAEC2" }}>
+                      Due {d.deadline.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Overdue countdown renders in Ember; the inline color deliberately
+                          overrides the .deadline-card.missed .mono Bone rule. */}
+                      <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em", ...(isMissed ? { color: "#C76E3A" } : {}) }}>
+                        {formatDuration(timeRemaining)}
+                      </div>
+                      {/* Hidden when closed: it would repeat the static date above. */}
+                      <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "6px" }}>
+                        Due {d.deadline.toLocaleString()}
+                      </div>
+                    </>
+                  )}
                   {depLabel && (
                     <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "4px", maxWidth: "200px", marginLeft: "auto" }}>
                       ({depLabel}; date assumes they're notified on their deadline)

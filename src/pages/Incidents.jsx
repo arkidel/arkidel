@@ -112,17 +112,15 @@ const nextDeadline = (payload, now) => {
   return new Date(Math.min(...dated.map((d) => d.deadline.getTime())));
 };
 
-// Status chip — the app's chip anatomy (mono caps, tint background + readable
-// text, 6px radius per the recorded radius scale) colored per lifecycle state:
-// Draft keeps the neutral Parchment treatment (the existing chip idiom —
-// AppHome's "In development", the risk section's "SUGGESTED"); Active renders
-// in Moss; Closed in Mist. Mist itself is too light to be text on a light
-// tint, so the Closed chip keeps Midnight-derived text over the Mist tint —
-// the same tint-background/readable-text contrast the other two use.
+// Status chip — the app's chip anatomy (mono caps, 6px radius per the
+// recorded radius scale) with solid token fills per lifecycle state
+// (treatment C, JDC ruling 2026-07-21): Draft is Parchment with Ink text;
+// Active is solid Moss with Bone text; Closed is solid Mist with Midnight
+// text.
 const STATUS_CHIP = {
-  draft: { background: PARCHMENT, color: MIDNIGHT, opacity: 0.6 },
-  active: { background: "rgba(90,110,74,0.16)", color: MOSS },
-  closed: { background: "rgba(159,174,194,0.28)", color: "rgba(27,42,63,0.65)" },
+  draft: { background: PARCHMENT, color: INK },
+  active: { background: MOSS, color: BONE },
+  closed: { background: MIST, color: MIDNIGHT },
 };
 
 const StatusChip = ({ status }) => (

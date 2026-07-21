@@ -262,7 +262,13 @@ function drawIncidentSummary(state, facts) {
   const valueX = CONTENT_X + labelW;
   const valueMaxW = CONTENT_W - labelW;
 
+  // Lifecycle status renders for every status, first — the record states what
+  // the matter was when the memo was cut. Omitted when the caller passes no
+  // status (the four-arg gate harnesses predate the lifecycle).
+  const statusLabel = { draft: "Draft", active: "Active", closed: "Closed" }[facts.status];
+
   const rows = [
+    ...(statusLabel ? [["Status", statusLabel]] : []),
     ["Awareness", facts.awarenessDate ? formatAwareness(facts.awarenessDate) : "Not provided"],
     ["Jurisdictions", facts.jurisdictionList || "None selected"],
     ...(facts.sensitivityLabels && facts.sensitivityLabels.length
@@ -917,6 +923,7 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
   state.cursorY = drawLetterhead(state.currentPage(), fonts, logoImage, generatedAt);
 
   drawIncidentSummary(state, {
+    status: facts.status,
     awarenessDate: facts.awarenessDate,
     jurisdictionList: buildJurisdictionList(facts),
     sensitivityLabels: facts.sensitivityLabels || [],
