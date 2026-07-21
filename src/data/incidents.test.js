@@ -12,6 +12,7 @@ vi.mock("../lib/supabase.js", () => ({ supabase: supabaseMock }));
 import {
   createIncident,
   updateIncident,
+  updateIncidentStatus,
   getIncident,
   listIncidents,
   deleteIncident,
@@ -54,14 +55,27 @@ describe("createIncident", () => {
     const result = await createIncident("org-1", "T", payload);
 
     expect(supabaseMock.from).toHaveBeenCalledWith("incidents");
+    // status defaults to 'draft' when the caller doesn't pass one.
     expect(query.insert).toHaveBeenCalledWith({
       org_id: "org-1",
       title: "T",
       payload,
+      status: "draft",
     });
     expect(query.select).toHaveBeenCalled();
     expect(query.single).toHaveBeenCalled();
     expect(result).toEqual(created);
+  });
+
+  it("carries a non-draft status into the insert (submitted-before-first-save)", async () => {
+    const query = makeQuery({ data: { id: "inc-1", status: "active" }, error: null });
+    supabaseMock.from.mockReturnValue(query);
+
+    await createIncident("org-1", "T", {}, "active");
+
+    expect(query.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "active" })
+    );
   });
 
   it("throws when no org id is supplied", async () => {
@@ -83,6 +97,29 @@ describe("updateIncident", () => {
     expect(query.update).toHaveBeenCalledWith({ title: "New title", payload });
     expect(query.eq).toHaveBeenCalledWith("id", "inc-1");
     expect(result).toEqual(updated);
+  });
+});
+
+describe("updateIncidentStatus", () => {
+  it("updates status alone by id and returns the row", async () => {
+    const updated = { id: "inc-1", status: "closed" };
+    const query = makeQuery({ data: updated, error: null });
+    supabaseMock.from.mockReturnValue(query);
+
+    const result = await updateIncidentStatus("inc-1", "closed");
+
+    expect(supabaseMock.from).toHaveBeenCalledWith("incidents");
+    // Status-only write — title and payload are never touched here.
+    expect(query.update).toHaveBeenCalledWith({ status: "closed" });
+    expect(query.eq).toHaveBeenCalledWith("id", "inc-1");
+    expect(result).toEqual(updated);
+  });
+
+  it("throws when the update errors", async () => {
+    const query = makeQuery({ data: null, error: { message: "boom" } });
+    supabaseMock.from.mockReturnValue(query);
+
+    await expect(updateIncidentStatus("inc-1", "active")).rejects.toMatchObject({ message: "boom" });
   });
 });
 

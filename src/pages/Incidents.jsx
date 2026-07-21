@@ -35,6 +35,7 @@ const PARCHMENT = "#E8DDC4";
 const INK = "#2C2418";
 const EMBER = "#C76E3A";
 const MIST = "#9FAEC2";
+const MOSS = "#5A6E4A";
 const HAIRLINE = "1px solid rgba(27,42,63,0.18)";
 const MONO_STACK = "'JetBrains Mono', ui-monospace, monospace";
 
@@ -111,11 +112,50 @@ const nextDeadline = (payload, now) => {
   return new Date(Math.min(...dated.map((d) => d.deadline.getTime())));
 };
 
+// Status chip — the app's chip anatomy (mono caps, tint background + readable
+// text, 6px radius per the recorded radius scale) colored per lifecycle state:
+// Draft keeps the neutral Parchment treatment (the existing chip idiom —
+// AppHome's "In development", the risk section's "SUGGESTED"); Active renders
+// in Moss; Closed in Mist. Mist itself is too light to be text on a light
+// tint, so the Closed chip keeps Midnight-derived text over the Mist tint —
+// the same tint-background/readable-text contrast the other two use.
+const STATUS_CHIP = {
+  draft: { background: PARCHMENT, color: MIDNIGHT, opacity: 0.6 },
+  active: { background: "rgba(90,110,74,0.16)", color: MOSS },
+  closed: { background: "rgba(159,174,194,0.28)", color: "rgba(27,42,63,0.65)" },
+};
+
+const StatusChip = ({ status }) => (
+  <span
+    style={{
+      fontFamily: MONO_STACK,
+      fontSize: 10,
+      letterSpacing: "0.12em",
+      textTransform: "uppercase",
+      padding: "2px 8px",
+      borderRadius: 6,
+      whiteSpace: "nowrap",
+      ...(STATUS_CHIP[status] || STATUS_CHIP.draft),
+    }}
+  >
+    {status}
+  </span>
+);
+
 // Next-deadline cell: upcoming → plain "Feb 21, 2026"; overdue → static
 // whole-days "Nd overdue" in semibold Ember mono (the table-scale echo of the
-// results page's overdue countdown); not computable → Mist em-dash.
-const NextDeadlineCell = ({ next, now }) => {
+// results page's overdue countdown); not computable → Mist em-dash. A closed
+// incident's row is muted: never the Ember overdue treatment — when
+// computable, the plain due date renders in Mist; otherwise the em-dash.
+const NextDeadlineCell = ({ next, now, muted }) => {
   if (!next) return <span style={{ color: MIST }}>—</span>;
+  if (muted) {
+    return (
+      <span style={{ fontSize: 13, color: MIST }}>
+        {next.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+      </span>
+    );
+  }
   if (next.getTime() < now.getTime()) {
     const days = Math.floor((now.getTime() - next.getTime()) / 86400000);
     return (
@@ -309,9 +349,11 @@ export default function Incidents() {
                   <div style={{ fontSize: 13, opacity: 0.85, whiteSpace: "nowrap" }}>
                     {inc._jur || <span style={{ color: MIST }}>—</span>}
                   </div>
-                  <div style={{ ...markStyle, opacity: 0.6 }}>{inc.status}</div>
                   <div>
-                    <NextDeadlineCell next={inc._next} now={inc._now} />
+                    <StatusChip status={inc.status} />
+                  </div>
+                  <div>
+                    <NextDeadlineCell next={inc._next} now={inc._now} muted={inc.status === "closed"} />
                   </div>
                   <div style={{ fontSize: 13, opacity: 0.7 }}>{fmtUpdated(inc.updated_at)}</div>
                   <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>

@@ -27,7 +27,7 @@
 // (footer link) after any change near the wiring.
 // =============================================================================
 
-import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, Save, X, ChevronDown } from "lucide-react";
 import { JURISDICTIONS } from "./data.js";
@@ -35,7 +35,7 @@ import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine
 import { groupResultsByJurisdiction } from "./results-grouping.js";
 import { computableGate, factsFromPayload } from "./facts.js";
 import { generateMemoPdf } from "./memo-pdf.js";
-import { createIncident, updateIncident, getIncident } from "../data/incidents.js";
+import { createIncident, updateIncident, updateIncidentStatus, getIncident } from "../data/incidents.js";
 import { useOrg } from "../org/OrgProvider.jsx";
 import ArkidelCaret from "../components/ArkidelCaret.jsx";
 import usePageTitle from "../usePageTitle.js";
@@ -351,6 +351,15 @@ export default function BreachClock() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [saveError, setSaveError] = useState("");
+  // Incident status lifecycle: "draft" | "active" | "closed" (DB CHECK
+  // constraint incidents_status_check). A DB column, NOT part of the payload —
+  // applyPayload never touches it. Draft until the user explicitly submits
+  // (→ active, via handleSubmit only — the silent auto-compute on rehydrate
+  // shares the compute path but must never transition status); any value can
+  // also be set manually via the top-bar dropdown. Saved incidents persist
+  // status changes immediately (changeStatus); the unsaved form holds status
+  // in memory and the first save writes it through createIncident.
+  const [status, setStatus] = useState("draft");
   // The id created by this session's first save. The load effect skips the
   // refetch for it — the form state IS the just-saved payload already.
   const justCreatedRef = useRef(null);
@@ -405,6 +414,7 @@ export default function BreachClock() {
     if (!routeIncidentId) {
       justCreatedRef.current = null;
       setSavedAt(null);
+      setStatus("draft");
       applyPayload({});
       setLoadState("ready");
       return undefined;
@@ -422,6 +432,7 @@ export default function BreachClock() {
           return;
         }
         applyPayload(incident.payload || {});
+        setStatus(incident.status || "draft");
         setSavedAt(null);
         setAutoComputePending(true);
         setLoadState("ready");
@@ -464,7 +475,9 @@ export default function BreachClock() {
       if (routeIncidentId) {
         await updateIncident(routeIncidentId, { title, payload: buildPayload() });
       } else {
-        const row = await createIncident(activeOrg?.id, title, buildPayload());
+        // First save writes the in-memory status too — an incident submitted
+        // before ever being saved is created active, not draft.
+        const row = await createIncident(activeOrg?.id, title, buildPayload(), status);
         justCreatedRef.current = row.id;
         // replace: back from the saved URL should not land on the blank form
         // and create a duplicate on the next save.
@@ -480,11 +493,74 @@ export default function BreachClock() {
     }
   };
 
-  // AppShell top-bar header slot. "Draft" is static for now (a real status
-  // model comes later); the title tracks the incident reference/title field
-  // live as the user types, falling back while it's empty.
+  // Change the incident's status — from the top-bar dropdown or the explicit
+  // submit transition (never the silent auto-compute). The control updates
+  // optimistically so the select never snaps back mid-write; a saved incident
+  // persists the change immediately (status is not staged behind Save), and on
+  // a failed write the control reverts and the error surfaces through the
+  // module's normal save-error slot. On the unsaved form there is no row yet:
+  // the value is held in memory and written by the first save (handleSave).
+  const changeStatus = async (next) => {
+    if (next === status) return;
+    const prev = status;
+    setStatus(next);
+    if (!routeIncidentId) return;
+    try {
+      await updateIncidentStatus(routeIncidentId, next);
+      setSaveError("");
+    } catch (err) {
+      console.error("Incident status update failed:", err);
+      setStatus(prev);
+      setSaveError(err?.message ? `Status change failed: ${err.message}` : "Status change failed. Try again.");
+    }
+  };
+
+  // Latest-handler ref so the memoized top-bar control below never closes over
+  // a stale changeStatus (it re-renders only when status changes).
+  const changeStatusRef = useRef(changeStatus);
+  useEffect(() => {
+    changeStatusRef.current = changeStatus;
+  });
+
+  // AppShell top-bar header slot. The eyebrow is the status control: a quiet
+  // native select (full keyboard/aria semantics for free) wearing the
+  // small-caps eyebrow treatment when collapsed — chromeless, so it reads as
+  // the eyebrow text plus the browser's own dropdown affordance. Memoized
+  // because the eyebrow node is an effect dependency inside useTopBarHeader:
+  // a fresh element every render would re-push the header slot on every tick
+  // of the results clock; keyed on status alone, it re-renders only when the
+  // status actually changes. The title tracks the incident reference/title
+  // field live as the user types, falling back while it's empty.
+  const statusControl = useMemo(
+    () => (
+      <select
+        value={status}
+        onChange={(e) => changeStatusRef.current(e.target.value)}
+        aria-label="Incident status"
+        style={{
+          fontFamily: "'Inter', sans-serif",
+          fontSize: "11px",
+          fontWeight: 500,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: "#1B2A3F",
+          opacity: 0.7,
+          background: "transparent",
+          border: "none",
+          padding: 0,
+          margin: 0,
+          cursor: "pointer",
+        }}
+      >
+        <option value="draft">Draft</option>
+        <option value="active">Active</option>
+        <option value="closed">Closed</option>
+      </select>
+    ),
+    [status]
+  );
   useTopBarHeader({
-    eyebrow: "Draft",
+    eyebrow: statusControl,
     title: record.incidentTitle.trim() || "Untitled Incident",
   });
 
@@ -829,6 +905,11 @@ export default function BreachClock() {
     }
     setExpandedCaveats(new Set());
     setSubmitted(true);
+    // Explicit submit → active. Bound to THIS handler only — the silent
+    // auto-compute on rehydrate flips submitted directly and must never
+    // transition status. Idempotent when already active (changeStatus no-ops
+    // on equal values); re-submitting a closed incident reactivates it.
+    changeStatus("active");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -2249,6 +2330,15 @@ export default function BreachClock() {
         {downloadError && (
           <div role="alert" style={{ marginBottom: "20px", padding: "10px 14px", border: "1px solid #C76E3A", color: "#C76E3A", fontSize: "13px", lineHeight: 1.5, borderRadius: "8px" }}>
             {downloadError}
+          </div>
+        )}
+        {/* The submit-driven active transition can fail its write while the
+            user is already here on review (the save cluster that normally
+            shows saveError lives on the form), so surface it in the same
+            error slot style as downloadError. */}
+        {saveError && (
+          <div role="alert" style={{ marginBottom: "20px", padding: "10px 14px", border: "1px solid #C76E3A", color: "#C76E3A", fontSize: "13px", lineHeight: 1.5, borderRadius: "8px" }}>
+            {saveError}
           </div>
         )}
 

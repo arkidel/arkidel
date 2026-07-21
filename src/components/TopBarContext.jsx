@@ -5,6 +5,12 @@
 // value is set via effect and cleared on unmount, so navigating away never
 // leaves a stale title in the bar. Both fields are optional — a page that
 // sets neither (or never calls the hook) leaves the slot empty.
+//
+// eyebrow may be a string OR a React node (the Respond editor passes its
+// status <select> so the control sits in the eyebrow position). Because both
+// fields are dependencies of the effect below, a node-valued eyebrow must be
+// memoized by the caller — a fresh element each render would re-push the
+// header slot (and re-render the shell bar) on every render of the page.
 
 import { createContext, useContext, useEffect } from "react";
 

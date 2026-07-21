@@ -29,13 +29,16 @@ const LIST_COLUMNS = "id, title, status, payload, created_at, updated_at";
 // caller belongs to (RLS WITH CHECK); created_by defaults to auth.uid() in the
 // database. Returns the created row (the read-back is admitted by the
 // membership SELECT policy — the caller is already a member at insert time).
-export async function createIncident(orgId, title, payload) {
+// status carries the unsaved form's in-memory lifecycle state into the first
+// save (an incident submitted before ever being saved is created 'active',
+// not 'draft'); values are constrained by incidents_status_check.
+export async function createIncident(orgId, title, payload, status = "draft") {
   if (!orgId) {
     throw new Error("An organization is required to save an incident.");
   }
   const { data, error } = await supabase
     .from("incidents")
-    .insert({ org_id: orgId, title, payload })
+    .insert({ org_id: orgId, title, payload, status })
     .select(INCIDENT_COLUMNS)
     .single();
   if (error) throw error;
@@ -48,6 +51,22 @@ export async function updateIncident(id, { title, payload }) {
   const { data, error } = await supabase
     .from("incidents")
     .update({ title, payload })
+    .eq("id", id)
+    .select(INCIDENT_COLUMNS)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Update an incident's status alone ('draft' | 'active' | 'closed' —
+// enforced by the incidents_status_check constraint). Status changes persist
+// immediately rather than staging behind Save, so this deliberately touches
+// neither title nor payload. RLS scopes the write; updated_at bumps via the
+// trigger like any other update.
+export async function updateIncidentStatus(id, status) {
+  const { data, error } = await supabase
+    .from("incidents")
+    .update({ status })
     .eq("id", id)
     .select(INCIDENT_COLUMNS)
     .single();

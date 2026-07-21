@@ -541,6 +541,11 @@ history share a Supabase backend and should be sequenced together.
   stays the brand/mission page; `/compare` carries the competitive positioning.
 - **Top-bar search stub's designated job:** filtering the Respond incidents
   list (recorded 2026-07-19; not yet built).
+- **Status lifecycle future work (recorded 2026-07-21):** consider
+  edit-locking/audit trail on Active (what-did-we-believe-when has litigation
+  value); a "no notification required" closed-state distinction downstream of
+  risk-of-harm modeling; list filtering by status when the search stub is
+  built.
 - **Category-conditioned engine outputs (design pass required BEFORE
   Connecticut)** `[substance]` (queued 2026-07-17): engine gates currently
   read scalar inputs only; sensitivity categories cannot condition obligations

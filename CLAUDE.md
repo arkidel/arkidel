@@ -388,6 +388,26 @@ prevent. Pure functions, no React, no engine imports.
 - **The rail is Respond + Map** — the former Incidents rail entry is removed
   (the list IS Respond's home). `ModuleItem`'s lucide-`icon` mechanism for
   non-module page entries is kept for future use.
+- **Incident status lifecycle (shipped 2026-07-21): `draft` / `active` /
+  `closed`**, enforced by a DB CHECK constraint (migration `20260721195745`).
+  An incident stays Draft until the user explicitly clicks "Submit & compute
+  deadlines" → Active (idempotent if already active; re-submitting a Closed
+  incident reactivates it). The **silent auto-compute on rehydrate shares the
+  compute path but never transitions status** — merely opening a complete
+  saved incident cannot activate it; the transition is bound to
+  `handleSubmit` alone. The manual control is the editor's top-bar eyebrow —
+  a quiet native `<select>` wearing the small-caps eyebrow treatment
+  (memoized, since the eyebrow node is a `useTopBarHeader` effect
+  dependency). Status writes **immediately**, not behind Save: saved
+  incidents persist through `updateIncidentStatus(id, status)` in
+  `src/data/incidents.js` (optimistic control, reverted on a failed write);
+  the unsaved form holds status in memory and the first save writes it via
+  `createIncident`'s status argument. On the Respond home list, Active chips
+  render in Moss and Closed in Mist (same chip anatomy, 6px radius), and
+  Closed rows mute the Next-deadline cell — plain Mist due date, never the
+  Ember overdue treatment. No edit-locking yet: Active and Closed incidents
+  remain fully editable (locking/audit-trail on finalization is recorded
+  future work in `docs/todo.md`).
 
 ### `src/breach-clock/memo-pdf.js` — PDF memo generation
 
