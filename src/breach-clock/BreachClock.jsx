@@ -1772,16 +1772,20 @@ export default function BreachClock() {
       const timeRemaining = d.deadline ? d.deadline.getTime() - now.getTime() : null;
       // Notification record for this obligation. A recorded card stops being a
       // live matter: no countdown, no urgent/missed treatment — the stripe and
-      // the "Notified {date}" line speak instead (Moss when the notified
-      // calendar date is at-or-before the due date, neutral Mist/Ink when
-      // after). Dates only — never a computed lateness delta, on screen or in
-      // the PDF (durable decision).
+      // the "Notified {date}" line speak instead. Moss is reserved EXCLUSIVELY
+      // for obligations with a computed due date where the notified calendar
+      // date is at-or-before it; everything else — notified after due, or an
+      // obligation with no computed due date ("without unreasonable delay" and
+      // kin) — takes the neutral Mist-stripe / Ink-text treatment. Moss on a
+      // no-deadline obligation would assert timeliness under a substantive
+      // standard the tool does not evaluate (JDC ruling 2026-07-24). Dates
+      // only — never a computed lateness delta, on screen or in the PDF
+      // (durable decision).
       const recKey = notifKey(d);
       const rec = notifications[recKey];
       const notifiedDate = rec ? parseDateOnly(rec.notified_on) : null;
       // Local-midnight vs. due-instant comparison = calendar-date on-or-before.
-      // No fixed-hour deadline → nothing to be late against → the Moss side.
-      const recOnTime = rec ? (!d.deadline || (notifiedDate && notifiedDate.getTime() <= d.deadline.getTime())) : null;
+      const recOnTime = rec ? !!(d.deadline && notifiedDate && notifiedDate.getTime() <= d.deadline.getTime()) : null;
       const isMissed = !rec && timeRemaining !== null && timeRemaining < 0;
       const isUrgent = !rec && timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 3600 * 1000;
       // Closed incidents render as record, not as live matter (JDC ruling
@@ -1811,8 +1815,9 @@ export default function BreachClock() {
           style={{
             ...extraStyle,
             ...(isClosed && isMissed ? { borderLeftColor: "#9FAEC2" } : {}),
-            // Recorded stripe: Moss when notified on-or-before due, neutral
-            // Mist when after. Live (unrecorded) stripes are unchanged.
+            // Recorded stripe: Moss only when a computed due date was met;
+            // neutral Mist otherwise (notified after due, or no computed due
+            // date). Live (unrecorded) stripes are unchanged.
             ...(rec ? { borderLeftColor: recOnTime ? "#5A6E4A" : "#9FAEC2" } : {}),
           }}
         >
@@ -2863,10 +2868,6 @@ export default function BreachClock() {
         <div className="divider-thick" style={{ marginBottom: "24px" }} />
         {renderObligations()}
 
-        {/* Incident log — below the deadline cards, above the incident-report
-            recap and further-considerations sections. Renders in both modes. */}
-        {renderIncidentLog()}
-
         {/* Incident-report recap (full mode only) */}
         {!quickMode && reportSections.length > 0 && (
           <div style={{ marginTop: "44px" }}>
@@ -2887,6 +2888,12 @@ export default function BreachClock() {
             </div>
           </div>
         )}
+
+        {/* Incident log — after the incident report, before Further
+            Considerations (JDC ruling 2026-07-24). Renders in both modes:
+            quick mode has no recap or further-considerations, so the log
+            holds the same relative position, directly after the obligations. */}
+        {renderIncidentLog()}
 
         {/* Further considerations (full mode) */}
         {!quickMode && (

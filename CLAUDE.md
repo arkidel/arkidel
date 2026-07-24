@@ -186,9 +186,17 @@ safety property. Covered by the `E. riskLevel` group in
 
 **Notification-record durable decisions (2026-07-24).** Notification records
 are non-evaluative: dates only, no computed lateness deltas, on screen or in
-PDF. Memo due dates are always Ember regardless of status. Memo incident-log
-filtering is silent. notifications/incident_log JSONB never enters facts or
-the engine.
+PDF. Moss is reserved exclusively for obligations with a computed due date
+where notified_on is at-or-before it; a recorded notification on a
+no-fixed-deadline obligation ("without unreasonable delay" and kin) renders
+the neutral Mist/Ink treatment — Moss there would assert timeliness under a
+substantive standard the tool does not evaluate. Memo due dates are always
+Ember regardless of status. Memo incident-log filtering is silent. Memo
+section order: the Notification Record (Authority/Due/Notified table) renders
+after the deadline analysis; the Incident Log renders after the incident
+report — on screen the Incident Log likewise sits after the incident-report
+recap, before Further Considerations. notifications/incident_log JSONB never
+enters facts or the engine.
 
 ### `src/breach-clock/BreachClock.jsx` — React UI
 

@@ -16,10 +16,12 @@
 //   3. Deadline obligations (one card per firing obligation)
 //   4. Suppressed obligations (conditional — only if any suppressed)
 //   5. Jurisdictional notes (conditional — only if any selected jur has notes)
-//   6. Notification record (conditional — recorded notifications + included
-//      incident-log entries; omitted entirely when both are empty)
-//   7. Further considerations (six fixed bullets)
-//   8. Disclaimer + generation footer block
+//   6. Notification record (conditional — the Authority/Due/Notified table;
+//      omitted when there are no recorded notifications)
+//   7. Incident report (conditional — full mode only; fresh page)
+//   8. Incident log (conditional — included entries only; omitted when none)
+//   9. Further considerations (six fixed bullets)
+//  10. Disclaimer + generation footer block
 // =============================================================================
 
 import { PDFDocument, PDFString, rgb } from "pdf-lib";
@@ -665,31 +667,32 @@ function drawJurisdictionBlock(state, block) {
   state.cursorY -= 8;
 }
 
-// ─── Section: notification record ─────────────────────────────────────────
+// ─── Sections: notification record + incident log ─────────────────────────
 //
-// Renders after the deadline analysis, before the incident report. Two parts,
-// both built UI-side (the core renders exactly what it's given, matching the
-// incidentReport pattern):
-//   1. A dates-only table — Authority / Due / Notified — one row per
-//      obligation with a recorded notification. Due dates Ember (the memo's
-//      unconditional due-date color), notified dates Ink. No deltas, no
-//      status words — the record is non-evaluative (durable decision).
-//   2. The incident log as dated entries in the memo's label/value idiom.
-//      Only entries the caller passed render; the caller filters to
-//      include_in_memo silently — no counts, no gaps, no indication that
-//      filtering exists.
-// The whole section omits itself when the record is null or empty (including
-// on closed incidents).
+// Both are built UI-side (the core renders exactly what it's given, matching
+// the incidentReport pattern) and arrive together as one `notificationRecord`
+// object, but they render as two separate sections in different places (JDC
+// ruling 2026-07-24):
+//   - "Notification Record" — the dates-only Authority / Due / Notified
+//     table, one row per obligation with a recorded notification — renders
+//     after the deadline analysis. Due dates Ember (the memo's unconditional
+//     due-date color), notified dates Ink. No deltas, no status words — the
+//     record is non-evaluative (durable decision). Omits itself when there
+//     are no recorded notifications.
+//   - "Incident Log" — the included log entries in the memo's label/value
+//     idiom — renders AFTER the incident report section. Only entries the
+//     caller passed render; the caller filters to include_in_memo silently —
+//     no counts, no gaps, no indication that filtering exists. Omits itself
+//     when there are no included entries.
+// Both omission rules apply on closed incidents too.
 
 const NOTIF_AUTH_W = 220; // authority column width (wraps)
 const NOTIF_DUE_X = 240;  // due column x-offset from CONTENT_X
 const NOTIF_NOTIF_X = 356; // notified column x-offset from CONTENT_X
 
 function drawNotificationRecord(state, record) {
-  if (!record) return;
-  const rows = Array.isArray(record.rows) ? record.rows : [];
-  const entries = Array.isArray(record.entries) ? record.entries : [];
-  if (rows.length === 0 && entries.length === 0) return;
+  const rows = record && Array.isArray(record.rows) ? record.rows : [];
+  if (rows.length === 0) return;
   const { fonts } = state;
 
   const rowH = (r) =>
@@ -698,39 +701,47 @@ function drawNotificationRecord(state, record) {
       SIZE.body * LINE
     ) + 6;
   const headerRowH = SIZE.label * LINE + 8;
+
+  // Keep the section heading with the column-label row plus the first table
+  // row (mirroring their renderers below).
+  keepHeaderWithNext(state, SIZE.sectionHead + 24, headerRowH + rowH(rows[0]));
+  state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Notification Record", state.cursorY);
+
+  state.ensureRoom(headerRowH + rowH(rows[0]));
+  const headerPage = state.currentPage();
+  drawTextLine(headerPage, "AUTHORITY", CONTENT_X, state.cursorY - SIZE.label, fonts.sansReg, SIZE.label, MIST);
+  drawTextLine(headerPage, "DUE", CONTENT_X + NOTIF_DUE_X, state.cursorY - SIZE.label, fonts.sansReg, SIZE.label, MIST);
+  drawTextLine(headerPage, "NOTIFIED", CONTENT_X + NOTIF_NOTIF_X, state.cursorY - SIZE.label, fonts.sansReg, SIZE.label, MIST);
+  state.cursorY -= headerRowH;
+
+  for (const r of rows) {
+    state.ensureRoom(rowH(r));
+    const page = state.currentPage();
+    let y = state.cursorY;
+    for (const line of wrapText(r.authority, fonts.sansReg, SIZE.body, NOTIF_AUTH_W)) {
+      page.drawText(line, { x: CONTENT_X, y: y - SIZE.body, size: SIZE.body, font: fonts.sansReg, color: INK });
+      y -= SIZE.body * LINE;
+    }
+    drawTextLine(page, r.dueText, CONTENT_X + NOTIF_DUE_X, state.cursorY - SIZE.body, fonts.sansReg, SIZE.body, EMBER);
+    drawTextLine(page, r.notifiedText, CONTENT_X + NOTIF_NOTIF_X, state.cursorY - SIZE.body, fonts.sansReg, SIZE.body, INK);
+    state.cursorY = Math.min(y, state.cursorY - SIZE.body * LINE) - 6;
+  }
+  state.cursorY -= 16;
+}
+
+function drawIncidentLog(state, record) {
+  const entries = record && Array.isArray(record.entries) ? record.entries : [];
+  if (entries.length === 0) return;
+  const { fonts } = state;
+
   const entryH = (e) =>
     SIZE.label * LINE + LABEL_TO_BODY_GAP +
     measureWrapped(e.value, fonts.sansReg, SIZE.body, CONTENT_W) + 10;
 
-  // Keep the section heading with its first real content — the column-label
-  // row plus the first table row (mirroring their renderers below), or the
-  // first log entry when there are no table rows.
-  const firstContentH = rows.length ? headerRowH + rowH(rows[0]) : entryH(entries[0]);
-  keepHeaderWithNext(state, SIZE.sectionHead + 24, firstContentH);
-  state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Notification Record", state.cursorY);
-
-  if (rows.length) {
-    state.ensureRoom(headerRowH + rowH(rows[0]));
-    const headerPage = state.currentPage();
-    drawTextLine(headerPage, "AUTHORITY", CONTENT_X, state.cursorY - SIZE.label, fonts.sansReg, SIZE.label, MIST);
-    drawTextLine(headerPage, "DUE", CONTENT_X + NOTIF_DUE_X, state.cursorY - SIZE.label, fonts.sansReg, SIZE.label, MIST);
-    drawTextLine(headerPage, "NOTIFIED", CONTENT_X + NOTIF_NOTIF_X, state.cursorY - SIZE.label, fonts.sansReg, SIZE.label, MIST);
-    state.cursorY -= headerRowH;
-
-    for (const r of rows) {
-      state.ensureRoom(rowH(r));
-      const page = state.currentPage();
-      let y = state.cursorY;
-      for (const line of wrapText(r.authority, fonts.sansReg, SIZE.body, NOTIF_AUTH_W)) {
-        page.drawText(line, { x: CONTENT_X, y: y - SIZE.body, size: SIZE.body, font: fonts.sansReg, color: INK });
-        y -= SIZE.body * LINE;
-      }
-      drawTextLine(page, r.dueText, CONTENT_X + NOTIF_DUE_X, state.cursorY - SIZE.body, fonts.sansReg, SIZE.body, EMBER);
-      drawTextLine(page, r.notifiedText, CONTENT_X + NOTIF_NOTIF_X, state.cursorY - SIZE.body, fonts.sansReg, SIZE.body, INK);
-      state.cursorY = Math.min(y, state.cursorY - SIZE.body * LINE) - 6;
-    }
-    state.cursorY -= 8;
-  }
+  // Keep the section heading with the whole of its first entry (mirroring the
+  // entry renderer below) — same uniform keep-with-next guard as the rest.
+  keepHeaderWithNext(state, SIZE.sectionHead + 24, entryH(entries[0]));
+  state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Incident Log", state.cursorY);
 
   for (const e of entries) {
     state.ensureRoom(entryH(e));
@@ -987,11 +998,13 @@ function drawIncidentReport(state, sections) {
 //             four-arg callers (the gate harnesses) keep working untouched. Empty
 //             until Stage 4 routes the MA second-trigger here, so its section
 //             omits itself.
-// notificationRecord: { rows, entries } | null — the Notification Record
-//             section's content, built UI-side (see drawNotificationRecord).
-//             Passed as its own trailing param, never inside facts —
-//             notification data must not mix with the engine-facing shape.
-//             Null/empty → the section omits itself.
+// notificationRecord: { rows, entries } | null — content for TWO sections,
+//             built UI-side: `rows` feeds the "Notification Record" table
+//             (after the deadline analysis) and `entries` feeds the
+//             "Incident Log" section (after the incident report). Passed as
+//             its own trailing param, never inside facts — notification data
+//             must not mix with the engine-facing shape. Each section omits
+//             itself independently when its half is empty.
 //
 // Returns: Uint8Array — the serialized PDF bytes
 //
@@ -1037,8 +1050,8 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
     drawJurisdictionBlock(state, block);
   }
 
-  // Notification Record — after the deadline analysis, before the incident
-  // report. Omits itself when there is nothing recorded and nothing included.
+  // Notification Record (the Authority/Due/Notified table) — after the
+  // deadline analysis. Omits itself when there are no recorded notifications.
   drawNotificationRecord(state, notificationRecord);
 
   if (facts.incidentReport && facts.incidentReport.length > 0) {
@@ -1047,6 +1060,11 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
     state.addPage();
     drawIncidentReport(state, facts.incidentReport);
   }
+
+  // Incident Log — after the incident report (JDC ruling 2026-07-24; quick
+  // mode has no incident report, so the log follows the Notification Record
+  // table directly). Omits itself when there are no included entries.
+  drawIncidentLog(state, notificationRecord);
 
   drawFurtherConsiderations(state);
   drawFooterBlock(state, generatedAt);
