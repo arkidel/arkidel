@@ -496,6 +496,16 @@ the formal intake process. When starting a new Claude Code session, check
 this file for context on what's pending. The file was initialized on
 2026-05-23; session history prior to that date lives in the git log.
 
+### Gate-render history
+
+- 2026-07-24: notification record + incident log (efbd4fd, 459386a)
+  gate-rendered and PASSED — all recorded-card states at exact brand values
+  incl. the neutral no-deadline ruling, conditional party both directions,
+  Other→free-text swap, toggle persistence, orphan retention and
+  re-attachment, memo section order, unconditional Ember due dates, silent
+  log filtering. Deadline-phrase defects found and queued to the engine
+  design pass; not caused by these commits.
+
 ---
 
 ## Brand identity

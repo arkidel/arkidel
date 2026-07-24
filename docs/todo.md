@@ -546,6 +546,20 @@ history share a Supabase backend and should be sequenced together.
   value); a "no notification required" closed-state distinction downstream of
   risk-of-harm modeling; list filtering by status when the search stub is
   built.
+  - Submit & compute on a never-saved form persists nothing — user can fill,
+    submit, review results, close tab, and lose everything silently. Decide
+    whether explicit submit should create the row (compute-without-persist
+    arguably belongs to quick mode only). (Gate render 2026-07-24.)
+  - Edit → Submit & compute on a closed incident reactivates it with zero
+    fact changes (documented behavior in changeStatus). Decide whether a
+    no-op resubmit should transition, prompt, or return to results without
+    transitioning. (Gate render 2026-07-24.)
+  - No affordance to clear a recorded notification date — Edit date only.
+    Decide whether a clear/remove control is needed and how it renders in
+    the record. (Gate render 2026-07-24.)
+  - Decision (JDC, 2026-07-24): the record-notification affordance and log
+    add-entry form remain available on closed incidents; closed is a status,
+    not a lock. Locking arrives with the edit-locking/audit-trail work.
 - File attachments on incident log entries + per-incident Files tab — gated
   on privacy policy (processor status, retention, deletion for stored breach
   files; see account-maintenance.md [JDC] markers). Supabase Storage,
@@ -559,6 +573,20 @@ history share a Supabase backend and should be sequenced together.
   conditional obligations. When it lands: upgrade DE § 12B-102(e)/(f) and MA
   c. 93H § 3A standing notes to computed outputs. Identified 2026-07-17 during
   Delaware intake (CC blocked-report; JDC ruled standing notes interim).
+  - Statutory deadline-phrase repair — four instances of hardcoded generic
+    phrasing misstating statutory language (gates Connecticut alongside the
+    existing scope; found in the 2026-07-24 gate render): (1) engine.js:328
+    pushes "without undue delay" (GDPR wording) as the basis label for ALL
+    no-fixed-clock obligations — wrong for Va. Code § 18.2-186.6(B) and
+    Colo. Rev. Stat. § 6-1-716(2)(d), which say "without unreasonable
+    delay"; (2) the no-deadline display slot (memo right slot and UI card)
+    hardcodes "Without unreasonable delay" — wrong for EU Art. 34, which
+    says "without undue delay"; (3) EU Art. 33 basis renders "3 days from
+    awareness" — statutory language is 72 hours; (4) the previously recorded
+    § 12B-102(d) "0 days from notification" artifact. Fix: per-obligation
+    statutory deadline phrase field in data.js, consumed by both the basis
+    composer and the no-deadline display label. Protected files — JDC
+    sign-off required.
 
 ---
 
