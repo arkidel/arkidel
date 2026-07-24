@@ -35,7 +35,7 @@ import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine
 import { groupResultsByJurisdiction } from "./results-grouping.js";
 import { computableGate, factsFromPayload } from "./facts.js";
 import { generateMemoPdf } from "./memo-pdf.js";
-import { createIncident, updateIncident, updateIncidentStatus, getIncident } from "../data/incidents.js";
+import { createIncident, updateIncident, updateIncidentStatus, updateIncidentNotifications, updateIncidentLog, getIncident } from "../data/incidents.js";
 import { useOrg } from "../org/OrgProvider.jsx";
 import ArkidelCaret from "../components/ArkidelCaret.jsx";
 import usePageTitle from "../usePageTitle.js";
@@ -128,6 +128,44 @@ const joinList = (arr) =>
     : `${arr.slice(0, -1).join(", ")}, and ${arr[arr.length - 1]}`;
 
 const SOURCE_OPTIONS = ["Internal", "External"];
+
+// ── Notification record + incident log (results view; persisted as the
+//    top-level `notifications` / `incident_log` jsonb columns, siblings of
+//    payload — NEVER nested in the payload and never seen by the engine). ──
+
+// Incident-log entry types. Communications carry a party (who the
+// communication was with); updates do not. Entries store the stable id;
+// labels render on screen and in the memo.
+const LOG_TYPES = [
+  { id: "initial_notification", label: "Initial notification", kind: "communication" },
+  { id: "supplemental_notification", label: "Supplemental notification", kind: "communication" },
+  { id: "inquiry_received", label: "Inquiry received", kind: "communication" },
+  { id: "response_sent", label: "Response sent", kind: "communication" },
+  { id: "development", label: "Development", kind: "update" },
+  { id: "remediation_update", label: "Remediation update", kind: "update" },
+  { id: "note", label: "Note", kind: "update" },
+];
+const LOG_TYPE_BY_ID = Object.fromEntries(LOG_TYPES.map((t) => [t.id, t]));
+// Sentinel for the "Other (enter name)" party option — swaps the select for a
+// free-text input. Never stored on an entry (the resolved name is).
+const OTHER_PARTY = "__other__";
+
+// Engine deadline objects carry `jurisdiction: jur.short` (the id is internal
+// to the engine and stripped before return), so map short → id to build the
+// stable "{jurId}:{authority}" notification-record keys.
+const JUR_SHORT_TO_ID = Object.fromEntries(JURISDICTIONS.map((j) => [j.short, j.id]));
+const notifKey = (d) => `${JUR_SHORT_TO_ID[d.jurisdiction] || d.jurisdiction}:${d.authority}`;
+
+// Parse a "YYYY-MM-DD" date-only string as LOCAL midnight (new Date(str)
+// would parse it as UTC and shift the calendar day in western timezones).
+const parseDateOnly = (s) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ""));
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+};
+const fmtDateOnly = (s) => {
+  const d = parseDateOnly(s);
+  return d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : String(s || "");
+};
 
 const DATA_PRINCIPLES = [
   { id: "confidentiality", label: "Confidentiality", desc: "Unauthorized or accidental access or disclosure of the personal data." },
@@ -360,6 +398,21 @@ export default function BreachClock() {
   // status changes immediately (changeStatus); the unsaved form holds status
   // in memory and the first save writes it through createIncident.
   const [status, setStatus] = useState("draft");
+  // Notification record + incident log — DB columns siblings of payload, NOT
+  // part of the payload (applyPayload never touches them) and never part of
+  // the facts the engine sees. Both persist immediately on change, the same
+  // pattern as status: saved incidents write through their dedicated update
+  // functions; the unsaved form holds them in memory and the first save
+  // writes them via createIncident.
+  const [notifications, setNotifications] = useState({});
+  const [incidentLog, setIncidentLog] = useState([]);
+  // Inline notified-on editor on the deadline cards: the open card's
+  // "{jurId}:{authority}" key (null = none open) + the draft date value.
+  const [notifEditing, setNotifEditing] = useState(null);
+  const [notifDraft, setNotifDraft] = useState("");
+  // Add-entry draft for the incident log's bottom form.
+  const EMPTY_LOG_DRAFT = { date: "", type: "", party: "", partyOther: "", note: "" };
+  const [logDraft, setLogDraft] = useState(EMPTY_LOG_DRAFT);
   // The id created by this session's first save. The load effect skips the
   // refetch for it — the form state IS the just-saved payload already.
   const justCreatedRef = useRef(null);
@@ -415,6 +468,11 @@ export default function BreachClock() {
       justCreatedRef.current = null;
       setSavedAt(null);
       setStatus("draft");
+      setNotifications({});
+      setIncidentLog([]);
+      setNotifEditing(null);
+      setNotifDraft("");
+      setLogDraft(EMPTY_LOG_DRAFT);
       applyPayload({});
       setLoadState("ready");
       return undefined;
@@ -433,6 +491,11 @@ export default function BreachClock() {
         }
         applyPayload(incident.payload || {});
         setStatus(incident.status || "draft");
+        setNotifications(incident.notifications && typeof incident.notifications === "object" ? incident.notifications : {});
+        setIncidentLog(Array.isArray(incident.incident_log) ? incident.incident_log : []);
+        setNotifEditing(null);
+        setNotifDraft("");
+        setLogDraft(EMPTY_LOG_DRAFT);
         setSavedAt(null);
         setAutoComputePending(true);
         setLoadState("ready");
@@ -476,8 +539,9 @@ export default function BreachClock() {
         await updateIncident(routeIncidentId, { title, payload: buildPayload() });
       } else {
         // First save writes the in-memory status too — an incident submitted
-        // before ever being saved is created active, not draft.
-        const row = await createIncident(activeOrg?.id, title, buildPayload(), status);
+        // before ever being saved is created active, not draft — along with
+        // any notification records / log entries made before the first save.
+        const row = await createIncident(activeOrg?.id, title, buildPayload(), status, notifications, incidentLog);
         justCreatedRef.current = row.id;
         // replace: back from the saved URL should not land on the blank form
         // and create a duplicate on the next save.
@@ -512,6 +576,38 @@ export default function BreachClock() {
       console.error("Incident status update failed:", err);
       setStatus(prev);
       setSaveError(err?.message ? `Status change failed: ${err.message}` : "Status change failed. Try again.");
+    }
+  };
+
+  // Persist the notification record / incident log — same immediate-write
+  // pattern as changeStatus: optimistic state update, reverted on a failed
+  // write, surfaced through the module's normal save-error slot. On the
+  // unsaved form there is no row yet; the value is held in memory and written
+  // by the first save (handleSave).
+  const persistNotifications = async (next) => {
+    const prev = notifications;
+    setNotifications(next);
+    if (!routeIncidentId) return;
+    try {
+      await updateIncidentNotifications(routeIncidentId, next);
+      setSaveError("");
+    } catch (err) {
+      console.error("Notification record update failed:", err);
+      setNotifications(prev);
+      setSaveError(err?.message ? `Notification record failed: ${err.message}` : "Notification record failed. Try again.");
+    }
+  };
+  const persistIncidentLog = async (next) => {
+    const prev = incidentLog;
+    setIncidentLog(next);
+    if (!routeIncidentId) return;
+    try {
+      await updateIncidentLog(routeIncidentId, next);
+      setSaveError("");
+    } catch (err) {
+      console.error("Incident log update failed:", err);
+      setIncidentLog(prev);
+      setSaveError(err?.message ? `Incident log update failed: ${err.message}` : "Incident log update failed. Try again.");
     }
   };
 
@@ -869,7 +965,31 @@ export default function BreachClock() {
         status,
         incidentReport: quickMode ? null : buildIncidentReportSections(),
       };
-      const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed, review);
+      // Notification Record section — built UI-side (like incidentReport) and
+      // passed as its own parameter, never inside facts: dates-only rows for
+      // each obligation with a recorded notification, plus the log entries the
+      // user included (filtering is silent — no counts, no gaps). Null when
+      // there is nothing to show, so the memo omits the section entirely.
+      const memoDateFmt = { month: "short", day: "numeric", year: "numeric" };
+      const notifRows = deadlines
+        .filter((d) => notifications[notifKey(d)])
+        .map((d) => ({
+          authority: d.authority,
+          dueText: d.deadline ? d.deadline.toLocaleDateString("en-US", memoDateFmt) : "—",
+          notifiedText: fmtDateOnly(notifications[notifKey(d)].notified_on),
+        }));
+      const memoLogEntries = [...incidentLog]
+        .filter((e) => e.include_in_memo)
+        .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+        .map((e) => {
+          const t = LOG_TYPE_BY_ID[e.type];
+          const typeLabel = t ? t.label : String(e.type || "");
+          const lead = t?.kind === "communication" && e.party ? `${e.party} · ${typeLabel}` : typeLabel;
+          return { label: `${fmtDateOnly(e.date)} — ${lead}`, value: e.note || "—" };
+        });
+      const notificationRecord =
+        notifRows.length || memoLogEntries.length ? { rows: notifRows, entries: memoLogEntries } : null;
+      const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed, review, notificationRecord);
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1650,8 +1770,20 @@ export default function BreachClock() {
     // only relocated into the per-jurisdiction blocks. No copy or style change.
     const renderActiveCard = (d, i, blockActive, extraStyle) => {
       const timeRemaining = d.deadline ? d.deadline.getTime() - now.getTime() : null;
-      const isMissed = timeRemaining !== null && timeRemaining < 0;
-      const isUrgent = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 3600 * 1000;
+      // Notification record for this obligation. A recorded card stops being a
+      // live matter: no countdown, no urgent/missed treatment — the stripe and
+      // the "Notified {date}" line speak instead (Moss when the notified
+      // calendar date is at-or-before the due date, neutral Mist/Ink when
+      // after). Dates only — never a computed lateness delta, on screen or in
+      // the PDF (durable decision).
+      const recKey = notifKey(d);
+      const rec = notifications[recKey];
+      const notifiedDate = rec ? parseDateOnly(rec.notified_on) : null;
+      // Local-midnight vs. due-instant comparison = calendar-date on-or-before.
+      // No fixed-hour deadline → nothing to be late against → the Moss side.
+      const recOnTime = rec ? (!d.deadline || (notifiedDate && notifiedDate.getTime() <= d.deadline.getTime())) : null;
+      const isMissed = !rec && timeRemaining !== null && timeRemaining < 0;
+      const isUrgent = !rec && timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 3600 * 1000;
       // Closed incidents render as record, not as live matter (JDC ruling
       // 2026-07-21): no ticking countdown, no overdue/urgency treatment
       // anywhere — every dated card shows a static Mist "Due {date}" in the
@@ -1676,7 +1808,13 @@ export default function BreachClock() {
         <div
           key={i}
           className={`deadline-card ${isMissed ? "missed" : isUrgent && !isClosed ? "urgent" : ""}`}
-          style={{ ...extraStyle, ...(isClosed && isMissed ? { borderLeftColor: "#9FAEC2" } : {}) }}
+          style={{
+            ...extraStyle,
+            ...(isClosed && isMissed ? { borderLeftColor: "#9FAEC2" } : {}),
+            // Recorded stripe: Moss when notified on-or-before due, neutral
+            // Mist when after. Live (unrecorded) stripes are unchanged.
+            ...(rec ? { borderLeftColor: recOnTime ? "#5A6E4A" : "#9FAEC2" } : {}),
+          }}
         >
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
             <div>
@@ -1702,7 +1840,21 @@ export default function BreachClock() {
               )}
             </div>
             <div style={{ textAlign: "right", minWidth: "200px" }}>
-              {d.deadline ? (
+              {rec ? (
+                /* Recorded: the countdown/deadline slot shows the notified
+                   date; the due date drops to the Mist secondary line. Applies
+                   identically on closed incidents (same treatment, per spec). */
+                <>
+                  <div style={{ fontSize: "13px", fontWeight: 500, color: recOnTime ? "#5A6E4A" : "#2C2418" }}>
+                    Notified {fmtDateOnly(rec.notified_on)}
+                  </div>
+                  {d.deadline && (
+                    <div style={{ fontSize: "11.5px", color: "#9FAEC2", marginTop: "5px" }}>
+                      Due {d.deadline.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </div>
+                  )}
+                </>
+              ) : d.deadline ? (
                 <>
                   {/* Missed cards carry no section-mark: the Ember "…overdue"
                       countdown is the whole overdue statement (ruled 2026-07-18).
@@ -1746,6 +1898,107 @@ export default function BreachClock() {
               )}
             </div>
           </div>
+          {renderNotificationFooter(d, recKey, rec, isMissed && !isClosed)}
+        </div>
+      );
+    };
+
+    // Notification-record footer strip on every computed deadline card (never
+    // on suppressed or counsel-review cards): a hairline, then a quiet
+    // text-link → inline horizontal editor → recorded "Edit date" link.
+    // `isDark` = the live-overdue card's Midnight surface, where the spec's
+    // Midnight-on-white footer colors would vanish — those elements flip to
+    // their light equivalents there (legibility adaptation only).
+    const renderNotificationFooter = (d, recKey, rec, isDark) => {
+      const editorOpen = notifEditing === recKey;
+      const openEditor = () => {
+        setNotifEditing(recKey);
+        setNotifDraft(rec ? rec.notified_on : "");
+      };
+      const closeEditor = () => {
+        setNotifEditing(null);
+        setNotifDraft("");
+      };
+      const saveNotified = () => {
+        if (!notifDraft) return;
+        persistNotifications({
+          ...notifications,
+          [recKey]: { notified_on: notifDraft, recorded_at: new Date().toISOString() },
+        });
+        closeEditor();
+      };
+      const linkStyle = (color, borderColor) => ({
+        background: "none", border: "none", padding: "0 0 1px", margin: 0,
+        fontFamily: "'Inter', sans-serif", fontSize: "12.5px", color,
+        borderBottom: `1px solid ${borderColor}`, cursor: "pointer",
+      });
+      return (
+        <div
+          style={{
+            marginTop: "14px",
+            borderTop: isDark ? "1px solid rgba(250,248,242,0.18)" : "1px solid rgba(27,42,63,0.10)",
+            paddingTop: "10px",
+          }}
+        >
+          {editorOpen ? (
+            /* Horizontal inline editor — deliberately NOT the label-above
+               convention: label sits to the LEFT of the date input. */
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <span className="section-mark" style={isDark ? { color: "#FAF8F2", opacity: 0.85 } : undefined}>
+                Notified on
+              </span>
+              <input
+                type="date"
+                value={notifDraft}
+                onChange={(e) => setNotifDraft(e.target.value)}
+                aria-label="Date notified"
+                style={{
+                  background: "#FAF8F2", border: "1px solid rgba(27,42,63,0.3)", borderRadius: 0,
+                  padding: "7px 10px", fontFamily: "'Inter', sans-serif", fontSize: "13px", color: "#2C2418",
+                  outline: "none",
+                }}
+              />
+              <button
+                type="button"
+                onClick={saveNotified}
+                disabled={!notifDraft}
+                style={{
+                  background: isDark ? "#FAF8F2" : "#1B2A3F", color: isDark ? "#1B2A3F" : "#FAF8F2",
+                  border: "none", borderRadius: "8px", padding: "8px 16px",
+                  fontFamily: "'Inter', sans-serif", fontSize: "12.5px", fontWeight: 500,
+                  cursor: notifDraft ? "pointer" : "not-allowed", opacity: notifDraft ? 1 : 0.5,
+                }}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={closeEditor}
+                style={{
+                  background: "none", border: "none", padding: "4px 0", margin: 0,
+                  fontFamily: "'Inter', sans-serif", fontSize: "12.5px", color: "#9FAEC2", cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : rec ? (
+            <button type="button" onClick={openEditor} style={linkStyle("#9FAEC2", "rgba(159,174,194,0.5)")}>
+              Edit date
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={openEditor}
+              style={
+                isDark
+                  ? linkStyle("#FAF8F2", "rgba(250,248,242,0.4)")
+                  : linkStyle("#1B2A3F", "rgba(27,42,63,0.3)")
+              }
+            >
+              Record notification date
+            </button>
+          )}
         </div>
       );
     };
@@ -2005,6 +2258,200 @@ export default function BreachClock() {
         ))}
       </div>
     </>
+    );
+  };
+
+  // ── Incident log (results view; below the deadline cards). Entries are
+  //    record-keeping only — chronological, each toggleable in/out of the memo
+  //    (toggling persists immediately; exclusion carries no visual penalty
+  //    beyond the unchecked box). Orphaned notification records — recorded
+  //    against an obligation a facts edit no longer computes — are retained
+  //    (never deleted on recompute) and rendered read-only at the end. ──
+  const renderIncidentLog = () => {
+    const currentKeys = new Set(deadlines.map((d) => notifKey(d)));
+    const orphans = Object.entries(notifications)
+      .filter(([key]) => !currentKeys.has(key))
+      .map(([key, rec]) => {
+        const sep = key.indexOf(":");
+        const jurId = sep >= 0 ? key.slice(0, sep) : key;
+        const authority = sep >= 0 ? key.slice(sep + 1) : "";
+        const jur = JURISDICTIONS.find((j) => j.id === jurId);
+        return { key, rec, jurisdiction: jur ? jur.short : jurId, authority };
+      });
+    const sortedEntries = [...incidentLog].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+    const draftType = LOG_TYPE_BY_ID[logDraft.type];
+    const isComm = draftType?.kind === "communication";
+    const resolvedParty = !isComm
+      ? null
+      : logDraft.party === OTHER_PARTY
+      ? logDraft.partyOther.trim()
+      : logDraft.party;
+    const canAdd = !!(logDraft.date && logDraft.type && (!isComm || resolvedParty));
+    // Party options: the authorities from the currently computed deadlines,
+    // plus "Other (enter name)" which swaps the select for a text input.
+    const authorities = [...new Set(deadlines.map((d) => d.authority))];
+
+    const addEntry = () => {
+      if (!canAdd) return;
+      const entry = {
+        id: crypto.randomUUID(),
+        date: logDraft.date,
+        type: logDraft.type,
+        party: isComm ? resolvedParty : null,
+        note: logDraft.note.trim(),
+        include_in_memo: true,
+        recorded_at: new Date().toISOString(),
+      };
+      persistIncidentLog([...incidentLog, entry]);
+      setLogDraft(EMPTY_LOG_DRAFT);
+    };
+    const toggleInMemo = (id) =>
+      persistIncidentLog(incidentLog.map((e) => (e.id === id ? { ...e, include_in_memo: !e.include_in_memo } : e)));
+
+    // Add-entry field chrome: white, hairline, square corners, 13px Inter.
+    const fieldChrome = {
+      background: "#fff", border: "1px solid rgba(27,42,63,0.3)", borderRadius: 0,
+      padding: "9px 11px", fontFamily: "'Inter', sans-serif", fontSize: "13px",
+      color: "#2C2418", outline: "none",
+    };
+    const rowBorder = "1px solid rgba(27,42,63,0.10)";
+
+    const renderEntryRow = (e) => {
+      const t = LOG_TYPE_BY_ID[e.type];
+      const typeLabel = t ? t.label : String(e.type || "");
+      const lead =
+        t?.kind === "communication" ? (
+          <>
+            <span style={{ color: "#1B2A3F", fontWeight: 500 }}>{e.party}</span>
+            <span> · {typeLabel}</span>
+          </>
+        ) : (
+          <span style={{ color: "#1B2A3F", fontWeight: 500 }}>{typeLabel}</span>
+        );
+      return (
+        <div key={e.id} style={{ display: "flex", gap: "16px", alignItems: "flex-start", padding: "14px 20px", borderBottom: rowBorder }}>
+          <div className="mono" style={{ width: "96px", flexShrink: 0, fontSize: "12px", color: "#1B2A3F", paddingTop: "2px" }}>
+            {fmtDateOnly(e.date)}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: "13.5px", lineHeight: 1.5 }}>{lead}</div>
+            {e.note && (
+              <div style={{ fontSize: "13px", color: "#2C2418", opacity: 0.8, lineHeight: 1.55, marginTop: "2px" }}>
+                {e.note}
+              </div>
+            )}
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0, cursor: "pointer", paddingTop: "2px" }}>
+            <span style={{ fontFamily: "'Inter', sans-serif", fontSize: "11px", color: "#9FAEC2" }}>In memo</span>
+            <input
+              type="checkbox"
+              checked={!!e.include_in_memo}
+              onChange={() => toggleInMemo(e.id)}
+              style={{ width: "14px", height: "14px", accentColor: "#1B2A3F", margin: 0 }}
+            />
+          </label>
+        </div>
+      );
+    };
+
+    return (
+      <div style={{ marginTop: "44px" }}>
+        <div className="section-mark" style={{ marginBottom: "14px" }}>Incident log</div>
+        <div style={{ background: "#fff", border: "1px solid rgba(27,42,63,0.18)", borderRadius: "12px", overflow: "hidden" }}>
+          {sortedEntries.map(renderEntryRow)}
+          {orphans.map((o) => (
+            <div key={o.key} style={{ padding: "14px 20px", borderBottom: rowBorder, fontSize: "13px", lineHeight: 1.55, color: "#2C2418", opacity: 0.7 }}>
+              Notified {fmtDateOnly(o.rec.notified_on)} — {o.jurisdiction} / {o.authority} (obligation no longer computed)
+            </div>
+          ))}
+          {/* Add-entry form — Bone strip, fields stacked vertically, labels
+              above in the intake form's own label idiom (labelRow). */}
+          <div style={{ background: "#FAF8F2", padding: "20px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+              <div>
+                {labelRow("Date")}
+                <input
+                  type="date"
+                  value={logDraft.date}
+                  onChange={(e) => setLogDraft((prev) => ({ ...prev, date: e.target.value }))}
+                  style={{ ...fieldChrome, width: "200px", maxWidth: "100%" }}
+                />
+              </div>
+              <div>
+                {labelRow("Type")}
+                <select
+                  value={logDraft.type}
+                  onChange={(e) => setLogDraft((prev) => ({ ...prev, type: e.target.value, party: "", partyOther: "" }))}
+                  style={{ ...fieldChrome, width: "320px", maxWidth: "100%" }}
+                >
+                  <option value="">Select…</option>
+                  <optgroup label="Communications">
+                    {LOG_TYPES.filter((t) => t.kind === "communication").map((t) => (
+                      <option key={t.id} value={t.id}>{t.label}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Updates">
+                    {LOG_TYPES.filter((t) => t.kind === "update").map((t) => (
+                      <option key={t.id} value={t.id}>{t.label}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+              {isComm && (
+                <div>
+                  {labelRow("Party")}
+                  {logDraft.party === OTHER_PARTY ? (
+                    <input
+                      value={logDraft.partyOther}
+                      onChange={(e) => setLogDraft((prev) => ({ ...prev, partyOther: e.target.value }))}
+                      placeholder="Party name"
+                      style={{ ...fieldChrome, width: "320px", maxWidth: "100%" }}
+                    />
+                  ) : (
+                    <select
+                      value={logDraft.party}
+                      onChange={(e) => setLogDraft((prev) => ({ ...prev, party: e.target.value }))}
+                      style={{ ...fieldChrome, width: "320px", maxWidth: "100%" }}
+                    >
+                      <option value="">Select…</option>
+                      {authorities.map((a) => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                      <option value={OTHER_PARTY}>Other (enter name)</option>
+                    </select>
+                  )}
+                </div>
+              )}
+              <div>
+                {labelRow("Note")}
+                <textarea
+                  rows={2}
+                  value={logDraft.note}
+                  onChange={(e) => setLogDraft((prev) => ({ ...prev, note: e.target.value }))}
+                  placeholder="e.g. Response submitted by counsel"
+                  style={{ ...fieldChrome, width: "100%", maxWidth: "560px", resize: "vertical", lineHeight: 1.5, display: "block" }}
+                />
+              </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={addEntry}
+                  disabled={!canAdd}
+                  style={{
+                    background: "transparent", border: "1px solid #1B2A3F", borderRadius: 0,
+                    padding: "9px 18px", fontFamily: "'Inter', sans-serif", fontSize: "13px",
+                    fontWeight: 500, color: "#1B2A3F",
+                    cursor: canAdd ? "pointer" : "not-allowed", opacity: canAdd ? 1 : 0.45,
+                  }}
+                >
+                  Add entry
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -2415,6 +2862,10 @@ export default function BreachClock() {
         </div>
         <div className="divider-thick" style={{ marginBottom: "24px" }} />
         {renderObligations()}
+
+        {/* Incident log — below the deadline cards, above the incident-report
+            recap and further-considerations sections. Renders in both modes. */}
+        {renderIncidentLog()}
 
         {/* Incident-report recap (full mode only) */}
         {!quickMode && reportSections.length > 0 && (

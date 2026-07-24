@@ -16,8 +16,10 @@
 //   3. Deadline obligations (one card per firing obligation)
 //   4. Suppressed obligations (conditional — only if any suppressed)
 //   5. Jurisdictional notes (conditional — only if any selected jur has notes)
-//   6. Further considerations (six fixed bullets)
-//   7. Disclaimer + generation footer block
+//   6. Notification record (conditional — recorded notifications + included
+//      incident-log entries; omitted entirely when both are empty)
+//   7. Further considerations (six fixed bullets)
+//   8. Disclaimer + generation footer block
 // =============================================================================
 
 import { PDFDocument, PDFString, rgb } from "pdf-lib";
@@ -31,6 +33,11 @@ const INK = rgb(0.173, 0.141, 0.094);
 const MIST = rgb(0.624, 0.682, 0.761);
 const MOSS = rgb(0.353, 0.431, 0.290);
 const PARCHMENT = rgb(0.910, 0.867, 0.769);
+// Ember (#C76E3A) — the memo's due-date color. Every due date the memo prints
+// renders in Ember unconditionally (deadline cards AND the Notification
+// Record table): it is the deadline color, not a warning, and must never vary
+// with status or timing (durable decision).
+const EMBER = rgb(0.780, 0.431, 0.227);
 
 // ─── Page geometry (points; 72pt = 1in) ───────────────────────────────────
 const PAGE_W = 612;
@@ -412,7 +419,8 @@ function drawCard(page, blocks, topY, borderColor, fonts) {
           y - SIZE.authority + 1,
           fonts.sansReg,
           SIZE.body,
-          INK
+          // Due dates render Ember unconditionally (see EMBER above).
+          b.rightColor === "ember" ? EMBER : INK
         );
       }
       y -= lines.length * SIZE.authority * LINE;
@@ -481,7 +489,7 @@ function attachLink(page, url, x, bottomY, height, width) {
 
 function deadlineBlocks(d) {
   return [
-    { type: "topRow", left: d.authority, right: formatDeadline(d.deadline) },
+    { type: "topRow", left: d.authority, right: formatDeadline(d.deadline), rightColor: "ember" },
     { type: "labelBody", label: "Basis", body: d.basis || "—" },
     ...(d.conditional ? [{ type: "labelBody", label: "Conditional", body: d.conditional }] : []),
     ...(d.source_url ? [{ type: "url", label: "Source", url: d.source_url }] : []),
@@ -653,6 +661,85 @@ function drawJurisdictionBlock(state, block) {
       const cardBottom = drawCard(state.currentPage(), item.blocks, state.cursorY, item.color, fonts);
       state.cursorY = cardBottom - CARD_GAP;
     }
+  }
+  state.cursorY -= 8;
+}
+
+// ─── Section: notification record ─────────────────────────────────────────
+//
+// Renders after the deadline analysis, before the incident report. Two parts,
+// both built UI-side (the core renders exactly what it's given, matching the
+// incidentReport pattern):
+//   1. A dates-only table — Authority / Due / Notified — one row per
+//      obligation with a recorded notification. Due dates Ember (the memo's
+//      unconditional due-date color), notified dates Ink. No deltas, no
+//      status words — the record is non-evaluative (durable decision).
+//   2. The incident log as dated entries in the memo's label/value idiom.
+//      Only entries the caller passed render; the caller filters to
+//      include_in_memo silently — no counts, no gaps, no indication that
+//      filtering exists.
+// The whole section omits itself when the record is null or empty (including
+// on closed incidents).
+
+const NOTIF_AUTH_W = 220; // authority column width (wraps)
+const NOTIF_DUE_X = 240;  // due column x-offset from CONTENT_X
+const NOTIF_NOTIF_X = 356; // notified column x-offset from CONTENT_X
+
+function drawNotificationRecord(state, record) {
+  if (!record) return;
+  const rows = Array.isArray(record.rows) ? record.rows : [];
+  const entries = Array.isArray(record.entries) ? record.entries : [];
+  if (rows.length === 0 && entries.length === 0) return;
+  const { fonts } = state;
+
+  const rowH = (r) =>
+    Math.max(
+      wrapText(r.authority, fonts.sansReg, SIZE.body, NOTIF_AUTH_W).length * SIZE.body * LINE,
+      SIZE.body * LINE
+    ) + 6;
+  const headerRowH = SIZE.label * LINE + 8;
+  const entryH = (e) =>
+    SIZE.label * LINE + LABEL_TO_BODY_GAP +
+    measureWrapped(e.value, fonts.sansReg, SIZE.body, CONTENT_W) + 10;
+
+  // Keep the section heading with its first real content — the column-label
+  // row plus the first table row (mirroring their renderers below), or the
+  // first log entry when there are no table rows.
+  const firstContentH = rows.length ? headerRowH + rowH(rows[0]) : entryH(entries[0]);
+  keepHeaderWithNext(state, SIZE.sectionHead + 24, firstContentH);
+  state.cursorY = drawSectionHeading(state.currentPage(), fonts, "Notification Record", state.cursorY);
+
+  if (rows.length) {
+    state.ensureRoom(headerRowH + rowH(rows[0]));
+    const headerPage = state.currentPage();
+    drawTextLine(headerPage, "AUTHORITY", CONTENT_X, state.cursorY - SIZE.label, fonts.sansReg, SIZE.label, MIST);
+    drawTextLine(headerPage, "DUE", CONTENT_X + NOTIF_DUE_X, state.cursorY - SIZE.label, fonts.sansReg, SIZE.label, MIST);
+    drawTextLine(headerPage, "NOTIFIED", CONTENT_X + NOTIF_NOTIF_X, state.cursorY - SIZE.label, fonts.sansReg, SIZE.label, MIST);
+    state.cursorY -= headerRowH;
+
+    for (const r of rows) {
+      state.ensureRoom(rowH(r));
+      const page = state.currentPage();
+      let y = state.cursorY;
+      for (const line of wrapText(r.authority, fonts.sansReg, SIZE.body, NOTIF_AUTH_W)) {
+        page.drawText(line, { x: CONTENT_X, y: y - SIZE.body, size: SIZE.body, font: fonts.sansReg, color: INK });
+        y -= SIZE.body * LINE;
+      }
+      drawTextLine(page, r.dueText, CONTENT_X + NOTIF_DUE_X, state.cursorY - SIZE.body, fonts.sansReg, SIZE.body, EMBER);
+      drawTextLine(page, r.notifiedText, CONTENT_X + NOTIF_NOTIF_X, state.cursorY - SIZE.body, fonts.sansReg, SIZE.body, INK);
+      state.cursorY = Math.min(y, state.cursorY - SIZE.body * LINE) - 6;
+    }
+    state.cursorY -= 8;
+  }
+
+  for (const e of entries) {
+    state.ensureRoom(entryH(e));
+    drawTextLine(state.currentPage(), upperLabel(e.label), CONTENT_X, state.cursorY - SIZE.label, fonts.sansReg, SIZE.label, MIST);
+    state.cursorY -= SIZE.label * LINE + 2;
+    state.cursorY = drawWrapped(state.currentPage(), e.value, CONTENT_X, state.cursorY, {
+      font: fonts.sansReg, size: SIZE.body, color: INK, maxWidth: CONTENT_W,
+    });
+    state.cursorY -= 10;
   }
   state.cursorY -= 8;
 }
@@ -900,10 +987,15 @@ function drawIncidentReport(state, sections) {
 //             four-arg callers (the gate harnesses) keep working untouched. Empty
 //             until Stage 4 routes the MA second-trigger here, so its section
 //             omits itself.
+// notificationRecord: { rows, entries } | null — the Notification Record
+//             section's content, built UI-side (see drawNotificationRecord).
+//             Passed as its own trailing param, never inside facts —
+//             notification data must not mix with the engine-facing shape.
+//             Null/empty → the section omits itself.
 //
 // Returns: Uint8Array — the serialized PDF bytes
 //
-export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontBytes, logoBytes, generatedAt }, review = []) {
+export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontBytes, logoBytes, generatedAt }, review = [], notificationRecord = null) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
 
@@ -944,6 +1036,10 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
   for (const block of groups) {
     drawJurisdictionBlock(state, block);
   }
+
+  // Notification Record — after the deadline analysis, before the incident
+  // report. Omits itself when there is nothing recorded and nothing included.
+  drawNotificationRecord(state, notificationRecord);
 
   if (facts.incidentReport && facts.incidentReport.length > 0) {
     // The incident report is a distinct artifact appended to the analysis —

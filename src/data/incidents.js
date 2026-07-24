@@ -16,7 +16,7 @@ import { supabase } from "../lib/supabase.js";
 // the insert-returning, and the update-returning agree. payload is the full
 // saved form state; deadlines are never stored — only inputs.
 const INCIDENT_COLUMNS =
-  "id, org_id, title, status, payload, schema_version, created_at, updated_at";
+  "id, org_id, title, status, payload, notifications, incident_log, schema_version, created_at, updated_at";
 
 // The list view reads the promoted columns PLUS payload: the Respond home
 // list computes each row's Next-deadline column client-side from the saved
@@ -32,13 +32,16 @@ const LIST_COLUMNS = "id, title, status, payload, created_at, updated_at";
 // status carries the unsaved form's in-memory lifecycle state into the first
 // save (an incident submitted before ever being saved is created 'active',
 // not 'draft'); values are constrained by incidents_status_check.
-export async function createIncident(orgId, title, payload, status = "draft") {
+// notifications / incidentLog likewise carry in-memory notification records
+// and log entries accumulated before the first save — top-level jsonb columns,
+// siblings of payload, never nested inside it (they do not feed the engine).
+export async function createIncident(orgId, title, payload, status = "draft", notifications = {}, incidentLog = []) {
   if (!orgId) {
     throw new Error("An organization is required to save an incident.");
   }
   const { data, error } = await supabase
     .from("incidents")
-    .insert({ org_id: orgId, title, payload, status })
+    .insert({ org_id: orgId, title, payload, status, notifications, incident_log: incidentLog })
     .select(INCIDENT_COLUMNS)
     .single();
   if (error) throw error;
@@ -67,6 +70,34 @@ export async function updateIncidentStatus(id, status) {
   const { data, error } = await supabase
     .from("incidents")
     .update({ status })
+    .eq("id", id)
+    .select(INCIDENT_COLUMNS)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Update an incident's notification record alone (the `notifications` jsonb
+// column — keyed "{jurId}:{authority}", values { notified_on, recorded_at }).
+// Like status, notification records persist immediately on change rather than
+// staging behind Save, so this deliberately touches nothing else.
+export async function updateIncidentNotifications(id, notifications) {
+  const { data, error } = await supabase
+    .from("incidents")
+    .update({ notifications })
+    .eq("id", id)
+    .select(INCIDENT_COLUMNS)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Update an incident's log alone (the `incident_log` jsonb array). Same
+// immediate-persist pattern as updateIncidentStatus / notifications above.
+export async function updateIncidentLog(id, incidentLog) {
+  const { data, error } = await supabase
+    .from("incidents")
+    .update({ incident_log: incidentLog })
     .eq("id", id)
     .select(INCIDENT_COLUMNS)
     .single();

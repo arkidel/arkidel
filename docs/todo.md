@@ -546,6 +546,11 @@ history share a Supabase backend and should be sequenced together.
   value); a "no notification required" closed-state distinction downstream of
   risk-of-harm modeling; list filtering by status when the search stub is
   built.
+- File attachments on incident log entries + per-incident Files tab — gated
+  on privacy policy (processor status, retention, deletion for stored breach
+  files; see account-maintenance.md [JDC] markers). Supabase Storage,
+  attachments metadata table, editor tab IA. Log entry JSONB needs no
+  forward-compat work.
 - **Category-conditioned engine outputs (design pass required BEFORE
   Connecticut)** `[substance]` (queued 2026-07-17): engine gates currently
   read scalar inputs only; sensitivity categories cannot condition obligations

@@ -184,6 +184,12 @@ safety property. Covered by the `E. riskLevel` group in
   (a US state fires while EU/UK await a risk assessment). The results page and PDF
   memo must render any combination of the four; do not assume mutual exclusivity.
 
+**Notification-record durable decisions (2026-07-24).** Notification records
+are non-evaluative: dates only, no computed lateness deltas, on screen or in
+PDF. Memo due dates are always Ember regardless of status. Memo incident-log
+filtering is silent. notifications/incident_log JSONB never enters facts or
+the engine.
+
 ### `src/breach-clock/BreachClock.jsx` — React UI
 
 UI/UX changes go here. Layout, copy, styling, form interactions, the in-app
