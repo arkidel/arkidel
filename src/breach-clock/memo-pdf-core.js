@@ -874,11 +874,16 @@ function formatAwareness(d) {
   return `${d.toLocaleDateString("en-US", dateOpts)} at ${d.toLocaleTimeString("en-US", timeOpts)}`;
 }
 
+// Single composition point for the deadline right slot: both branches carry
+// the inline "Due " label, so when the queued statutory-phrase repair lands
+// the phrase swaps under the prefix (JDC 2026-07-25). The Notification Record
+// table builds its own dueText and must never gain this prefix — its DUE
+// column header already labels it.
 function formatDeadline(d) {
-  if (!d) return "Without unreasonable delay";
+  if (!d) return "Due without unreasonable delay";
   const dateOpts = { year: "numeric", month: "long", day: "numeric" };
   const timeOpts = { hour: "2-digit", minute: "2-digit", timeZoneName: "short" };
-  return `${d.toLocaleDateString("en-US", dateOpts)} at ${d.toLocaleTimeString("en-US", timeOpts)}`;
+  return `Due ${d.toLocaleDateString("en-US", dateOpts)} at ${d.toLocaleTimeString("en-US", timeOpts)}`;
 }
 
 function buildJurisdictionList(facts) {

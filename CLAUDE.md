@@ -198,6 +198,12 @@ report — on screen the Incident Log likewise sits after the incident-report
 recap, before Further Considerations. notifications/incident_log JSONB never
 enters facts or the engine.
 
+**Due-label durable decision (2026-07-25).** Deadline right slots (UI countdown
+secondary + memo card slots) carry an inline "Due " label; memo right slots are
+uniformly Ember for dates and phrases; composition is "Due {statutory phrase}"
+so the queued phrase repair swaps under the prefix. Recorded/closed Mist due
+lines stay demoted and unlabeled beyond their existing "Due" text.
+
 ### `src/breach-clock/BreachClock.jsx` — React UI
 
 UI/UX changes go here. Layout, copy, styling, form interactions, the in-app

@@ -1883,8 +1883,12 @@ export default function BreachClock() {
                       <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em", ...(isMissed ? { color: "#C76E3A" } : {}) }}>
                         {formatDuration(timeRemaining)}
                       </div>
-                      {/* Hidden when closed: it would repeat the static date above. */}
-                      <div className="mono" style={{ fontSize: "11px", opacity: 0.6, marginTop: "6px" }}>
+                      {/* Hidden when closed: it would repeat the static date above.
+                          Promoted due line (JDC 2026-07-25): mono 13px/500 Ember at
+                          full opacity on both the white live card and the Midnight
+                          overdue card — the inline color overrides the .missed Bone
+                          rule, same pattern as the countdown above. */}
+                      <div className="mono" style={{ fontSize: "13px", fontWeight: 500, color: "#C76E3A", marginTop: "6px" }}>
                         Due {d.deadline.toLocaleString()}
                       </div>
                     </>
@@ -1898,7 +1902,7 @@ export default function BreachClock() {
               ) : (
                 <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 14px", border: "1px solid currentColor" }}>
                   <AlertTriangle size={14} />
-                  <div className="section-mark">No fixed hour deadline</div>
+                  <div className="section-mark">No fixed notification deadline</div>
                 </div>
               )}
             </div>
