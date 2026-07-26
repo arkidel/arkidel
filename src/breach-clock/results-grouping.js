@@ -31,6 +31,14 @@
 // consolidated "Risk assessment required" banner above the blocks, so a
 // pending-only jurisdiction (EU/UK awaiting a risk assessment) produces no
 // block — its state is spoken by that banner.
+//
+// SERVICES & ADVISORIES (category-conditioned pass, commit 2). The engine's
+// additive `services` and `advisories` arrays are grouped here too:
+//   - serviceCards  — computed service obligations, passed through by
+//     reference; render after the jurisdiction's deadline cards.
+//   - advisoryCards — DISPLAY objects built by `advisoryDisplay` below (the
+//     one place the auto-advisory title/body copy is composed, so the screen
+//     and the memo cannot drift); render after the service cards.
 // =============================================================================
 
 import { JURISDICTIONS } from "./data.js";
@@ -96,6 +104,42 @@ function soonestActive(block) {
   return min;
 }
 
+// Short display name for a service obligation, used in the auto-advisory
+// title ("{Service short name} may apply — …"). Strips the "for Affected …
+// Residents" suffix, then applies the ratified-mock casing: "Credit
+// Monitoring Services" reads as "Credit monitoring"; anything else is the
+// stripped authority in sentence case ("Identity theft prevention services").
+function serviceShortName(authority) {
+  const stripped = String(authority ?? "").replace(/\s+for\s+Affected\s+.*$/i, "").trim();
+  if (!stripped) return "This service obligation";
+  if (stripped.toLowerCase() === "credit monitoring services") return "Credit monitoring";
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1).toLowerCase();
+}
+
+// Build the display object for one engine advisory entry. Auto-advisories
+// (reason "ssn_unconfirmed") get composed title/body copy; declared
+// advisories pass their data-entry title/body through. `kind` drives the
+// screen-only "Edit data categories" affordance (auto only) — the memo
+// prints title / body / citation for both and never the link.
+function advisoryDisplay(a) {
+  if (a.reason === "ssn_unconfirmed") {
+    return {
+      kind: "auto",
+      jurisdiction: a.jurisdiction,
+      title: `${serviceShortName(a.authority)} may apply — confirm whether Social Security numbers were included`,
+      body: `Government IDs are reported among the affected data categories, but Social Security numbers and taxpayer identification numbers are not separately confirmed. If they were included, this obligation is computed under ${a.citation}.`,
+      citation: a.citation,
+    };
+  }
+  return {
+    kind: "declared",
+    jurisdiction: a.jurisdiction,
+    title: a.authority,
+    body: a.condition,
+    citation: a.citation,
+  };
+}
+
 // Split a block's note entries ({ jurShort, note }) by placement. "sectoral" is
 // also the safe default for any unknown/missing placement — a neutral block-foot
 // position that never implies a pre-notification gate.
@@ -119,11 +163,15 @@ function splitNotesByPlacement(entries) {
  * @param {Array}   [result.deadlines]     - active deadline cards (engine `deadlines`)
  * @param {Array}   [result.suppressed]    - suppressed / not-required cards
  * @param {Array}   [result.review]        - counsel-review cards
+ * @param {Array}   [result.services]      - computed service obligations (engine `services`)
+ * @param {Array}   [result.advisories]    - advisory entries (engine `advisories`; declared + auto)
  * @param {Object}  [result.jurisdictions] - { [id]: boolean } selected-jurisdiction map (facts.jurisdictions),
  *                                           used to attach each selected jurisdiction's counsel notes.
  * @returns {Array<{
  *   jurisdictionId, name, statuteSubtitle,
  *   activeCards, counselReviewCards, suppressedCards,
+ *   serviceCards,                                   // engine service entries — render AFTER the deadline cards
+ *   advisoryCards,                                  // advisoryDisplay objects — render AFTER the service cards
  *   caveatNotes,                                    // [{ jurShort, note }] — render ABOVE the cards
  *   obligations,                                    // [{ card, role: "active"|"review", parallelNotes: [{ jurShort, note }] }]
  *   sectoralNotes,                                  // [{ jurShort, note }] — render at the FOOT
@@ -136,6 +184,8 @@ export function groupResultsByJurisdiction({
   deadlines = [],
   suppressed = [],
   review = [],
+  services = [],
+  advisories = [],
   jurisdictions = {},
 } = {}) {
   const blocks = new Map(); // jurisdictionId → block
@@ -151,6 +201,8 @@ export function groupResultsByJurisdiction({
         activeCards: [],
         counselReviewCards: [],
         suppressedCards: [],
+        serviceCards: [],
+        advisoryCards: [],
         _notes: [],
         _index: meta.index,
         _kindByAuthority: meta.kindByAuthority,
@@ -170,6 +222,14 @@ export function groupResultsByJurisdiction({
   suppressed.forEach((s) => {
     const b = ensureBlock(s.jurisdiction);
     if (b) b.suppressedCards.push(s);
+  });
+  services.forEach((s) => {
+    const b = ensureBlock(s.jurisdiction);
+    if (b) b.serviceCards.push(s);
+  });
+  advisories.forEach((a) => {
+    const b = ensureBlock(a.jurisdiction);
+    if (b) b.advisoryCards.push(advisoryDisplay(a));
   });
 
   // Counsel notes — sourced from data.js for each SELECTED jurisdiction. A

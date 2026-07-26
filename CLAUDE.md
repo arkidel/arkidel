@@ -235,6 +235,28 @@ deliberately keeps the canonical `defeatedBy: keyAcquired` shape
 the `ct-no-key-proviso-36a-701b-a` counsel note documents the difference —
 do not "fix" the gate to match the literal statute without JDC sign-off.
 
+**Service / advisory rendering durable decisions (2026-07-26, commit 2 —
+mocks ratified by JDC).** Service cards: Midnight stripe (the deadline-card
+idiom), a "Service period" right slot, statutory duration units spelled out
+verbatim from `service_duration_display` ("2 years", "1 year", "18 months" —
+never abbreviated), a Mist "minimum · runs with notice" sub-line, **no**
+record-notification affordance, **no** countdown, **no** Ember anywhere, and
+no dark variant (services have no overdue concept); closed incidents render
+them unchanged. Advisory cards: white with a 1px dashed border and Parchment
+stripe, alert-triangle glyph; auto-advisories (reason `ssn_unconfirmed`)
+carry the "Edit data categories" jump **on screen only** — declared
+advisories are guidance and carry no link. Auto-advisory title/body copy is
+composed once, in `results-grouping.js` (`advisoryDisplay`), shared by both
+surfaces. Memo: service right slots render Ink "{duration} (minimum)" and
+are **never** routed through `formatDeadline` (no "Due " prefix) — the
+2026-07-25 uniform-Ember rule is scoped to deadline slots; advisories print
+in the counsel-note idiom (title, body, citation; the edit link never
+prints). The memo's no-fixed-clock deadline slot composes "Due {statutory
+phrase}" recovered from the basis line (`basisPhrase`) — do not reintroduce
+a hardcoded phrase there. The Q1 category checkboxes render from the
+canonical `SENSITIVITY_OPTIONS` export in `data.js`; the former local copy
+in `BreachClock.jsx` is deleted — do not reintroduce it.
+
 ### `src/breach-clock/BreachClock.jsx` — React UI
 
 UI/UX changes go here. Layout, copy, styling, form interactions, the in-app
@@ -342,11 +364,13 @@ information, (2) how & when discovered, (3) when the incident occurred,
 - **Quick mode** is a focusing view over one shared state, not a separate
   workflow — it shows only the operative fields; entered record data persists
   across toggles.
-- **Q1 retains all ten sensitivity options with their exact IDs.** `location`
-  and `communications` are kept (they are not high-risk, so `isHighRisk`
-  classifies them out and they never raise the "Suggested" hint) rather than
-  dropped — removing user-facing data categories would be a substantive
-  reduction, and the IDs must match the set `isHighRisk` treats as high-risk.
+- **Q1 renders all eleven sensitivity options with their exact IDs** (ten
+  original plus the standalone `ssn` added 2026-07-25), from the canonical
+  `SENSITIVITY_OPTIONS` export in `data.js`. `location` and `communications`
+  are kept (they are not high-risk, so `isHighRisk` classifies them out and
+  they never raise the "Suggested" hint) rather than dropped — removing
+  user-facing data categories would be a substantive reduction, and the IDs
+  must match the set `isHighRisk` treats as high-risk.
   Note Q1/`sensitivity` no longer feeds any deadline gating directly — the EU/UK
   obligations gate on the explicit `riskLevel` input, not on the categories (see
   the engine section); `sensitivity` drives only the UI hint and the

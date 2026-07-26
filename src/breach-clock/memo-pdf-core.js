@@ -13,7 +13,9 @@
 // Sections rendered:
 //   1. Page-1 letterhead (Arkidel wordmark · date · centered title · rule)
 //   2. Incident summary (compact metadata table)
-//   3. Deadline obligations (one card per firing obligation)
+//   3. Deadline obligations (one card per firing obligation), each
+//      jurisdiction block followed by its computed service obligations
+//      (conditional) and advisory notes (conditional)
 //   4. Suppressed obligations (conditional — only if any suppressed)
 //   5. Jurisdictional notes (conditional — only if any selected jur has notes)
 //   6. Notification record (conditional — the Authority/Due/Notified table;
@@ -491,10 +493,23 @@ function attachLink(page, url, x, bottomY, height, width) {
 
 function deadlineBlocks(d) {
   return [
-    { type: "topRow", left: d.authority, right: formatDeadline(d.deadline), rightColor: "ember" },
+    { type: "topRow", left: d.authority, right: formatDeadline(d.deadline, basisPhrase(d.basis)), rightColor: "ember" },
     { type: "labelBody", label: "Basis", body: d.basis || "—" },
     ...(d.conditional ? [{ type: "labelBody", label: "Conditional", body: d.conditional }] : []),
     ...(d.source_url ? [{ type: "url", label: "Source", url: d.source_url }] : []),
+  ];
+}
+
+// Service-obligation card (category-conditioned pass, commit 2). The right
+// slot is the statutory duration — "{service_duration_display} (minimum)" —
+// drawn in INK, explicitly NOT Ember and NOT routed through formatDeadline
+// (no "Due " prefix): Ember remains strictly the deadline color, which scopes
+// the 2026-07-25 uniform-Ember rule to deadline slots.
+function serviceBlocks(s) {
+  return [
+    { type: "topRow", left: s.authority, right: `${s.service_duration_display} (minimum)` },
+    { type: "labelBody", label: "Basis", body: s.citation || "—" },
+    ...(s.condition ? [{ type: "body", text: s.condition }] : []),
   ];
 }
 
@@ -610,6 +625,18 @@ function buildBlockPlan(block) {
       noteCard(pn);
     });
   }
+
+  // Service cards after the deadline cards, then advisories after any service
+  // cards (ratified placement; mirrors the screen via the shared grouping).
+  // Services carry the Midnight stripe like the deadline cards; advisories
+  // print in the existing counsel-note visual idiom (parchment note card:
+  // title, body, citation). The auto-advisories' screen-only "Edit data
+  // categories" link never prints, and nothing here is Ember. A block with no
+  // services/advisories prints none of this — existing sections unchanged.
+  (block.serviceCards || []).forEach((s) => card(serviceBlocks(s), MIDNIGHT));
+  (block.advisoryCards || []).forEach((a) =>
+    card(noteBlocks({ title: a.title, content: a.body, citation: a.citation }), PARCHMENT)
+  );
 
   if (block.suppressedCards.length) {
     label(SUPPRESSED_LABEL);
@@ -879,8 +906,23 @@ function formatAwareness(d) {
 // the phrase swaps under the prefix (JDC 2026-07-25). The Notification Record
 // table builds its own dueText and must never gain this prefix — its DUE
 // column header already labels it.
-function formatDeadline(d) {
-  if (!d) return "Due without unreasonable delay";
+// Statutory phrase for a no-fixed-clock right slot, recovered from the
+// engine's basis line ("{citation} — {deadline_phrase}"; since the 2026-07-25
+// phrase repair, all deadline wording lives per-obligation in data.js and no
+// citation contains " — "). Null when the basis carries no phrase.
+function basisPhrase(basis) {
+  const s = String(basis ?? "");
+  const i = s.indexOf(" — ");
+  return i >= 0 ? s.slice(i + 3) : null;
+}
+
+// Right-slot composition is "Due {statutory phrase}" for no-fixed-clock
+// obligations (durable decision 2026-07-25 — the queued phrase repair swaps
+// the statute's own wording under the "Due " prefix; formerly a hardcoded
+// "without unreasonable delay", which misstated EU Art. 34). The fallback
+// guards a phrase-less basis only.
+function formatDeadline(d, phrase) {
+  if (!d) return `Due ${phrase || "without unreasonable delay"}`;
   const dateOpts = { year: "numeric", month: "long", day: "numeric" };
   const timeOpts = { hour: "2-digit", minute: "2-digit", timeZoneName: "short" };
   return `Due ${d.toLocaleDateString("en-US", dateOpts)} at ${d.toLocaleTimeString("en-US", timeOpts)}`;
@@ -1010,10 +1052,17 @@ function drawIncidentReport(state, sections) {
 //             its own trailing param, never inside facts — notification data
 //             must not mix with the engine-facing shape. Each section omits
 //             itself independently when its half is empty.
+// services:   Array — the engine's additive computed service obligations;
+//             print inside their jurisdiction section after the deadline
+//             cards. Trailing param with a default so existing callers keep
+//             working.
+// advisories: Array — the engine's additive advisory entries (declared +
+//             auto "ssn_unconfirmed"); print in the counsel-note idiom after
+//             the service cards. Same trailing-default convention.
 //
 // Returns: Uint8Array — the serialized PDF bytes
 //
-export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontBytes, logoBytes, generatedAt }, review = [], notificationRecord = null) {
+export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontBytes, logoBytes, generatedAt }, review = [], notificationRecord = null, services = [], advisories = []) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
 
@@ -1049,6 +1098,8 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
     deadlines: deadlines || [],
     suppressed: suppressed || [],
     review: review || [],
+    services: services || [],
+    advisories: advisories || [],
     jurisdictions: facts.jurisdictions || {},
   });
   for (const block of groups) {

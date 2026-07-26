@@ -579,9 +579,27 @@ history share a Supabase backend and should be sequenced together.
   undue delay" mislabel, the EU Art. 34 "Without unreasonable delay" display
   slot (data now correct; the display-slot rendering itself is commit 2), the
   EU Art. 33 "3 days from awareness" label (now "72 hours from awareness"),
-  and the DE AG "0 days from notification" artifact. Commit 2 (service /
-  advisory rendering in BreachClock.jsx and the memo) follows; until it
-  lands, the UI ignores the new arrays.
+  and the DE AG "0 days from notification" artifact. **Commit 2 (rendering)
+  DONE 2026-07-26**: Q1 renders from the canonical SENSITIVITY_OPTIONS export
+  (ssn selectable above the relabeled gov_id); service cards (Midnight
+  stripe, "Service period" slot, statutory duration units) and advisory
+  cards (dashed border, Parchment stripe; auto-advisories carry the
+  screen-only "Edit data categories" jump) render per jurisdiction on the
+  results view; the memo prints service cards (Ink "{duration} (minimum)"
+  right slot, never through formatDeadline) and advisories in the
+  counsel-note idiom; the memo's no-fixed-clock right slot now composes
+  "Due {statutory phrase}" from the basis (closing phrase defect #2 in the
+  renderer). Verified headlessly: build, both engine suites (96 + 63), and
+  the extended memo gate (scripts/render-gate-memo.mjs — three fixtures, 15
+  assertions). Commits f02f0ef and the rendering commit ship together —
+  never push commit 1 alone (interim rendering regression documented in the
+  commit-1 report).
+  - **Fixture data-category updates (post-gate, JDC to drive):** the saved
+    fixtures "Delaware Test 1" and "Test Incident 2" predate the ssn split
+    and carry the bundled gov_id selection — update their data categories
+    via the UI (explicit ssn / gov_id selections) after the JDC + Claude
+    gate render, so their computed services and advisories reflect the
+    split model.
 - **Harm-gate form question** `[substance]` — design settled in principle
   (single generic question, per-jurisdiction harmGate mechanism carrying each
   statute's exact standard and character: exemption CT/DE, misuse

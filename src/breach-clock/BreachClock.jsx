@@ -30,7 +30,7 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, Save, X, ChevronDown } from "lucide-react";
-import { JURISDICTIONS } from "./data.js";
+import { JURISDICTIONS, SENSITIVITY_OPTIONS } from "./data.js";
 import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine.js";
 import { groupResultsByJurisdiction } from "./results-grouping.js";
 import { computableGate, factsFromPayload } from "./facts.js";
@@ -80,21 +80,11 @@ const ALL_SECTION_IDS = [...FORM_SECTIONS.map((s) => s.id), "form-risk"];
 // viewport edge. (If that nav is ever made sticky, bump this to ~its height.)
 const NAV_CLEARANCE = 32;
 
-// Q1 personal-data categories — these ARE the engine `sensitivity` input; IDs
-// must match what engine.js treats as high-risk. location/communications are
-// kept for record completeness; the engine ignores ids outside its high-risk set.
-const SENSITIVITY_OPTIONS = [
-  { id: "identifiers", label: "Identifiers (name, email, address)" },
-  { id: "gov_id", label: "Government IDs (SSN, passport, driver's license)" },
-  { id: "financial", label: "Financial (account, card, credentials)" },
-  { id: "health", label: "Health or medical information" },
-  { id: "biometric", label: "Biometric or genetic data" },
-  { id: "children", label: "Data concerning children" },
-  { id: "special", label: "Other sensitive / special-category data", desc: "e.g., racial or ethnic origin, political opinions, religious or philosophical beliefs, trade-union membership, sex life or sexual orientation" },
-  { id: "credentials", label: "Authentication credentials (passwords, tokens)" },
-  { id: "location", label: "Precise geolocation" },
-  { id: "communications", label: "Private communications content" },
-];
+// Q1 personal-data categories — these ARE the engine `sensitivity` input, and
+// render from the canonical SENSITIVITY_OPTIONS export in data.js (imported
+// above; the former local copy predated the 2026-07-25 ssn split and is
+// deleted). `ssn` sits directly above the relabeled gov_id and flows into
+// facts.sensitivity like any other category.
 
 // EU/UK risk-assessment levels — the operative `riskLevel` input. The value
 // strings match what engine.js gates on (riskRequired → "risk"|"high";
@@ -812,7 +802,10 @@ export default function BreachClock() {
   // Facts come from the SAME payload shape the save path writes
   // (factsFromPayload over buildPayload), so the editor, the saved-incident
   // rehydrate, and the incidents list all feed the engine identically.
-  const { deadlines, suppressed, pending, review } = computeDeadlines(factsFromPayload(buildPayload()));
+  // `services` / `advisories` are the engine's additive category-conditioned
+  // outputs (commit f02f0ef): computed service obligations (statutory duration,
+  // no deadline) and advisory entries (declared + auto "ssn_unconfirmed").
+  const { deadlines, suppressed, pending, review, services, advisories } = computeDeadlines(factsFromPayload(buildPayload()));
 
   // ── Minimal operative inputs required to submit (mirrors the old
   //    canAdvance) — read from the shared gate above. ──
@@ -989,7 +982,7 @@ export default function BreachClock() {
         });
       const notificationRecord =
         notifRows.length || memoLogEntries.length ? { rows: notifRows, entries: memoLogEntries } : null;
-      const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed, review, notificationRecord);
+      const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed, review, notificationRecord, services, advisories);
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1049,6 +1042,20 @@ export default function BreachClock() {
     setSubmitted(false);
     requestAnimationFrame(() => {
       const el = document.getElementById("form-risk");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  // From an auto-advisory card ("Edit data categories"): return to the form and
+  // jump to the data section holding the Q1 category checkboxes — the same
+  // mechanism as the risk-assessment pending card's jump, plus opening the
+  // collapsible Data section first (mirroring the submit-validation path) so
+  // the anchor isn't collapsed shut. No-ops harmlessly in quick mode.
+  const handleEditDataCategories = () => {
+    setSubmitted(false);
+    setOpenSections((s) => ({ ...s, "form-data": true }));
+    requestAnimationFrame(() => {
+      const el = document.getElementById("form-data");
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   };
@@ -1764,7 +1771,7 @@ export default function BreachClock() {
     // consolidated banner above, so a pending-only jurisdiction yields no block.
     // blockSections() returns each block's non-empty card-type groups in the
     // shared within-block order (the order knob lives in results-grouping.js).
-    const groups = groupResultsByJurisdiction({ deadlines, suppressed, review, jurisdictions });
+    const groups = groupResultsByJurisdiction({ deadlines, suppressed, review, services, advisories, jurisdictions });
 
     // Card renderers — markup IDENTICAL to the former outcome-first sections,
     // only relocated into the per-jurisdiction blocks. No copy or style change.
@@ -2012,6 +2019,81 @@ export default function BreachClock() {
       );
     };
 
+    // Service card (ratified mock, 2026-07-26): white card in the existing
+    // deadline-card idiom (border, shadow, 4px Midnight stripe), serif title =
+    // authority, mono citation subtitle, condition body. The right slot is a
+    // "Service period" mark over the statutory duration — spelled-out units,
+    // verbatim from service_duration_display — with a quiet Mist sub-line.
+    // Deliberately: NO countdown, NO record-notification footer, NO Ember
+    // anywhere, and no dark variant (services have no overdue concept). Closed
+    // incidents render service cards unchanged.
+    const renderServiceCard = (s, key) => (
+      <div key={key} className="deadline-card" style={{ marginTop: "16px", position: "relative", zIndex: 1 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
+          <div>
+            <div className="serif" style={{ fontSize: "18px", fontWeight: 400, lineHeight: 1.25, marginBottom: "10px", letterSpacing: "-0.01em" }}>
+              {s.authority}
+            </div>
+            <div className="mono" style={{ fontSize: "12.5px", opacity: 0.7, marginBottom: "10px" }}>{s.citation}</div>
+            <div style={{ fontSize: "13px", lineHeight: 1.55, color: "#2C2418", opacity: 0.8 }}>{s.condition}</div>
+          </div>
+          <div style={{ textAlign: "right", minWidth: "200px" }}>
+            <div className="section-mark" style={{ marginBottom: "6px" }}>Service period</div>
+            <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em", color: "#1B2A3F" }}>
+              {s.service_duration_display}
+            </div>
+            <div style={{ fontSize: "11.5px", color: "#9FAEC2", marginTop: "5px" }}>minimum · runs with notice</div>
+          </div>
+        </div>
+      </div>
+    );
+
+    // Advisory card (ratified mock, 2026-07-26): white card, 1px dashed
+    // border, 4px Parchment stripe, alert-triangle glyph (same icon set as the
+    // "No fixed notification deadline" badge). Auto-advisories (reason
+    // "ssn_unconfirmed") carry the quiet "Edit data categories" text link —
+    // screen-only, never printed; declared advisories are guidance with
+    // nothing to change, so no link. Title/body composition is shared with the
+    // memo via advisoryDisplay in results-grouping.js.
+    const renderAdvisoryCard = (a, key) => (
+      <div
+        key={key}
+        style={{
+          background: "#fff",
+          border: "1px dashed rgba(27,42,63,0.45)",
+          borderLeft: "4px solid #E8DDC4",
+          borderRadius: "0 12px 12px 0",
+          padding: "20px 24px",
+          marginTop: "16px",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+          <AlertTriangle size={16} style={{ color: "#1B2A3F", opacity: 0.75, flexShrink: 0, marginTop: "3px" }} />
+          <div>
+            <div className="serif" style={{ fontSize: "16px", fontWeight: 400, lineHeight: 1.3, letterSpacing: "-0.005em" }}>
+              {a.title}
+            </div>
+            <div style={{ fontSize: "13px", lineHeight: 1.6, opacity: 0.8, marginTop: "8px" }}>{a.body}</div>
+            {a.kind === "auto" && (
+              <button
+                type="button"
+                onClick={handleEditDataCategories}
+                style={{
+                  background: "none", border: "none", padding: "0 0 1px", margin: "12px 0 0",
+                  fontFamily: "'Inter', sans-serif", fontSize: "12.5px", color: "#1B2A3F",
+                  borderBottom: "1px solid rgba(27,42,63,0.3)", cursor: "pointer",
+                }}
+              >
+                Edit data categories
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+
     const renderSuppressedCard = (s, i) => (
       <div key={i} style={{ background: "#fff", borderLeft: "4px solid #5A6E4A", padding: "20px 24px", borderRadius: "0 12px 12px 0" }}>
         <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
@@ -2196,6 +2278,10 @@ export default function BreachClock() {
           out.push(renderParchmentPanel({ key: `par-${idx}-${j}`, notes: [pn], perNoteLead: PARALLEL_LEAD, lapEdge: "top", marginTop: -16 }))
         );
       });
+      // Service cards after the jurisdiction's deadline cards, then advisory
+      // cards after any service cards (ratified placement).
+      block.serviceCards.forEach((s, i) => out.push(renderServiceCard(s, `svc-${i}`)));
+      block.advisoryCards.forEach((a, i) => out.push(renderAdvisoryCard(a, `adv-${i}`)));
       if (block.suppressedCards.length > 0) {
         out.push(<div key="sup-label" className="section-mark" style={{ margin: "24px 0 12px" }}>Notification likely not required</div>);
         block.suppressedCards.forEach((s, i) =>
