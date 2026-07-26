@@ -16,6 +16,28 @@
 // EUR-Lex consolidated text and ICO guidance respectively.
 // =============================================================================
 
+// Q1 personal-data categories — the canonical `sensitivity` input vocabulary.
+// Category-conditioned pass (JDC review 2026-07-25): `ssn` is a standalone
+// element (SSN / ITIN / other taxpayer IDs) positioned directly above
+// `gov_id`, and `gov_id` no longer includes SSN. The ids are substantive:
+// `ssn` gates the CT / DE / MA service obligations (gating.categories), and
+// `gov_id` without `ssn` produces the "ssn_unconfirmed" advisory state.
+// The UI (BreachClock.jsx) adopts this list in the follow-on rendering commit;
+// until then its local copy predates the ssn split.
+const SENSITIVITY_OPTIONS = [
+  { id: "identifiers", label: "Identifiers (name, email, address)" },
+  { id: "ssn", label: "Social Security numbers (or ITIN / other taxpayer IDs)" },
+  { id: "gov_id", label: "Government IDs (passport, driver's license, state ID)" },
+  { id: "financial", label: "Financial (account, card, credentials)" },
+  { id: "health", label: "Health or medical information" },
+  { id: "biometric", label: "Biometric or genetic data" },
+  { id: "children", label: "Data concerning children" },
+  { id: "special", label: "Other sensitive / special-category data", desc: "e.g., racial or ethnic origin, political opinions, religious or philosophical beliefs, trade-union membership, sex life or sexual orientation" },
+  { id: "credentials", label: "Authentication credentials (passwords, tokens)" },
+  { id: "location", label: "Precise geolocation" },
+  { id: "communications", label: "Private communications content" },
+];
+
 const JURISDICTIONS = [
   {
     id: "eu",
@@ -28,6 +50,7 @@ const JURISDICTIONS = [
         authority: "Lead Supervisory Authority",
         deadline_hours: 72,
         deadline_trigger: "awareness",
+        deadline_phrase: "72 hours from awareness",
         gating: { riskRequired: true },
         citation: "Art. 33 GDPR",
         source_url: "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e3185-1-1",
@@ -42,6 +65,7 @@ const JURISDICTIONS = [
         authority: "Affected Data Subjects",
         deadline_hours: null, // "without undue delay"
         deadline_trigger: "awareness",
+        deadline_phrase: "without undue delay",
         gating: { highRiskRequired: true },
         citation: "Art. 34 GDPR",
         source_url: "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32016R0679#d1e3220-1-1",
@@ -76,6 +100,7 @@ const JURISDICTIONS = [
         authority: "Information Commissioner's Office (ICO)",
         deadline_hours: 72,
         deadline_trigger: "awareness",
+        deadline_phrase: "72 hours from awareness",
         gating: { riskRequired: true },
         citation: "Art. 33 UK GDPR",
         source_url: "https://ico.org.uk/for-organisations/report-a-breach/personal-data-breach/",
@@ -90,6 +115,7 @@ const JURISDICTIONS = [
         authority: "Affected Data Subjects",
         deadline_hours: null,
         deadline_trigger: "awareness",
+        deadline_phrase: "without undue delay",
         gating: { highRiskRequired: true },
         citation: "Art. 34 UK GDPR",
         source_url: "https://ico.org.uk/for-organisations/report-a-breach/personal-data-breach/",
@@ -125,6 +151,7 @@ const JURISDICTIONS = [
         authority: "Affected California Residents",
         deadline_hours: 30 * 24, // SB-446, eff. Jan. 1, 2026
         deadline_trigger: "discovery or notification of breach",
+        deadline_phrase: "30 days from discovery or notification of breach",
         citation: "Cal. Civ. Code § 1798.82(a)",
         source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1798.82.&lawCode=CIV",
         condition: "Within 30 calendar days following discovery or notification of the breach (SB-446, effective January 1, 2026). Delay permitted only to accommodate the legitimate needs of law enforcement or as necessary to determine the scope of the breach and restore the reasonable integrity of the data system.",
@@ -148,6 +175,7 @@ const JURISDICTIONS = [
         deadline_hours: 15 * 24, // 15 days from resident notification
         deadline_relative_to: { parent_authority: "Affected California Residents" },
         deadline_trigger: "resident notification",
+        deadline_phrase: "15 days from notice to residents",
         gating: { residentThreshold: 500, comparator: "gt" }, // SB-446 changed this to "more than 500"
         thresholdLabel: "AG notification",
         citation: "Cal. Civ. Code § 1798.82(f)",
@@ -191,6 +219,7 @@ const JURISDICTIONS = [
         authority: "Affected Texas Residents",
         deadline_hours: 60 * 24, // 60 days — corrected from 30; § 521.053(b) sets 60-day ceiling for individual notice
         deadline_trigger: "determination of breach",
+        deadline_phrase: "60 days from determination of breach",
         citation: "Tex. Bus. & Com. Code § 521.053(b)",
         source_url: "https://statutes.capitol.texas.gov/Docs/BC/htm/BC.521.htm",
         condition: "Without unreasonable delay and no later than the 60th day after the date the entity determines that the breach occurred. Delay permitted only as necessary to determine scope/restore integrity of the data system or for legitimate law-enforcement needs.",
@@ -213,6 +242,7 @@ const JURISDICTIONS = [
         authority: "Texas Attorney General",
         deadline_hours: 30 * 24, // 30 days — confirmed (S.B. 768, eff. Sept. 1, 2023)
         deadline_trigger: "determination of breach",
+        deadline_phrase: "30 days from determination of breach",
         gating: { residentThreshold: 250, comparator: "gte" },
         thresholdLabel: "AG notification",
         citation: "Tex. Bus. & Com. Code § 521.053(i)",
@@ -237,6 +267,7 @@ const JURISDICTIONS = [
         authority: "Nationwide Consumer Reporting Agencies",
         deadline_hours: null, // "without unreasonable delay" — no fixed clock
         deadline_trigger: "determination of breach",
+        deadline_phrase: "without unreasonable delay",
         gating: { residentThreshold: 10000, comparator: "gt" }, // "more than 10,000 persons"
         thresholdLabel: "CRA notification",
         citation: "Tex. Bus. & Com. Code § 521.053(h)",
@@ -270,6 +301,7 @@ const JURISDICTIONS = [
         authority: "Affected Colorado Residents",
         deadline_hours: 30 * 24,
         deadline_trigger: "determination of breach",
+        deadline_phrase: "30 days from determination of breach",
         citation: "Colo. Rev. Stat. § 6-1-716(2)(a)",
         source_url: "https://law.justia.com/codes/colorado/title-6/fair-trade-and-restraint-of-trade/article-1/part-7/section-6-1-716/",
         condition: "In the most expedient time possible and without unreasonable delay, but not later than 30 days after determination that a security breach occurred. Notification not required if a prompt good-faith investigation determines misuse has not occurred and is not reasonably likely to occur.",
@@ -292,6 +324,7 @@ const JURISDICTIONS = [
         authority: "Colorado Attorney General",
         deadline_hours: 30 * 24,
         deadline_trigger: "determination of breach",
+        deadline_phrase: "30 days from determination of breach",
         gating: { residentThreshold: 500, comparator: "gte" },
         thresholdLabel: "AG notification",
         citation: "Colo. Rev. Stat. § 6-1-716(2)(f)",
@@ -316,6 +349,7 @@ const JURISDICTIONS = [
         authority: "Nationwide Consumer Reporting Agencies",
         deadline_hours: null,
         deadline_trigger: "determination of breach",
+        deadline_phrase: "without unreasonable delay",
         gating: { residentThreshold: 1000, comparator: "gt" },
         thresholdLabel: "CRA notification",
         citation: "Colo. Rev. Stat. § 6-1-716(2)(d)",
@@ -349,6 +383,7 @@ const JURISDICTIONS = [
         authority: "Affected Massachusetts Residents",
         deadline_hours: null, // "as soon as practicable and without unreasonable delay"
         deadline_trigger: "awareness",
+        deadline_phrase: "as soon as practicable and without unreasonable delay",
         citation: "M.G.L. c. 93H § 3",
         source_url: "https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93h/Section3",
         condition: "Required regardless of resident count. Notice must include the resident's right to obtain a police report and security-freeze information; it must NOT include the nature of the breach or the number of residents affected (those go only to the AG and OCABR).",
@@ -371,6 +406,7 @@ const JURISDICTIONS = [
         authority: "Massachusetts Attorney General",
         deadline_hours: null,
         deadline_trigger: "awareness",
+        deadline_phrase: "as soon as practicable and without unreasonable delay",
         citation: "M.G.L. c. 93H § 3",
         source_url: "https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93h/Section3",
         condition: "Required regardless of resident count. Notice must include nature of the breach, number of MA residents affected, entity details, type of personal information compromised, whether the entity maintains a Written Information Security Program, and steps taken or planned. Cannot be delayed because the affected resident count is not yet ascertained.",
@@ -393,6 +429,7 @@ const JURISDICTIONS = [
         authority: "Massachusetts Office of Consumer Affairs and Business Regulation (OCABR)",
         deadline_hours: null,
         deadline_trigger: "awareness",
+        deadline_phrase: "as soon as practicable and without unreasonable delay",
         citation: "M.G.L. c. 93H § 3",
         source_url: "https://www.mass.gov/info-details/requirements-for-data-breach-notifications",
         condition: "Required in parallel with AG notification. OCABR identifies any consumer reporting agencies or state agencies that should also receive notification, and forwards those identifications to the entity for follow-up notification.",
@@ -410,6 +447,37 @@ const JURISDICTIONS = [
           },
         ],
       },
+      {
+        // Category-conditioned pass (JDC review 2026-07-25): upgraded from the
+        // former standing counsel note `ma-credit-monitoring-93h-3a` to a
+        // computed, ssn-gated service obligation. Statutory unit is "18 months".
+        // The consumer-reporting-agency variant (42 months) is an entity-type
+        // condition carried in the conditional language, not as an input, per
+        // the NYDFS house rule. The obligation is contingent on an incident
+        // requiring notice under § 3, so the § 1 encryption harbor (and the
+        // § 3(b) dual-trigger caveat it reflects) cascades to it.
+        kind: "service",
+        authority: "Credit Monitoring Services for Affected Massachusetts Residents",
+        gating: { categories: { anyOf: ["ssn"] } },
+        service_duration_display: "18 months",
+        trigger_note: "Breach involving a resident's Social Security number.",
+        citation: "M.G.L. c. 93H § 3A(a)",
+        source_url: "https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93h/Section3A",
+        condition: "Contract with a third party to offer each affected resident credit monitoring services at no cost for a period of not less than 18 months — not less than 42 months where the breached entity is a consumer reporting agency — together with all information necessary to enroll and information on placing a security freeze. The contract may not include reciprocal agreements for services in lieu of payment or the exchange of fees, and the offer may not be conditioned on the resident waiving the right to a private action. A certification of compliance must be filed with the Attorney General and the director of consumer affairs and business regulation. The obligation is contingent on an incident requiring notice under § 3.",
+        conditionalGates: [
+          {
+            role: "safeHarbor",
+            input: "encrypted",
+            equals: "yes",
+            requiresStrength: "ge_128",
+            defeatedBy: "keyAcquired",
+            onSatisfied: "review",
+            whenUnset: "fires",
+            citation: "M.G.L. c. 93H § 1",
+            description: "The § 3A duty is contingent on an incident requiring notice under § 3. The encryption safe harbor excuses § 3(b)'s breach-of-security trigger, but § 3(b)'s second trigger (unauthorized acquisition or use, which has no encryption qualifier) must be independently assessed by counsel.",
+          },
+        ],
+      },
     ],
     counselNotes: [
       {
@@ -419,14 +487,6 @@ const JURISDICTIONS = [
         content: "Massachusetts c. 93H § 3(b) imposes the notification duty under TWO independent triggers, joined by 'or': (1) the entity knows or has reason to know of a 'breach of security' as defined in § 1, OR (2) the entity knows or has reason to know that personal information was acquired or used by an unauthorized person, or used for an unauthorized purpose. The two triggers do not have identical scope. The § 1 'breach of security' definition includes a substantial-risk-of-identity-theft-or-fraud requirement, a good-faith-acquisition carve-out for employees/agents acting for lawful purposes, and the encryption qualifier (encrypted data only counts if the key was also acquired). The second trigger contains none of these elements — it captures any unauthorized acquisition or use of personal information. As a result, the encryption-suppression analysis above (which derives from the § 1 definition) may be incomplete: even where encrypted data with an uncompromised key falls outside § 1, the second trigger of § 3(b) could independently require notification on facts where personal information was acquired or used by an unauthorized person. Likewise, a 'no substantial risk of identity theft or fraud' conclusion under § 1 does not by itself excuse notification if the second trigger fires. Confirm both triggers against the facts before concluding that notification is not required.",
         citation: "M.G.L. c. 93H §§ 1, 3(b)",
         source_url: "https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93h/Section3",
-      },
-      {
-        id: "ma-credit-monitoring-93h-3a",
-        placement: "sectoral",
-        title: "Credit monitoring when Social Security numbers are involved — c. 93H § 3A",
-        content: "If the breach includes Social Security numbers, Massachusetts requires the notifying person to contract with a third party to offer each affected resident credit monitoring services at no cost for not less than 18 months — not less than 42 months if the notifying person is a consumer reporting agency — with all information necessary to enroll and information on placing a security freeze. The contract may not include reciprocal agreements for services in lieu of payment, and the offer may not be conditioned on the resident waiving the right to a private action. Mass. Gen. Laws ch. 93H, § 3A.",
-        citation: "M.G.L. c. 93H § 3A",
-        source_url: "https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93H/Section3A",
       },
     ],
   },
@@ -442,6 +502,7 @@ const JURISDICTIONS = [
         authority: "Affected New York Residents",
         deadline_hours: 30 * 24, // 30 days — added by S2659B/A8872A, eff. December 21, 2024
         deadline_trigger: "discovery of breach",
+        deadline_phrase: "30 days from discovery of breach",
         citation: "N.Y. Gen. Bus. Law § 899-aa(2)",
         source_url: "https://www.nysenate.gov/legislation/laws/GBS/899-AA",
         condition: "In the most expedient time possible and without unreasonable delay, but within 30 days after discovery of the breach. Delay permitted only for the legitimate needs of law enforcement under § 899-aa(4). The 2024 amendments removed the prior allowance for delay to determine scope or restore system integrity.",
@@ -464,6 +525,7 @@ const JURISDICTIONS = [
         authority: "New York Attorney General",
         deadline_hours: null, // no fixed clock — "without delaying notice to residents"
         deadline_trigger: "discovery of breach",
+        deadline_phrase: "without delaying notice to residents",
         citation: "N.Y. Gen. Bus. Law § 899-aa(8)(a)",
         source_url: "https://formsnym.ag.ny.gov/OAGOnlineSubmissionForm/faces/OAGSBHome",
         condition: "Required whenever any New York resident is notified. No threshold. Submission via the AG's online breach reporting portal serves as simultaneous notice to the AG, Department of State, and Division of State Police; entities regulated by NYDFS notify NYDFS separately (see counsel notes).",
@@ -486,6 +548,7 @@ const JURISDICTIONS = [
         authority: "New York Department of State",
         deadline_hours: null,
         deadline_trigger: "discovery of breach",
+        deadline_phrase: "without delaying notice to residents",
         citation: "N.Y. Gen. Bus. Law § 899-aa(8)(a)",
         source_url: "https://dos.ny.gov/",
         condition: "Required whenever any New York resident is notified, in parallel with AG and State Police notification. The AG's online breach reporting portal is the standard route for simultaneous submission to all three.",
@@ -508,6 +571,7 @@ const JURISDICTIONS = [
         authority: "New York Division of State Police",
         deadline_hours: null,
         deadline_trigger: "discovery of breach",
+        deadline_phrase: "without delaying notice to residents",
         citation: "N.Y. Gen. Bus. Law § 899-aa(8)(a)",
         source_url: "https://troopers.ny.gov/",
         condition: "Required whenever any New York resident is notified, in parallel with AG and Department of State notification.",
@@ -530,6 +594,7 @@ const JURISDICTIONS = [
         authority: "Nationwide Consumer Reporting Agencies",
         deadline_hours: null,
         deadline_trigger: "discovery of breach",
+        deadline_phrase: "without delaying notice to residents",
         gating: { residentThreshold: 5000, comparator: "gt" },
         thresholdLabel: "CRA notification",
         citation: "N.Y. Gen. Bus. Law § 899-aa(8)(b)",
@@ -590,6 +655,7 @@ const JURISDICTIONS = [
         authority: "Affected Virginia Residents",
         deadline_hours: null, // "without unreasonable delay" — no fixed clock
         deadline_trigger: "discovery of breach",
+        deadline_phrase: "without unreasonable delay",
         citation: "Va. Code § 18.2-186.6(B)",
         source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
         condition: "Notice required without unreasonable delay following discovery or notification of the breach. Notice may be reasonably delayed to allow the entity to determine the scope of the breach and restore the reasonable integrity of the system, or if a law-enforcement agency advises that notice will impede a criminal or civil investigation or homeland or national security. The breach must have caused, or the entity must reasonably believe has caused or will cause, identity theft or other fraud to a Virginia resident — see counsel note on the harm threshold.",
@@ -623,6 +689,7 @@ const JURISDICTIONS = [
         authority: "Virginia Attorney General",
         deadline_hours: null,
         deadline_trigger: "discovery of breach",
+        deadline_phrase: "without unreasonable delay",
         citation: "Va. Code § 18.2-186.6(B)",
         source_url: "https://www.oag.state.va.us/programs-initiatives/computer-crime",
         condition: "Required whenever any Virginia resident is notified. No threshold. Notice without unreasonable delay; the same law-enforcement-delay provisions that apply to resident notification also apply to AG notification. Notification is sent to the Computer Crime Section of the Office of the Attorney General by mail (or follow current AG guidance on submission method).",
@@ -656,6 +723,7 @@ const JURISDICTIONS = [
         authority: "Nationwide Consumer Reporting Agencies",
         deadline_hours: null,
         deadline_trigger: "discovery of breach",
+        deadline_phrase: "without unreasonable delay",
         gating: { residentThreshold: 1000, comparator: "gt" }, // "more than 1,000 persons at one time"
         thresholdLabel: "CRA notification",
         citation: "Va. Code § 18.2-186.6(E)",
@@ -735,6 +803,7 @@ const JURISDICTIONS = [
         authority: "Affected Delaware Residents",
         deadline_hours: 60 * 24,
         deadline_trigger: "determination of breach",
+        deadline_phrase: "60 days from determination of the breach",
         citation: "6 Del. C. § 12B-102(c)",
         source_url: "https://delcode.delaware.gov/title6/c012b/index.html",
         condition: "Without unreasonable delay but not later than 60 days after determination of the breach of security. If a shorter notification timeframe applies under federal law, the shorter federal timeframe controls. Delay permitted at the request of a law-enforcement agency if notice would impede a criminal investigation — notice is then due after the agency determines that it will no longer impede the investigation. If the affected residents cannot be identified within the 60-day period despite reasonable diligence, notice is due as soon as practicable after identification, unless substitute notice was provided under § 12B-101(5)d.",
@@ -758,6 +827,7 @@ const JURISDICTIONS = [
         deadline_hours: 0, // "not later than the time when notice is provided to the resident" — same date as the resident-notification deadline
         deadline_relative_to: { parent_authority: "Affected Delaware Residents" },
         deadline_trigger: "resident notification",
+        deadline_phrase: "no later than notice to residents",
         gating: { residentThreshold: 500, comparator: "gt" }, // § 12B-102(d): "exceeds 500 residents" — gt, not gte
         thresholdLabel: "AG notification",
         citation: "6 Del. C. § 12B-102(d)",
@@ -776,6 +846,46 @@ const JURISDICTIONS = [
             description: "AG notification is contingent on notice to residents being required. Encrypted data with an uncompromised key falls outside the statutory breach definition.",
           },
         ],
+      },
+      {
+        // Category-conditioned pass (JDC review 2026-07-25): upgraded from the
+        // former standing counsel note `de-credit-monitoring-12b-102-e` to a
+        // computed, ssn-gated service obligation. Statutory unit is "1 year",
+        // not "12 months".
+        kind: "service",
+        authority: "Credit Monitoring Services for Affected Delaware Residents",
+        gating: { categories: { anyOf: ["ssn"] } },
+        service_duration_display: "1 year",
+        trigger_note: "Breach including a resident's Social Security number.",
+        citation: "6 Del. C. § 12B-102(e)",
+        source_url: "https://law.justia.com/codes/delaware/title-6/chapter-12b/section-12b-102",
+        condition: "Credit monitoring services at no cost for a period of 1 year to each resident whose personal information, including Social Security number, was breached or is reasonably believed to have been breached. Provide all information necessary to enroll in the services and information on how the resident can place a credit freeze on the resident's credit file. Services are not required if, after an appropriate investigation, the person reasonably determines the breach of security is unlikely to result in harm to the affected individuals — the same risk-of-harm determination that excuses notice (see the § 12B-102(a) counsel note).",
+        conditionalGates: [
+          {
+            role: "safeHarbor",
+            input: "encrypted",
+            equals: "yes",
+            defeatedBy: "keyAcquired",
+            onSatisfied: "suppress",
+            whenUnset: "fires",
+            suppressionType: "breach_definition",
+            citation: "6 Del. C. § 12B-101(1)",
+            description: "The credit-monitoring duty is contingent on a breach of security having occurred. Encrypted data with an uncompromised key falls outside the statutory breach definition.",
+          },
+        ],
+      },
+      {
+        // Category-conditioned pass (JDC review 2026-07-25): upgraded from the
+        // former standing counsel note `de-email-credential-notice-12b-102-f`;
+        // content unchanged. Gated on the credentials category per the
+        // § 12B-101(7)a.5 definition (username or email address in combination
+        // with a password or security question and answer).
+        kind: "advisory",
+        authority: "Email-credential breaches — notice restriction under § 12B-102(f)",
+        gating: { categories: { anyOf: ["credentials"] } },
+        citation: "6 Del. C. § 12B-102(f)",
+        source_url: "https://delcode.delaware.gov/title6/c012b/index.html",
+        condition: "If the breached credentials are for an email account furnished by the notifying entity, notice may not be sent to that email address. Use another method permitted under 6 Del. C. § 12B-101(5), or clear and conspicuous online notice delivered when the resident connects from the IP address or online location from which the resident customarily accesses the account. 6 Del. C. § 12B-102(f).",
       },
     ],
     counselNotes: [
@@ -796,22 +906,6 @@ const JURISDICTIONS = [
         source_url: "https://delcode.delaware.gov/title6/c012b/index.html",
       },
       {
-        id: "de-email-credential-notice-12b-102-f",
-        placement: "caveat",
-        title: "Email-credential breaches — notice restriction under § 12B-102(f)",
-        content: "If the breached credentials are for an email account furnished by the notifying entity, notice may not be sent to that email address. Use another method permitted under 6 Del. C. § 12B-101(5), or clear and conspicuous online notice delivered when the resident connects from the IP address or online location from which the resident customarily accesses the account. 6 Del. C. § 12B-102(f).",
-        citation: "6 Del. C. § 12B-102(f)",
-        source_url: "https://delcode.delaware.gov/title6/c012b/index.html",
-      },
-      {
-        id: "de-credit-monitoring-12b-102-e",
-        placement: "sectoral",
-        title: "Credit monitoring when Social Security numbers are involved — § 12B-102(e)",
-        content: "If the breach includes Social Security numbers, Delaware requires an offer to each affected resident of credit monitoring services at no cost for a period of one year, together with all information necessary to enroll and information on placing a credit freeze. 6 Del. C. § 12B-102(e). The obligation is excused by the same risk-of-harm determination that excuses notice.",
-        citation: "6 Del. C. § 12B-102(e)",
-        source_url: "https://delcode.delaware.gov/title6/c012b/index.html",
-      },
-      {
         id: "de-security-duty-12b-100",
         placement: "sectoral",
         title: "Independent duty to safeguard personal information — § 12B-100",
@@ -829,6 +923,128 @@ const JURISDICTIONS = [
       },
     ],
   },
+  {
+    id: "ct",
+    name: "Connecticut",
+    short: "Connecticut",
+    statute: "Conn. Gen. Stat. § 36a-701b",
+    // Informational only — no Connecticut gate depends on resident count (the
+    // AG notification is required regardless of the number affected).
+    residentField: { stateLabel: "Connecticut residents affected", placeholder: "e.g. 800" },
+    obligations: [
+      {
+        kind: "individual",
+        authority: "Affected Connecticut Residents",
+        deadline_hours: 60 * 24,
+        deadline_trigger: "discovery of breach",
+        deadline_phrase: "60 days from discovery of breach",
+        citation: "Conn. Gen. Stat. § 36a-701b(b)(1)",
+        source_url: "https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/",
+        condition: "Without unreasonable delay but no later than 60 days after discovery of the breach, unless a shorter timeframe is required under federal law or delay is requested by law enforcement under § 36a-701b(d). Residents identified only after the 60-day window must be notified as expediently as possible, unless the risk exemption applies.",
+        conditionalGates: [
+          {
+            role: "safeHarbor",
+            input: "encrypted",
+            equals: "yes",
+            defeatedBy: "keyAcquired",
+            onSatisfied: "suppress",
+            whenUnset: "fires",
+            suppressionType: "breach_definition",
+            citation: "Conn. Gen. Stat. § 36a-701b(a)",
+            description: "Connecticut's breach definition excludes data secured by encryption or by any other method or technology that renders the personal information unreadable or unusable. Note the statutory exclusion carries no express key-compromise proviso (unlike CO/NY); the gate conservatively treats an acquired key as defeating the harbor, since a compromised key no longer renders the data unreadable or unusable — see the no-key-proviso counsel note.",
+          },
+        ],
+      },
+      {
+        kind: "ag",
+        authority: "Connecticut Attorney General",
+        deadline_hours: 60 * 24, // same 60-day-from-discovery clock as resident notice; due no later than notice to residents
+        deadline_trigger: "discovery of breach",
+        deadline_phrase: "no later than notice to residents",
+        citation: "Conn. Gen. Stat. § 36a-701b(b)(2)(A)",
+        source_url: "https://portal.ct.gov/ag/sections/privacy/reporting-a-data-breach",
+        condition: "Required regardless of the number of residents affected, not later than the time when notice is provided to residents. The Attorney General's online submission form is the office's preferred method; supplements to a previously reported breach go to ag.breach@ct.gov with the PR case number.",
+        conditionalGates: [
+          {
+            role: "safeHarbor",
+            input: "encrypted",
+            equals: "yes",
+            defeatedBy: "keyAcquired",
+            onSatisfied: "suppress",
+            whenUnset: "fires",
+            suppressionType: "breach_definition",
+            citation: "Conn. Gen. Stat. § 36a-701b(a)",
+            description: "AG notification is contingent on notice to residents being required. Data secured by encryption or another method rendering it unreadable or unusable falls outside the statutory breach definition (no express key-compromise proviso — see the counsel note).",
+          },
+        ],
+      },
+      {
+        kind: "service",
+        authority: "Identity Theft Prevention Services for Affected Connecticut Residents",
+        gating: { categories: { anyOf: ["ssn"] } },
+        service_duration_display: "2 years",
+        trigger_note: "Breach involving a resident's Social Security number or taxpayer identification number.",
+        citation: "Conn. Gen. Stat. § 36a-701b(b)(2)(B)",
+        source_url: "https://portal.ct.gov/ag/sections/privacy/reporting-a-data-breach",
+        condition: "Appropriate identity theft prevention services and, if applicable, identity theft mitigation services. Such service or services shall be provided at no cost to such resident for a period of not less than two years. Such person shall provide all information necessary for such resident to enroll in such service or services and shall include information on how such resident can place a credit freeze on such resident's credit file.",
+        conditionalGates: [
+          {
+            role: "safeHarbor",
+            input: "encrypted",
+            equals: "yes",
+            defeatedBy: "keyAcquired",
+            onSatisfied: "suppress",
+            whenUnset: "fires",
+            suppressionType: "breach_definition",
+            citation: "Conn. Gen. Stat. § 36a-701b(a)",
+            description: "The identity-theft-prevention-services duty is contingent on notice to residents being required. Data secured by encryption or another method rendering it unreadable or unusable falls outside the statutory breach definition.",
+          },
+        ],
+      },
+      {
+        kind: "advisory",
+        authority: "Login-credential breaches — notice method under § 36a-701b(f)",
+        gating: { categories: { anyOf: ["credentials"] } },
+        citation: "Conn. Gen. Stat. § 36a-701b(f)",
+        source_url: "https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/",
+        condition: "Where the breach involves online-account login credentials, notice may be provided by directing the resident to promptly change the credentials. Where the breached credentials are for an email account furnished by the entity, notice to that email address does not comply — use another permitted method or clear and conspicuous online notice delivered when the resident connects from an IP address or online location from which the entity knows the resident customarily accesses the account.",
+      },
+    ],
+    counselNotes: [
+      {
+        id: "ct-harm-exemption-36a-701b-b1",
+        placement: "caveat",
+        title: "Harm exemption — self-determination standard, not modelled",
+        content: "Connecticut's notification duty carries a harm exemption: \"Such notification shall not be required if, after an appropriate investigation the person reasonably determines that the breach will not likely result in harm to the individuals whose personal information has been acquired or accessed.\" This is a self-determination standard with no law-enforcement-consultation element. It is a substantive judgment the engine does not model (a form-level harm gate is queued in docs/todo.md); Respond's deadlines reflect the default position that notification is required. If the entity concludes after an appropriate investigation that harm is not likely, the obligations may not arise. Document that determination contemporaneously and consult counsel before relying on it.",
+        citation: "Conn. Gen. Stat. § 36a-701b(b)(1)",
+        source_url: "https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/",
+      },
+      {
+        id: "ct-no-key-proviso-36a-701b-a",
+        placement: "caveat",
+        title: "No key-compromise proviso in the § 36a-701b(a) encryption exclusion",
+        content: "Unlike Colorado and New York, Connecticut's definitional exclusion for encrypted data does not condition the exclusion on the encryption key remaining uncompromised — the definition excludes data secured by encryption or by any other method or technology that renders the personal information unreadable or unusable, with no express key proviso. Counsel should not assume the CO/NY key-compromise analysis transfers to Connecticut. Respond's gate conservatively treats an acquired key as defeating the harbor (a compromised key arguably leaves the data no longer 'unreadable or unusable'), so the obligations compute in that case rather than being silently excused; counsel may reach a different conclusion under the literal statutory text.",
+        citation: "Conn. Gen. Stat. § 36a-701b(a)",
+        source_url: "https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/",
+      },
+      {
+        id: "ct-deemed-compliance-36a-701b-g-h",
+        placement: "sectoral",
+        title: "Own-procedures and functional-regulator deemed compliance — § 36a-701b(g), (h)",
+        content: "Connecticut deems a person compliant if it maintains its own security-breach procedures consistent with the timing requirements of § 36a-701b and notifies residents in accordance with its policies in the event of a breach (subsection (g)), or if it complies with the security-breach requirements of its primary or functional regulator, including notice regimes under federal law such as HIPAA/HITECH (subsection (h)). These are entity-type-dependent provisions that Respond does not model (same treatment as the NYDFS sectoral overlay for New York). If the entity is subject to a functional regulator's breach regime, assess deemed compliance separately.",
+        citation: "Conn. Gen. Stat. § 36a-701b(g), (h)",
+        source_url: "https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/",
+      },
+      {
+        id: "ct-cutpa-enforcement-36a-701b-j",
+        placement: "caveat",
+        title: "CUTPA enforcement context — § 36a-701b(j)",
+        content: "Failure to comply with § 36a-701b constitutes an unfair trade practice for purposes of the Connecticut Unfair Trade Practices Act and is enforced by the Attorney General. This enforcement framing raises the stakes of a missed or late notification beyond the notification statute itself; it does not change any deadline modelled above.",
+        citation: "Conn. Gen. Stat. § 36a-701b(j)",
+        source_url: "https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/",
+      },
+    ],
+  },
 ];
 
-export { JURISDICTIONS };
+export { JURISDICTIONS, SENSITIVITY_OPTIONS };

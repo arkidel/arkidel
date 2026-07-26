@@ -15,7 +15,7 @@
 
 import { JURISDICTIONS } from "./data.js";
 
-const HIGH_RISK_CATEGORIES = ["gov_id", "financial", "health", "biometric", "children", "special", "credentials"];
+const HIGH_RISK_CATEGORIES = ["ssn", "gov_id", "financial", "health", "biometric", "children", "special", "credentials"];
 
 // The only valid riskLevel inputs. The UI emits exactly one of these three or
 // "" (unset). Anything else reaching the engine — undefined/null/"" or an
@@ -123,6 +123,18 @@ function evaluateSafeHarbors(gates, inputs) {
   return null;
 }
 
+// Category gate (category-conditioned pass, JDC review 2026-07-25). An
+// obligation may declare `gating.categories: { anyOf: [...] }` — it computes
+// only if facts.sensitivity contains at least one member of anyOf. The object
+// form reserves allOf/noneOf for future use; only anyOf ships. AND-composed
+// with resident thresholds. Returns true when no category gate is declared.
+function categoryGateMet(ob, sensitivity) {
+  const anyOf = ob.gating?.categories?.anyOf;
+  if (!Array.isArray(anyOf)) return true;
+  if (!Array.isArray(sensitivity)) return false;
+  return anyOf.some((c) => sensitivity.includes(c));
+}
+
 // Build the full gate list for an obligation: the risk fireCondition derived from
 // the legacy gating.* fields (the behavior-preserved adapter from Stage 1) MERGED
 // with any declared `conditionalGates` (the encryption / redaction safeHarbors
@@ -161,13 +173,23 @@ function deriveGates(ob) {
  * @param {string[]} [facts.sensitivity]     - Array of sensitivity category ids.
  * @param {string} [facts.encrypted] - US encryption-cluster inputs ("yes"|"no"|unset): encrypted, plus encryptionStrength ("ge_128"|"below_128"|"unknown"), redacted, keyAcquired, reidentificationAcquired.
  * @param {string} [facts.gdprUnintelligibility] - GDPR Art. 34(3)(a) input ("yes"|"no"|unset): measures rendering the data unintelligible.
- * @returns {{deadlines: Array, suppressed: Array}}
+ * @returns {{deadlines: Array, suppressed: Array, pending: Array, review: Array, services: Array, advisories: Array}}
  *   deadlines  — obligations that fire under the facts.
  *   suppressed — obligations that would have fired but were suppressed because
  *                encryption was reported. Each suppressed entry includes the
  *                citation for the suppression mechanism (either definitional
  *                breach exclusion or unintelligibility-of-data exemption), so the UI
  *                can render an explanatory card.
+ *   pending    — obligations awaiting a required user input (the EU/UK risk
+ *                assessment).
+ *   review     — obligations whose outcome turns on a substantive legal
+ *                judgment the engine does not make.
+ *   services   — additive: computed category-gated service obligations
+ *                (statutory duration, no deadline date).
+ *   advisories — additive: declared advisories whose category gate is met,
+ *                plus auto-generated "ssn_unconfirmed" conditional advisories
+ *                (category-gated obligation not computed while gov_id is
+ *                selected without ssn).
  *
  * Obligations may declare `deadline_relative_to: { parent_authority: "..." }` to specify
  * that their deadline runs from another obligation's deadline, not from awareness.
@@ -205,7 +227,25 @@ function computeDeadlines(facts) {
   // in exactly one of the four arrays. EMPTY until Stage 4 wires the MA gate — no
   // gate emits "review" yet.
   const review = [];
-  if (!awarenessDate) return { deadlines, suppressed, pending, review };
+  // Additive output arrays (category-conditioned pass). The existing
+  // deadline-output shape is unchanged; a UI that ignores these keys keeps
+  // working.
+  //   services   — computed kind:"service" obligations (category-gated,
+  //                duration instead of deadline; e.g. CT identity-theft
+  //                prevention, DE/MA credit monitoring). A service whose
+  //                encryption harbor is satisfied (suppress OR review) does
+  //                not compute — the parallel notification obligations' cards
+  //                carry that story.
+  //   advisories — (a) declared kind:"advisory" entries whose category gate
+  //                is met, and (b) auto-generated conditional advisories for
+  //                category-gated obligations whose gate is NOT met while
+  //                gov_id IS present in facts.sensitivity (the data may
+  //                include SSNs the user recorded under Government IDs) —
+  //                reason "ssn_unconfirmed". No advisory when neither ssn nor
+  //                gov_id is present.
+  const services = [];
+  const advisories = [];
+  if (!awarenessDate) return { deadlines, suppressed, pending, review, services, advisories };
 
   // Two-pass build:
   //   Pass 1 — collect obligations that fire, computing deadlines that anchor
@@ -225,6 +265,23 @@ function computeDeadlines(facts) {
       : (typeof residentCountRaw === "number" ? residentCountRaw : parseInt(residentCountRaw, 10));
 
     jur.obligations.forEach((ob) => {
+      // Declared advisories — advisory-only content, never a deadline. A met
+      // category gate surfaces the advisory; nothing else about the incident
+      // is evaluated for it.
+      if (ob.kind === "advisory") {
+        if (categoryGateMet(ob, sensitivity)) {
+          advisories.push({
+            jurisdiction: jur.short,
+            authority: ob.authority,
+            condition: ob.condition,
+            citation: ob.citation,
+            source_url: ob.source_url,
+            statute: jur.statute,
+          });
+        }
+        return;
+      }
+
       // Conditional-gate seam, Pass 1 — fireConditions, evaluated BEFORE the
       // resident-threshold check (preserving the risk → threshold → encryption
       // order). The EU/UK risk gate is the only fireCondition; US obligations have
@@ -259,6 +316,26 @@ function computeDeadlines(facts) {
         });
         return;
       }
+      // Category gate — AND-composed with the resident threshold below. An
+      // unmet gate leaves the obligation silently absent, EXCEPT when gov_id
+      // is among the selected categories: the incident may involve SSNs the
+      // user recorded under Government IDs (the categories were split in the
+      // 2026-07-25 data-model amendment), so an ssn-gated obligation that did
+      // not compute surfaces as a conditional advisory instead.
+      if (!categoryGateMet(ob, sensitivity)) {
+        if (Array.isArray(sensitivity) && sensitivity.includes("gov_id")) {
+          advisories.push({
+            jurisdiction: jur.short,
+            authority: ob.authority,
+            citation: ob.citation,
+            source_url: ob.source_url,
+            statute: jur.statute,
+            reason: "ssn_unconfirmed",
+          });
+        }
+        return;
+      }
+
       if (ob.gating?.residentThreshold !== undefined) {
         const threshold = ob.gating.residentThreshold;
         const comparator = ob.gating.comparator || "gte";
@@ -278,6 +355,30 @@ function computeDeadlines(facts) {
       // judgment routes to `review` instead (Stage 4: MA second trigger);
       // `review` outranks `suppress`.
       const harborVerdict = evaluateSafeHarbors(gates, gateInputs);
+
+      // Service obligations (kind:"service") — computed, category-gated,
+      // duration instead of deadline. They land in the additive `services`
+      // array, never in deadlines/suppressed/review: when the encryption
+      // harbor is satisfied (suppress OR review), the service simply does not
+      // compute — the jurisdiction's notification obligations land in
+      // suppressed/review with the full explanation, and the service is
+      // contingent on notice being required.
+      if (ob.kind === "service") {
+        if (!harborVerdict) {
+          services.push({
+            jurisdiction: jur.short,
+            authority: ob.authority,
+            service_duration_display: ob.service_duration_display,
+            trigger_note: ob.trigger_note,
+            condition: ob.condition,
+            citation: ob.citation,
+            source_url: ob.source_url,
+            statute: jur.statute,
+          });
+        }
+        return;
+      }
+
       if (harborVerdict?.outcome === "review") {
         review.push({
           jurisdiction: jur.short,
@@ -314,20 +415,12 @@ function computeDeadlines(facts) {
         }
       }
 
-      // Build basis text. For dependent obligations, the trigger references the
-      // parent authority; for absolute obligations, it references the trigger event.
-      const basisParts = [ob.citation];
-      if (ob.deadline_hours !== null && ob.deadline_hours !== undefined) {
-        const h = ob.deadline_hours;
-        const label = h % 24 === 0 ? `${h / 24} days` : `${h} hours`;
-        const triggerLabel = ob.deadline_relative_to
-          ? `notification of ${ob.deadline_relative_to.parent_authority}`
-          : ob.deadline_trigger;
-        basisParts.push(`${label} from ${triggerLabel}`);
-      } else {
-        basisParts.push("without undue delay");
-      }
-      const basis = basisParts.join(" — ");
+      // Build basis text — statutory-phrase repair (JDC review 2026-07-25):
+      // the deadline language is per-obligation data (`deadline_phrase` in
+      // data.js), never composed or hardcoded here. Composition is
+      // "{citation} — {deadline_phrase}"; an obligation missing its phrase
+      // falls back to the bare citation rather than any generic wording.
+      const basis = ob.deadline_phrase ? `${ob.citation} — ${ob.deadline_phrase}` : ob.citation;
 
       let conditional = ob.condition || "";
       if (ob.gating?.residentThreshold !== undefined && !isNaN(residentCount)) {
@@ -384,7 +477,7 @@ function computeDeadlines(facts) {
     return rest;
   });
 
-  return { deadlines: cleaned, suppressed, pending, review };
+  return { deadlines: cleaned, suppressed, pending, review, services, advisories };
 }
 
 
@@ -429,9 +522,9 @@ const expectCount = (n) => (deadlines) =>
     ? { pass: true }
     : { pass: false, message: `Expected ${n} deadlines; got ${deadlines.length}` };
 
-const expectAll = (...checks) => (deadlines, suppressed, pending, review) => {
+const expectAll = (...checks) => (deadlines, suppressed, pending, review, services, advisories) => {
   const failures = checks
-    .map((c) => c(deadlines, suppressed, pending, review))
+    .map((c) => c(deadlines, suppressed, pending, review, services, advisories))
     .filter((r) => !r.pass)
     .map((r) => r.message);
   return failures.length === 0
@@ -501,6 +594,54 @@ const expectReviewCount = (n) => (deadlines, suppressed = [], pending = [], revi
   review.length === n
     ? { pass: true }
     : { pass: false, message: `Expected ${n} review obligations; got ${review.length}` };
+
+// Basis assertions (statutory-phrase repair). The basis must be exactly
+// "{citation} — {deadline_phrase}" as declared in data.js — these cases pin
+// the four phrase repairs and prove the phrase flows from data, not code.
+const expectBasis = (jurisdiction, authoritySubstring, expectedBasis) => (deadlines) => {
+  const found = findDeadline(deadlines, jurisdiction, authoritySubstring);
+  if (!found) return { pass: false, message: `${jurisdiction} / ${authoritySubstring} not found` };
+  return found.basis === expectedBasis
+    ? { pass: true }
+    : { pass: false, message: `Expected basis "${expectedBasis}"; got "${found.basis}"` };
+};
+
+// Service / advisory expectations (category-conditioned pass).
+const expectService = (jurisdiction, authoritySubstring, duration) => (deadlines, suppressed = [], pending = [], review = [], services = []) => {
+  const found = services.find(
+    (s) => s.jurisdiction === jurisdiction && s.authority.toLowerCase().includes(authoritySubstring.toLowerCase())
+  );
+  if (!found) {
+    return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" service to compute; got ${services.length} services: ${services.map((s) => `${s.jurisdiction}/${s.authority}`).join(" | ")}` };
+  }
+  if (duration !== undefined && found.service_duration_display !== duration) {
+    return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" duration "${duration}"; got "${found.service_duration_display}"` };
+  }
+  return { pass: true };
+};
+
+const expectServiceCount = (n) => (deadlines, suppressed = [], pending = [], review = [], services = []) =>
+  services.length === n
+    ? { pass: true }
+    : { pass: false, message: `Expected ${n} services; got ${services.length}: ${services.map((s) => `${s.jurisdiction}/${s.authority}`).join(" | ")}` };
+
+const expectAdvisory = (jurisdiction, authoritySubstring, reason) => (deadlines, suppressed = [], pending = [], review = [], services = [], advisories = []) => {
+  const found = advisories.find(
+    (a) => a.jurisdiction === jurisdiction && a.authority.toLowerCase().includes(authoritySubstring.toLowerCase())
+  );
+  if (!found) {
+    return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" advisory; got ${advisories.length} advisories: ${advisories.map((a) => `${a.jurisdiction}/${a.authority}`).join(" | ")}` };
+  }
+  if (reason !== undefined && found.reason !== reason) {
+    return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" advisory reason "${reason}"; got "${found.reason}"` };
+  }
+  return { pass: true };
+};
+
+const expectAdvisoryCount = (n) => (deadlines, suppressed = [], pending = [], review = [], services = [], advisories = []) =>
+  advisories.length === n
+    ? { pass: true }
+    : { pass: false, message: `Expected ${n} advisories; got ${advisories.length}: ${advisories.map((a) => `${a.jurisdiction}/${a.authority}`).join(" | ")}` };
 
 
 
@@ -1309,6 +1450,261 @@ const TEST_CASES = [
       expectCount(1)
     ),
   },
+
+  // === Delaware — § 12B-102 boundaries, cascade, encryption (intake § 9.10) ===
+  {
+    name: "Delaware: 1 resident → individual fires (60d from determination-as-awareness); AG does NOT (1 not >500)",
+    category: "Delaware — boundaries",
+    facts: { jurisdictions: { de: true }, residentCounts: { de: 1 }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectFires("Delaware", "Delaware Residents"),
+      expectDeadlineHoursFromAwareness("Delaware", "Delaware Residents", 60 * 24),
+      expectDoesNotFire("Delaware", "Attorney General")
+    ),
+  },
+  {
+    name: "Delaware: 500 residents does NOT trigger AG (statute says 'exceeds 500' — gt boundary)",
+    category: "Delaware — boundaries",
+    facts: { jurisdictions: { de: true }, residentCounts: { de: 500 }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectFires("Delaware", "Delaware Residents"),
+      expectDoesNotFire("Delaware", "Attorney General")
+    ),
+  },
+  {
+    name: "Delaware: 501 residents → both fire; AG deadline equals the resident deadline (0-hour cascade)",
+    category: "Delaware — boundaries",
+    facts: { jurisdictions: { de: true }, residentCounts: { de: 501 }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectFires("Delaware", "Delaware Residents"),
+      expectFires("Delaware", "Attorney General"),
+      expectDeadlineHoursFromAwareness("Delaware", "Delaware Residents", 60 * 24),
+      expectDeadlineHoursFromAwareness("Delaware", "Attorney General", 60 * 24)
+    ),
+  },
+  {
+    name: "Delaware + encryption (key not acquired) → both obligations suppressed (definitional)",
+    category: "Delaware — encryption",
+    facts: { jurisdictions: { de: true }, residentCounts: { de: 501 }, sensitivity: ["financial"], encrypted: "yes", keyAcquired: "no" },
+    expect: expectAll(
+      expectCount(0),
+      expectSuppressed("Delaware", "Delaware Residents", "breach_definition"),
+      expectSuppressed("Delaware", "Attorney General", "breach_definition")
+    ),
+  },
+  {
+    name: "Delaware: encrypted but key also acquired → both fire (harbor defeated)",
+    category: "Delaware — encryption",
+    facts: { jurisdictions: { de: true }, residentCounts: { de: 501 }, sensitivity: ["financial"], encrypted: "yes", keyAcquired: "yes" },
+    expect: expectAll(
+      expectFires("Delaware", "Delaware Residents"),
+      expectFires("Delaware", "Attorney General"),
+      expectSuppressedCount(0)
+    ),
+  },
+  {
+    name: "Delaware: missing resident count fires individual but not AG (threshold-gated, no count)",
+    category: "Delaware — boundaries",
+    facts: { jurisdictions: { de: true }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectFires("Delaware", "Delaware Residents"),
+      expectDoesNotFire("Delaware", "Attorney General")
+    ),
+  },
+
+  // === Category-gated service obligations & advisories (JDC review 2026-07-25) ===
+  {
+    name: "Delaware + ssn → 1-year credit-monitoring service computed (§ 12B-102(e))",
+    category: "Service obligations",
+    facts: { jurisdictions: { de: true }, residentCounts: { de: 100 }, sensitivity: ["identifiers", "ssn"] },
+    expect: expectAll(
+      expectService("Delaware", "Credit Monitoring", "1 year"),
+      expectServiceCount(1),
+      expectAdvisoryCount(0)
+    ),
+  },
+  {
+    name: "Delaware + gov_id without ssn → service absent; 'ssn_unconfirmed' conditional advisory",
+    category: "Service obligations",
+    facts: { jurisdictions: { de: true }, residentCounts: { de: 100 }, sensitivity: ["gov_id"] },
+    expect: expectAll(
+      expectServiceCount(0),
+      expectAdvisory("Delaware", "Credit Monitoring", "ssn_unconfirmed"),
+      expectAdvisoryCount(1)
+    ),
+  },
+  {
+    name: "Delaware + credentials → § 12B-102(f) declared advisory (email-credential notice restriction)",
+    category: "Service obligations",
+    facts: { jurisdictions: { de: true }, residentCounts: { de: 100 }, sensitivity: ["credentials"] },
+    expect: expectAll(
+      expectServiceCount(0),
+      expectAdvisory("Delaware", "Email-credential"),
+      expectAdvisoryCount(1)
+    ),
+  },
+  {
+    name: "Delaware + ssn + encryption (key not acquired) → service does not compute; obligations suppressed",
+    category: "Service obligations",
+    facts: { jurisdictions: { de: true }, residentCounts: { de: 501 }, sensitivity: ["ssn"], encrypted: "yes", keyAcquired: "no" },
+    expect: expectAll(
+      expectServiceCount(0),
+      expectSuppressed("Delaware", "Delaware Residents", "breach_definition"),
+      expectSuppressed("Delaware", "Attorney General", "breach_definition")
+    ),
+  },
+  {
+    name: "MA + ssn → 18-month credit-monitoring service computed (c. 93H § 3A(a)); three obligations fire",
+    category: "Service obligations",
+    facts: { jurisdictions: { ma: true }, sensitivity: ["ssn"] },
+    expect: expectAll(
+      expectCount(3),
+      expectService("Massachusetts", "Credit Monitoring", "18 months"),
+      expectServiceCount(1)
+    ),
+  },
+  {
+    name: "MA + ssn + encryption (128-bit, key not acquired) → service does not compute; obligations route to review (§ 1 mechanism)",
+    category: "Service obligations",
+    facts: { jurisdictions: { ma: true }, sensitivity: ["ssn"], encrypted: "yes", encryptionStrength: "ge_128", keyAcquired: "no" },
+    expect: expectAll(
+      expectServiceCount(0),
+      expectReviewCount(3),
+      expectSuppressedCount(0),
+      expectCount(0)
+    ),
+  },
+  {
+    name: "MA + gov_id without ssn → 'ssn_unconfirmed' advisory for the § 3A service",
+    category: "Service obligations",
+    facts: { jurisdictions: { ma: true }, sensitivity: ["gov_id"] },
+    expect: expectAll(
+      expectServiceCount(0),
+      expectAdvisory("Massachusetts", "Credit Monitoring", "ssn_unconfirmed"),
+      expectAdvisoryCount(1)
+    ),
+  },
+
+  // === Connecticut — Conn. Gen. Stat. § 36a-701b (tenth jurisdiction) ===
+  {
+    name: "Connecticut: individual + AG both compute at 60 days from discovery-as-awareness; no CRA obligation",
+    category: "Connecticut",
+    facts: { jurisdictions: { ct: true }, residentCounts: { ct: 800 }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectFires("Connecticut", "Connecticut Residents"),
+      expectFires("Connecticut", "Attorney General"),
+      expectDeadlineHoursFromAwareness("Connecticut", "Connecticut Residents", 60 * 24),
+      expectDeadlineHoursFromAwareness("Connecticut", "Attorney General", 60 * 24),
+      expectDoesNotFire("Connecticut", "Consumer Reporting"),
+      expectCount(2)
+    ),
+  },
+  {
+    name: "Connecticut: AG computes with a blank resident count (no threshold — count is informational)",
+    category: "Connecticut",
+    facts: { jurisdictions: { ct: true }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectFires("Connecticut", "Connecticut Residents"),
+      expectFires("Connecticut", "Attorney General"),
+      expectCount(2)
+    ),
+  },
+  {
+    name: "Connecticut: AG computes at a count of 1 (required regardless of the number affected)",
+    category: "Connecticut",
+    facts: { jurisdictions: { ct: true }, residentCounts: { ct: 1 }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectFires("Connecticut", "Attorney General"),
+      expectCount(2)
+    ),
+  },
+  {
+    name: "Connecticut + ssn → 2-year identity-theft-prevention service computed (§ 36a-701b(b)(2)(B))",
+    category: "Connecticut",
+    facts: { jurisdictions: { ct: true }, residentCounts: { ct: 800 }, sensitivity: ["ssn"] },
+    expect: expectAll(
+      expectService("Connecticut", "Identity Theft Prevention", "2 years"),
+      expectServiceCount(1),
+      expectAdvisoryCount(0)
+    ),
+  },
+  {
+    name: "Connecticut + gov_id without ssn → service absent; 'ssn_unconfirmed' conditional advisory",
+    category: "Connecticut",
+    facts: { jurisdictions: { ct: true }, residentCounts: { ct: 800 }, sensitivity: ["gov_id"] },
+    expect: expectAll(
+      expectServiceCount(0),
+      expectAdvisory("Connecticut", "Identity Theft Prevention", "ssn_unconfirmed"),
+      expectAdvisoryCount(1)
+    ),
+  },
+  {
+    name: "Connecticut with neither ssn nor gov_id → no service, no advisory",
+    category: "Connecticut",
+    facts: { jurisdictions: { ct: true }, residentCounts: { ct: 800 }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectServiceCount(0),
+      expectAdvisoryCount(0)
+    ),
+  },
+  {
+    name: "Connecticut + credentials → § 36a-701b(f) declared advisory (login-credential notice method)",
+    category: "Connecticut",
+    facts: { jurisdictions: { ct: true }, residentCounts: { ct: 800 }, sensitivity: ["credentials"] },
+    expect: expectAll(
+      expectAdvisory("Connecticut", "Login-credential"),
+      expectAdvisoryCount(1),
+      expectServiceCount(0)
+    ),
+  },
+  {
+    name: "Connecticut + ssn + encryption (key not acquired) → individual + AG suppressed AND service does not compute",
+    category: "Connecticut",
+    facts: { jurisdictions: { ct: true }, residentCounts: { ct: 800 }, sensitivity: ["ssn"], encrypted: "yes", keyAcquired: "no" },
+    expect: expectAll(
+      expectCount(0),
+      expectSuppressed("Connecticut", "Connecticut Residents", "breach_definition"),
+      expectSuppressed("Connecticut", "Attorney General", "breach_definition"),
+      expectServiceCount(0)
+    ),
+  },
+  {
+    name: "Connecticut: encrypted but key also acquired → computes (conservative — no statutory key proviso; see counsel note)",
+    category: "Connecticut",
+    facts: { jurisdictions: { ct: true }, residentCounts: { ct: 800 }, sensitivity: ["ssn"], encrypted: "yes", keyAcquired: "yes" },
+    expect: expectAll(
+      expectFires("Connecticut", "Connecticut Residents"),
+      expectFires("Connecticut", "Attorney General"),
+      expectService("Connecticut", "Identity Theft Prevention", "2 years"),
+      expectSuppressedCount(0)
+    ),
+  },
+
+  // === Statutory deadline phrases — basis is "{citation} — {deadline_phrase}" from data.js ===
+  {
+    name: "Phrase: VA individual basis renders 'without unreasonable delay' (not the GDPR wording)",
+    category: "Statutory phrases",
+    facts: { jurisdictions: { va: true }, residentCounts: { va: 100 }, sensitivity: ["identifiers"] },
+    expect: expectBasis("Virginia", "Virginia Residents", "Va. Code § 18.2-186.6(B) — without unreasonable delay"),
+  },
+  {
+    name: "Phrase: EU Art. 34 basis renders 'without undue delay'",
+    category: "Statutory phrases",
+    facts: { jurisdictions: { eu: true }, riskLevel: "high" },
+    expect: expectBasis("EU GDPR", "Data Subjects", "Art. 34 GDPR — without undue delay"),
+  },
+  {
+    name: "Phrase: EU Art. 33 basis renders '72 hours from awareness' (statutory hours, not computed days)",
+    category: "Statutory phrases",
+    facts: { jurisdictions: { eu: true }, riskLevel: "risk" },
+    expect: expectBasis("EU GDPR", "Supervisory Authority", "Art. 33 GDPR — 72 hours from awareness"),
+  },
+  {
+    name: "Phrase: DE AG basis renders 'no later than notice to residents' (no '0 days from notification' artifact)",
+    category: "Statutory phrases",
+    facts: { jurisdictions: { de: true }, residentCounts: { de: 501 }, sensitivity: ["identifiers"] },
+    expect: expectBasis("Delaware", "Attorney General", "6 Del. C. § 12B-102(d) — no later than notice to residents"),
+  },
 ];
 
 /**
@@ -1322,8 +1718,8 @@ function runTests() {
         ...t.facts,
         awarenessDate: t.facts._skipAwareness ? undefined : TEST_AWARENESS,
       };
-      const { deadlines, suppressed, pending, review } = computeDeadlines(facts);
-      const result = t.expect(deadlines, suppressed, pending, review);
+      const { deadlines, suppressed, pending, review, services, advisories } = computeDeadlines(facts);
+      const result = t.expect(deadlines, suppressed, pending, review, services, advisories);
       return {
         name: t.name,
         category: t.category,

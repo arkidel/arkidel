@@ -18,7 +18,9 @@
 // Exit code is non-zero if any case fails.
 // =============================================================================
 
+import { readFileSync } from "node:fs";
 import { computeDeadlines } from "../src/breach-clock/engine.js";
+import { JURISDICTIONS } from "../src/breach-clock/data.js";
 
 // --- Fixtures ----------------------------------------------------------------
 
@@ -475,6 +477,101 @@ T("G. Degenerate", "Extra residentCounts keys for unselected jurisdictions are i
 T("G. Degenerate", "Missing awarenessDate -> empty buckets (engine short-circuits)", (a) => {
   const r = computeDeadlines({ jurisdictions: { eu: true, ca: true }, residentCounts: { ca: 1000 }, riskLevel: "high" });
   a.eq(r.deadlines.length + r.suppressed.length + r.pending.length, 0, "no awareness -> nothing");
+});
+
+// =============================================================================
+// H. STATUTORY PHRASES — deadline language is data, never engine code.
+//    The 2026-07-25 phrase repair moved every deadline phrase into data.js
+//    (`deadline_phrase` per obligation); the engine composes the basis as
+//    "{citation} — {deadline_phrase}". These cases pin that structurally.
+// =============================================================================
+
+T("H. Phrases", "engine.js code (pre-TEST_CASES) contains NO hardcoded deadline-phrase strings", (a) => {
+  // Grep-style source assertion. Test-case expectations below TEST_CASES may
+  // legitimately quote phrases (they verify data flows through); the engine
+  // logic above it must not contain any.
+  const src = readFileSync(new URL("../src/breach-clock/engine.js", import.meta.url), "utf8");
+  const codeSection = src.split("const TEST_CASES")[0];
+  for (const phrase of [
+    "without undue delay",
+    "without unreasonable delay",
+    "no later than",
+    "days from",
+    "hours from",
+    "as soon as practicable",
+    "without delaying notice",
+  ]) {
+    a.ok(!codeSection.includes(phrase), `engine code contains hardcoded "${phrase}"`);
+  }
+});
+
+T("H. Phrases", "every deadline obligation in data.js declares a non-empty deadline_phrase", (a) => {
+  for (const jur of JURISDICTIONS) {
+    for (const ob of jur.obligations) {
+      if (ob.kind === "service" || ob.kind === "advisory") continue; // no deadline, no phrase
+      a.ok(typeof ob.deadline_phrase === "string" && ob.deadline_phrase.length > 0,
+        `${jur.id} / ${ob.authority} missing deadline_phrase`);
+    }
+  }
+});
+
+T("H. Phrases", "every fired basis is exactly '{citation} — {deadline_phrase}' from data.js (all ten jurisdictions)", (a) => {
+  const r = computeDeadlines({
+    awarenessDate: AW,
+    jurisdictions: Object.fromEntries(JURISDICTIONS.map((j) => [j.id, true])),
+    residentCounts: { ca: 100000, tx: 100000, co: 100000, ny: 100000, va: 100000, de: 100000, ct: 100000 },
+    riskLevel: "high",
+  });
+  a.ok(r.deadlines.length > 0, "scenario fires deadlines");
+  for (const d of r.deadlines) {
+    const jur = JURISDICTIONS.find((j) => j.short === d.jurisdiction);
+    const ob = jur?.obligations.find((o) => o.authority === d.authority);
+    a.ok(ob, `data.js obligation found for ${d.jurisdiction}/${d.authority}`);
+    if (ob) a.eq(d.basis, `${ob.citation} — ${ob.deadline_phrase}`, `${d.jurisdiction}/${d.authority} basis`);
+  }
+});
+
+T("H. Phrases", "DE AG basis carries the statutory phrase, not the '0 days from notification' artifact", (a) => {
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { de: true }, residentCounts: { de: 501 } });
+  const ag = D(r, "Delaware", "Attorney General");
+  a.eq(ag?.basis, "6 Del. C. § 12B-102(d) — no later than notice to residents", "DE AG basis");
+  a.ok(!ag?.basis.includes("0 days"), "no '0 days' artifact");
+});
+
+// =============================================================================
+// I. ADDITIVE OUTPUT SHAPE — services/advisories are additive; legacy arrays
+//    never carry service or advisory entries (compat between commits 1 and 2).
+// =============================================================================
+
+T("I. Additive", "services/advisories present and empty on a plain legacy scenario", (a) => {
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { ca: true }, residentCounts: { ca: 1000 }, sensitivity: ["financial"] });
+  a.ok(Array.isArray(r.services), "services is an array");
+  a.ok(Array.isArray(r.advisories), "advisories is an array");
+  a.eq(r.services.length, 0, "no services");
+  a.eq(r.advisories.length, 0, "no advisories");
+});
+
+T("I. Additive", "service/advisory entries never leak into deadlines/suppressed/pending/review", (a) => {
+  // CT + ssn + encryption: service exists and its harbor is satisfied — the
+  // service must vanish from `services`, not surface in a legacy bucket.
+  const r = computeDeadlines({
+    awarenessDate: AW,
+    jurisdictions: { ct: true, de: true, ma: true },
+    residentCounts: { ct: 800, de: 501 },
+    sensitivity: ["ssn", "credentials"],
+    encrypted: "yes",
+    encryptionStrength: "ge_128", // MA's harbor needs the 128-bit floor; CT/DE ignore strength
+    keyAcquired: "no",
+  });
+  const legacy = [...r.deadlines, ...r.suppressed, ...r.pending, ...(r.review || [])];
+  for (const entry of legacy) {
+    a.ok(!/Credit Monitoring|Identity Theft Prevention|credential/i.test(entry.authority),
+      `service/advisory leaked into a legacy bucket: ${entry.jurisdiction}/${entry.authority}`);
+  }
+  // Declared credential advisories still compute (no encryption gate on advisories).
+  a.ok(r.advisories.some((x) => x.jurisdiction === "Delaware"), "DE credential advisory present");
+  a.ok(r.advisories.some((x) => x.jurisdiction === "Connecticut"), "CT credential advisory present");
+  a.eq(r.services.length, 0, "no service computes under the satisfied harbor");
 });
 
 // =============================================================================

@@ -81,6 +81,96 @@ reconciliation only — no change to any rule, threshold, citation, deadline,
 conditional language, or the substance of the exemption. U.S.-state mechanism
 names were outside this pass's scope and are unchanged.
 
+**Connecticut added; category-conditioned model** (July 25, 2026 update;
+reviewer: JDC, 2026-07-25). Connecticut (Conn. Gen. Stat. § 36a-701b) drafted
+through formal intake as the tenth jurisdiction — see § 10. The same pass
+amended the data-category model (see § 0): a standalone `ssn` element split
+out of `gov_id`; a new `gating.categories` array-membership gate; two new
+obligation kinds, `service` (computed, category-gated, statutory duration
+instead of a deadline) and `advisory` (category-gated advisory content, never
+a deadline); and a per-obligation `deadline_phrase` field replacing all
+engine-composed and hardcoded deadline wording. The Delaware § 12B-102(e)/(f)
+and Massachusetts c. 93H § 3A standing counsel notes were upgraded to
+computed service/advisory obligations (see the § 9 and § 6 sign-offs).
+
+---
+
+# 0. Data-category model (cross-jurisdiction)
+
+*Added July 25, 2026 (category-conditioned engine pass). Reviewer: JDC,
+2026-07-25.*
+
+## 0.1 Standalone `ssn` element
+
+- The sensitivity vocabulary gains a standalone **`ssn`** element, labelled
+  "Social Security numbers (or ITIN / other taxpayer IDs)", positioned
+  directly above `gov_id`. It is added to the engine's high-risk category set.
+- **`gov_id` no longer includes SSN** — relabelled "Government IDs (passport,
+  driver's license, state ID)".
+- Rationale: three shipped statutes condition a remedial service duty
+  specifically on Social Security numbers (CT § 36a-701b(b)(2)(B), which also
+  reaches taxpayer identification numbers; DE § 12B-102(e); MA c. 93H § 3A).
+  A combined "Government IDs (SSN, …)" category cannot gate those duties
+  without over- or under-inclusion.
+- The canonical list now lives in `data.js` (`SENSITIVITY_OPTIONS`); the form
+  UI adopts it in the follow-on rendering commit.
+
+## 0.2 `gating.categories` — array-membership gate
+
+- New gating form: `gating.categories: { anyOf: ["..."] }`. An obligation
+  carrying it computes only if `facts.sensitivity` contains at least one
+  member of `anyOf`. The object form reserves `allOf` / `noneOf` for future
+  use; only `anyOf` ships.
+- AND-composed with resident thresholds; encryption suppression applies to
+  category-gated obligations through the existing per-obligation
+  `conditionalGates` mechanisms.
+
+## 0.3 Obligation kinds `service` and `advisory`
+
+- **`service`** — a computed, category-gated remedial duty carrying a
+  statutory duration (`service_duration_display`) instead of a deadline
+  (fields: authority, service_duration_display, condition, citation,
+  source_url, gating). Durations render in **statutory units** — "2 years"
+  (CT), "1 year" (DE — not "12 months"), "18 months" (MA). Computed services
+  land in the engine's additive `services` output array. A service whose
+  encryption harbor is satisfied does not compute; the jurisdiction's
+  notification obligations carry the suppression/review explanation.
+- **`advisory`** — declared advisory content gated on a category; renders as
+  advisory only, never a deadline. Used for the credential notice-method
+  rules (CT § 36a-701b(f); DE § 12B-102(f)).
+- Entity-type conditions (e.g. MA's 42-month consumer-reporting-agency
+  variant) stay in the conditional language, never as inputs — the NYDFS
+  house rule.
+
+## 0.4 The `gov_id`-without-`ssn` advisory state
+
+- For every category-gated obligation whose gate is **not** met while
+  `gov_id` **is** present in the selected categories, the engine emits a
+  conditional advisory (reason `ssn_unconfirmed`) carrying the jurisdiction,
+  obligation authority, and citation: the incident may involve SSNs the user
+  recorded under Government IDs (particularly incidents predating the
+  category split). No advisory is emitted when neither `ssn` nor `gov_id` is
+  present.
+
+## 0.5 Statutory deadline phrases (`deadline_phrase`)
+
+- Every deadline obligation now declares its statutory deadline language as
+  data — e.g. "72 hours from awareness" (EU/UK Art. 33), "without undue
+  delay" (EU/UK Art. 34), "without unreasonable delay" (VA; CO/TX CRA),
+  "30 days from determination of breach" (CO), "60 days from discovery of
+  breach" (CT), "60 days from determination of the breach" (DE), "no later
+  than notice to residents" (DE AG, CT AG dependent clocks).
+- The engine composes the basis line as `{citation} — {deadline_phrase}` and
+  contains **no** hardcoded phrase strings (pinned by the adversarial
+  harness's source-grep case). This repairs the four defects found in the
+  2026-07-24 gate render, including the DE AG "0 days from notification"
+  artifact.
+
+## 0.6 Terminology
+
+- User-facing strings and documentation say **"computed"**, never "fired";
+  "fires" may remain in engine internals and test code only.
+
 ---
 
 # 1. European Union — GDPR
@@ -979,11 +1069,13 @@ the model to support an `authorities[]` array on a single obligation.
 
 - **§ 3A credit-monitoring duty** — when SSN is involved, entity must offer 18
   months (42 months for CRAs) of free credit monitoring through a third-party
-  vendor and file a separate certification with AG/OCABR. This is a substantive
-  remedial duty rather than a notification deadline; not currently modelled.
-  Worth surfacing in a Counsel's Note when SSN is among the sensitivity
-  categories selected. *(Implemented 2026-07-17 as a standing counsel note,
-  id `ma-credit-monitoring-93h-3a`; see Sign-off.)*
+  vendor and file a separate certification with AG/OCABR. *(Implemented
+  2026-07-17 as a standing counsel note, id `ma-credit-monitoring-93h-3a`;
+  **upgraded 2026-07-25** to a computed `service` obligation gated
+  `gating.categories { anyOf: ["ssn"] }`, duration "18 months" — the 42-month
+  consumer-reporting-agency variant carried in the conditional language, not
+  as an input, per the NYDFS house rule — with the § 1 encryption harbor and
+  the § 3(b) dual-trigger caveat cascading to it. See Sign-off.)*
 - **CRA / state-agency follow-up notification** — driven by OCABR's response
   identifying the relevant CRAs/agencies. Not deterministic from input facts;
   not modelled.
@@ -1021,8 +1113,9 @@ the model to support an `authorities[]` array on a single obligation.
 - [x] **Multi-authority notification** — handled as two adjacent obligations
   with the same trigger.
 - [x] `breachDefinitionExcludesEncrypted` (used)
-- [ ] § 3A remedial duty — substantive obligation, not a deadline; not
-  modelled by design.
+- [x] § 3A remedial duty — modelled as of 2026-07-25: a computed `service`
+  obligation gated `gating.categories { anyOf: ["ssn"] }`, duration
+  "18 months", encryption harbor cascading.
 - [ ] Misuse / substantial-risk gate — substantive judgment, not modelled.
 
 ## 6.9 Counsel notes
@@ -1038,14 +1131,12 @@ the model to support an `authorities[]` array on a single obligation.
 - MA is unusual in not having a resident-count threshold for any notification.
   Surface this difference visibly to users. *(Candidate for an additional
   counsel note if user-testing surfaces confusion.)*
-- The § 3A SSN credit-monitoring obligation is meaningful and substantive;
-  consider adding a counsel note that fires when SSN is among the selected
-  sensitivity categories. *(Currently not implemented; sensitivity-conditional
-  counsel notes are a future model extension.)* *(Update 2026-07-17:
-  implemented as a **standing** note with conditional wording, id
-  `ma-credit-monitoring-93h-3a`, per JDC ruling — the sensitivity-conditional
-  upgrade rides with the category-conditioned engine work queued in
-  `docs/todo.md`; see Sign-off.)*
+- The § 3A SSN credit-monitoring obligation is meaningful and substantive.
+  *(Update 2026-07-17: implemented as a **standing** note with conditional
+  wording, id `ma-credit-monitoring-93h-3a`, per JDC ruling.)* *(Update
+  2026-07-25: the standing note is retired — upgraded to a computed,
+  ssn-gated `service` obligation; see 6.6 and the Sign-off. Reviewer: JDC,
+  2026-07-25.)*
 - 201 CMR 17.00 is a separate, proactive, ongoing security-program requirement
   worth mentioning in the memo's Further Considerations section.
 
@@ -1057,6 +1148,9 @@ the model to support an `authorities[]` array on a single obligation.
 | MA selected, encryption applied | All three obligations suppressed (breach-definition exclusion) |
 | MA + EU, encryption applied | MA fully suppressed; EU Art. 33 fires; EU Art. 34 suppressed |
 | MA selected, no resident count entered | Three obligations still fire (no threshold) |
+| MA + ssn *(added 2026-07-25)* | § 3A credit-monitoring service computed at "18 months" alongside the three notification obligations |
+| MA + ssn + encryption (128-bit, key not acquired) *(added 2026-07-25)* | Service does not compute; the three obligations route to counsel review via the § 1 mechanism |
+| MA + gov_id without ssn *(added 2026-07-25)* | Service absent; `ssn_unconfirmed` conditional advisory present |
 
 ## 6.11 Sign-off
 
@@ -1108,6 +1202,26 @@ the model to support an `authorities[]` array on a single obligation.
   (verified 2026-07-17). Reviewed and signed off: JDC, 2026-07-17. To be
   upgraded to a computed, SSN-conditioned obligation when category-conditioned
   engine work lands (queued in `docs/todo.md`).
+- **§ 3A upgraded to a computed service obligation (2026-07-25):** the
+  standing note `ma-credit-monitoring-93h-3a` retired and replaced by a
+  `kind: "service"` obligation — authority "Credit Monitoring Services for
+  Affected Massachusetts Residents", gated
+  `gating.categories { anyOf: ["ssn"] }`, duration displayed in the statutory
+  unit "18 months". The consumer-protection and certification details are
+  carried in the conditional language: not less than 42 months where the
+  breached entity is a consumer reporting agency (entity-type condition in
+  language, not as an input, per the NYDFS house rule); no reciprocal
+  agreements for services in lieu of payment or fees; the offer may not be
+  conditioned on waiving the right to a private action; certification of
+  compliance filed with the Attorney General and the director of consumer
+  affairs and business regulation. Because the § 3A duty is contingent on an
+  incident requiring notice under § 3, the § 1 encryption harbor
+  (`onSatisfied: "review"`, 128-bit floor) and the § 3(b) dual-trigger caveat
+  cascade to it — a satisfied harbor means the service does not compute while
+  the notification obligations route to counsel review. Primary source:
+  `https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93h/Section3A`
+  (verified 2026-07-25). Test additions in 6.10 implemented as executable
+  engine tests. **Reviewer: JDC, 2026-07-25.**
 - **Reviewer:** *(pending)*
 
 ---
@@ -1694,17 +1808,21 @@ multi-authority array.
 - **Credit monitoring (§ 12B-102(e))** — when Social Security numbers are
   involved: one year of credit monitoring at no cost, enrollment information,
   and credit-freeze instructions; excused by the same risk-of-harm
-  determination as notice. Surfaced as a **standing** counsel note
-  (id: `de-credit-monitoring-12b-102-e`) with conditional wording — JDC ruling
-  2026-07-17, pending category-conditioned engine work (queued in
-  `docs/todo.md`).
+  determination as notice. *(Upgraded 2026-07-25 from the standing counsel
+  note `de-credit-monitoring-12b-102-e` to a computed `service` obligation
+  gated `gating.categories { anyOf: ["ssn"] }`, duration "1 year" — the
+  statutory unit — with the risk-of-harm cross-reference in the conditional
+  language and the § 12B-101(1) encryption harbor cascading to it. Reviewer:
+  JDC, 2026-07-25.)*
 - **Email-credential notice restriction (§ 12B-102(f))** — where breached
   credentials are for an email account furnished by the notifying person,
   notice may not go to that email address; another § 12B-101(5) method or
   conspicuous online notice at the resident's customary access point is
-  required. Content/method rule, not a deadline. Surfaced as a **standing**
-  counsel note (id: `de-email-credential-notice-12b-102-f`) with conditional
-  wording — same JDC ruling as above.
+  required. Content/method rule, not a deadline. *(Upgraded 2026-07-25 from
+  the standing counsel note `de-email-credential-notice-12b-102-f` to a kind
+  `advisory` obligation gated `{ anyOf: ["credentials"] }` per the
+  § 12B-101(7)a.5 credential definition, content unchanged. Reviewer: JDC,
+  2026-07-25.)*
 - **Security duty (§ 12B-100)** — independent duty to implement and maintain
   reasonable procedures and practices to protect personal information,
   separate from and predating any breach. Surfaced as a standing counsel note
@@ -1768,12 +1886,15 @@ multi-authority array.
 - [x] `breachDefinitionExcludesEncrypted` — per-obligation `conditionalGates`
   suppress harbors on both obligations
 - [ ] `gdprUnintelligibility` gate — not applicable
-- [x] `counselNotes` — five notes (see 9.9)
-- **New features needed (if any):** None for the modelled rules.
-  Category-conditioned outputs (needed to compute § 12B-102(e)/(f) from the
-  SSN / credential data categories) deliberately deferred per JDC ruling —
-  design pass queued in `docs/todo.md` (2026-07-17), required before the
-  Connecticut intake.
+- [x] `gating.categories { anyOf }` — § 12B-102(e) service gated on `ssn`;
+  § 12B-102(f) advisory gated on `credentials` (as of 2026-07-25)
+- [x] `kind: "service"` / `kind: "advisory"` — § 12B-102(e) and (f)
+  respectively (as of 2026-07-25)
+- [x] `counselNotes` — four notes (see 9.9; two former standing notes
+  upgraded to computed obligations 2026-07-25)
+- **New features needed (if any):** None. The category-conditioned outputs
+  deferred at intake (JDC ruling 2026-07-17) landed 2026-07-25 — the
+  § 12B-102(e)/(f) standing notes are now computed obligations.
 
 ## 9.9 Counsel notes
 
@@ -1786,14 +1907,10 @@ multi-authority array.
   `de-notice-methods-12b-101-5` (placement: caveat). Records the § 12B-101(5)
   methods and the substitute-notice gates ($75,000 / 100,000 / insufficient
   contact information; all three substitute components required).
-- **In-app counsel note: email-credential notice restriction.** Note id:
-  `de-email-credential-notice-12b-102-f` (placement: caveat). **Standing**
-  note with conditional wording per JDC ruling 2026-07-17; to be upgraded to
-  a category-conditioned output when the engine work lands.
-- **In-app counsel note: credit monitoring.** Note id:
-  `de-credit-monitoring-12b-102-e` (placement: sectoral). **Standing** note
-  with conditional wording per JDC ruling 2026-07-17; to be upgraded to a
-  category-conditioned output when the engine work lands.
+- **Former standing notes upgraded (2026-07-25):**
+  `de-email-credential-notice-12b-102-f` and `de-credit-monitoring-12b-102-e`
+  are no longer counsel notes — upgraded to the § 12B-102(f) `advisory` and
+  § 12B-102(e) `service` obligations respectively (see 9.6 and the Sign-off).
 - **In-app counsel note: § 12B-100 security duty.** Note id:
   `de-security-duty-12b-100` (placement: sectoral). Standing note per JDC
   ruling — flags the independent, breach-independent safeguards duty.
@@ -1807,16 +1924,20 @@ multi-authority array.
 
 | Fact pattern | Expected outcome |
 |---|---|
-| 1 DE resident, identifiers | Individual fires (60d from determination-as-awareness); AG does NOT (1 not >500) |
-| 500 DE residents | Individual fires; AG does NOT (500 not >500 — gt boundary) |
-| 501 DE residents | Both fire; AG deadline equals the resident-notification deadline (0-hour cascade) |
+| 1 DE resident, identifiers | Individual computes (60d from determination-as-awareness); AG does NOT (1 not >500) |
+| 500 DE residents | Individual computes; AG does NOT (500 not >500 — gt boundary) |
+| 501 DE residents | Both compute; AG deadline equals the resident-notification deadline (0-hour cascade) |
 | Any count, encrypted, key not acquired | Both suppressed (breach-definition exclusion) |
-| Encrypted, key acquired | Both fire (harbor defeated) |
-| Missing resident count | Individual fires; AG does not (threshold-gated, no count) |
+| Encrypted, key acquired | Both compute (harbor defeated) |
+| Missing resident count | Individual computes; AG does not (threshold-gated, no count) |
+| DE + ssn *(added 2026-07-25)* | § 12B-102(e) credit-monitoring service computed at "1 year" |
+| DE + gov_id without ssn *(added 2026-07-25)* | Service absent; `ssn_unconfirmed` conditional advisory present |
+| DE + credentials *(added 2026-07-25)* | § 12B-102(f) declared advisory present |
+| DE + ssn + encryption, key not acquired *(added 2026-07-25)* | Service does not compute; both notification obligations suppressed |
 
-*(Documentation only in this change — `engine.js` was not authorized and is
-untouched; adding these as executable engine tests rides with the next
-authorized engine change.)*
+*(All implemented as executable engine tests as of 2026-07-25 — see the
+"Delaware — boundaries", "Delaware — encryption", and "Service obligations"
+categories in `engine.js` TEST_CASES.)*
 
 ## 9.11 Sign-off
 
@@ -1842,6 +1963,216 @@ authorized engine change.)*
   2026-07-17).
 - **Reviewer:** JDC, 2026-07-17 (substance reviewed and signed off; see
   Rulings line).
+- **Category-conditioned upgrade (2026-07-25):** the § 12B-102(e)
+  credit-monitoring standing counsel note (`de-credit-monitoring-12b-102-e`)
+  upgraded to a computed `service` obligation — authority "Credit Monitoring
+  Services for Affected Delaware Residents", gated
+  `gating.categories { anyOf: ["ssn"] }`, duration displayed in the statutory
+  unit "1 year" (not "12 months"), with enrollment/credit-freeze information
+  and the risk-of-harm cross-reference carried in the conditional language,
+  and the § 12B-101(1) encryption harbor cascading to it. The § 12B-102(f)
+  email-credential standing note (`de-email-credential-notice-12b-102-f`)
+  upgraded to a kind `advisory` obligation gated
+  `{ anyOf: ["credentials"] }` (per the § 12B-101(7)a.5 credential
+  definition), content unchanged. Both former standing notes removed from
+  `counselNotes`; see §§ 9.6, 9.9, and the test additions in § 9.10.
+  **Reviewer: JDC, 2026-07-25.**
+
+---
+
+# 10. Connecticut — Conn. Gen. Stat. § 36a-701b
+
+## 10.1 Identifier & display
+
+- **Internal ID:** `ct`
+- **Display name:** Connecticut
+- **Short form:** Connecticut
+- **Statute name (subtitle):** Conn. Gen. Stat. § 36a-701b
+
+## 10.2 Resident-count input
+
+- **Does this jurisdiction have any rule that depends on resident count?**
+  **No.** The AG notification is required regardless of the number of
+  residents affected, and no other Connecticut rule gates on count. The
+  resident-count input is rendered as **informational only** — no gate
+  depends on it.
+- **Label:** "Connecticut residents affected"
+- **Placeholder:** "e.g. 800"
+
+## 10.3 Resident notification (§ 36a-701b(b)(1))
+
+- **Required?** Yes, where personal information of a Connecticut resident was
+  breached, subject to the harm exemption (self-determination standard;
+  surfaced as counsel note `ct-harm-exemption-36a-701b-b1`, not modelled as a
+  gate — see 10.8).
+- **Deadline:** 60 days (outer limit) — without unreasonable delay but no
+  later than 60 days after discovery of the breach.
+- **Trigger event:** Discovery of the breach. Awareness-anchor convention
+  applies as elsewhere; discovery-based clocks are anchored at
+  `awarenessDate` directly.
+- **Authority name:** Affected Connecticut Residents
+- **`deadline_phrase`:** "60 days from discovery of breach"
+- **Citation:** Conn. Gen. Stat. § 36a-701b(b)(1)
+- **Source URL:** `https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/`
+- **Conditional / exception language:** Without unreasonable delay but no
+  later than 60 days after discovery of the breach, unless a shorter
+  timeframe is required under federal law or delay is requested by law
+  enforcement under § 36a-701b(d). Residents identified only after the 60-day
+  window must be notified as expediently as possible, unless the risk
+  exemption applies.
+
+## 10.4 Regulator notification — Connecticut Attorney General (§ 36a-701b(b)(2)(A))
+
+- **Required?** Yes — regardless of the number of residents affected. **No
+  threshold.**
+- **Authority name:** Connecticut Attorney General
+- **Deadline:** The same 60-day-from-discovery clock as resident notice
+  (`deadline_hours: 60 * 24`, direct — not cascaded), due not later than the
+  time when notice is provided to residents.
+- **Trigger event:** Discovery of the breach.
+- **`deadline_phrase`:** "no later than notice to residents"
+- **Citation:** Conn. Gen. Stat. § 36a-701b(b)(2)(A)
+- **Source URL:** `https://portal.ct.gov/ag/sections/privacy/reporting-a-data-breach`
+- **Conditional language:** Required regardless of the number of residents
+  affected, not later than the time when notice is provided to residents. The
+  Attorney General's online submission form is the office's preferred method;
+  supplements to a previously reported breach go to ag.breach@ct.gov with the
+  PR case number.
+- **No CRA obligation** — § 36a-701b contains no consumer-reporting-agency
+  notification requirement.
+
+## 10.5 Encryption suppression — breach-definition exclusion
+
+- **Mechanism:** `breachDefinitionExcludesEncrypted`, expressed as
+  per-obligation `conditionalGates` safe-harbor gates (`role: "safeHarbor"`,
+  `onSatisfied: "suppress"`, `suppressionType: "breach_definition"`) on the
+  individual and AG obligations, **cascading to the service obligation**
+  (10.6).
+- **Citation:** Conn. Gen. Stat. § 36a-701b(a)
+- **Description:** Definitional exclusion for data secured by encryption or
+  by any other method or technology that renders the personal information
+  unreadable or unusable.
+- **No key-compromise proviso (see 10.7):** unlike CO/NY, the statutory
+  exclusion is not conditioned on the key remaining uncompromised. The gate
+  nonetheless retains the canonical `defeatedBy: keyAcquired` shape as a
+  conservative modeling choice — an acquired key arguably leaves the data no
+  longer "unreadable or unusable," and the engine must never silently excuse
+  an obligation on a contestable reading. Surfaced as counsel note
+  `ct-no-key-proviso-36a-701b-a`.
+- **Specific encryption standard, if any:** None — no bit-strength floor.
+
+## 10.6 Identity theft prevention services (§ 36a-701b(b)(2)(B)) — service obligation
+
+- **Kind:** `service` — computed, category-gated, statutory duration instead
+  of a deadline.
+- **Card title / authority:** Identity Theft Prevention Services for Affected
+  Connecticut Residents
+- **Gate:** `gating.categories: { anyOf: ["ssn"] }`
+- **Trigger note:** Breach involving a resident's Social Security number or
+  taxpayer identification number.
+- **Duration:** "2 years" (`service_duration_display`; statutory "not less
+  than two years").
+- **Citation:** Conn. Gen. Stat. § 36a-701b(b)(2)(B)
+- **Source URL:** `https://portal.ct.gov/ag/sections/privacy/reporting-a-data-breach`
+- **Conditional language (statutory text per JDC):** "Appropriate identity
+  theft prevention services and, if applicable, identity theft mitigation
+  services. Such service or services shall be provided at no cost to such
+  resident for a period of not less than two years. Such person shall provide
+  all information necessary for such resident to enroll in such service or
+  services and shall include information on how such resident can place a
+  credit freeze on such resident's credit file."
+- **Encryption cascade:** carries the same § 36a-701b(a) breach-definition
+  harbor as the notification obligations — a suppressed breach computes no
+  service.
+- **`gov_id`-without-`ssn` advisory state:** per § 0.4, when `gov_id` is
+  selected without `ssn`, the engine emits an `ssn_unconfirmed` conditional
+  advisory for this obligation instead of computing it.
+
+## 10.7 Trigger nuances
+
+- **Harm exemption — self-determination standard.** "Such notification shall
+  not be required if, after an appropriate investigation the person
+  reasonably determines that the breach will not likely result in harm to the
+  individuals whose personal information has been acquired or accessed."
+  Self-determination standard, with **no law-enforcement-consultation
+  element**. Substantive judgment, not modelled (the form-level harm gate is
+  queued in `docs/todo.md`); document the determination contemporaneously.
+- **NO key-compromise proviso in the § 36a-701b(a) encryption exclusion** —
+  unlike CO/NY, the definition does not condition the exclusion on the key
+  remaining uncompromised; counsel should not assume the CO/NY analysis
+  transfers. See 10.5 for the conservative gate shape.
+- **Law-enforcement delay** — § 36a-701b(d).
+- **Late-identified residents** — residents identified only after the 60-day
+  window must be notified **as expediently as possible**, unless the risk
+  exemption applies.
+- **Shorter-federal-timeframe override** — a shorter timeframe required under
+  federal law controls.
+- **AG timing** — not later than the time when notice is provided to
+  residents; modelled as the same 60-day-from-discovery clock.
+
+## 10.8 Other obligations & counsel notes
+
+- **Harm exemption (§ 36a-701b(b)(1))** — self-determination standard quoted
+  in 10.7; substantive judgment, not modelled. Counsel note
+  `ct-harm-exemption-36a-701b-b1` (placement: caveat), which also records
+  that the form-level harm gate is queued in `docs/todo.md`.
+- **No key-compromise proviso (§ 36a-701b(a))** — counsel note
+  `ct-no-key-proviso-36a-701b-a` (placement: caveat); see 10.5.
+- **Own-procedures and functional-regulator deemed compliance
+  (§ 36a-701b(g), (h))** — entity-type dependent; not modelled, following the
+  NYDFS-overlay precedent. Counsel note `ct-deemed-compliance-36a-701b-g-h`
+  (placement: sectoral).
+- **CUTPA enforcement context (§ 36a-701b(j))** — failure to comply is an
+  unfair trade practice enforced by the Attorney General. Counsel note
+  `ct-cutpa-enforcement-36a-701b-j` (placement: caveat).
+- **Credentials advisory (§ 36a-701b(f))** — kind `advisory` obligation gated
+  `{ anyOf: ["credentials"] }`: where the breach involves online-account
+  login credentials, notice may be provided by directing the resident to
+  promptly change credentials; where the breached credentials are for an
+  email account furnished by the entity, notice to that email address does
+  not comply — use another permitted method or clear and conspicuous online
+  notice when the resident connects from a known IP address or online
+  location.
+
+## 10.9 Sign-off
+
+- **Rules verification:** Drafted through formal intake on 2026-07-25, with
+  primary-source verification of Conn. Gen. Stat. § 36a-701b.
+- **IAPP chart consistency:** Cross-checked against the IAPP US State Breach
+  Notification Chart (version: February 2026 update), p. 4, on 2026-07-25.
+- **Sources confirmed:** Conn. Gen. Stat. § 36a-701b (Justia current-code
+  mirror, `https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/`,
+  accessed 2026-07-25); Connecticut AG "Reporting a Data Breach,"
+  `https://portal.ct.gov/ag/sections/privacy/reporting-a-data-breach`
+  (accessed 2026-07-25).
+- **Sources confirmed via project knowledge base:** IAPP US State Breach
+  Notification Chart, February 2026 update, p. 4.
+- **Material change since prior draft:** First draft.
+- **Reviewer:** JDC, 2026-07-25 (substance reviewed and signed off, including
+  the corrections issued in review: harm exemption recorded as the
+  self-determination standard with no consultation element and
+  law-enforcement delay under § 36a-701b(d); late-identified residents "as
+  expediently as possible" unless the risk exemption applies; AG citation
+  § 36a-701b(b)(2)(A); § 10.6 carrying the exact statutory service text with
+  duration "2 years" and the card title "Identity Theft Prevention Services
+  for Affected Connecticut Residents").
+
+## 10.10 Recommended test cases
+
+| Fact pattern | Expected outcome |
+|---|---|
+| CT selected, any count, identifiers | Individual + AG both compute at 60 days from discovery-as-awareness; no CRA obligation |
+| CT selected, blank resident count | Individual + AG both compute (no threshold — count is informational) |
+| CT selected, count 1 | AG computes (required regardless of the number affected) |
+| CT + ssn | Identity-theft-prevention service computed at "2 years" |
+| CT + gov_id without ssn | Service absent; `ssn_unconfirmed` conditional advisory present |
+| CT with neither ssn nor gov_id | No service card, no advisory |
+| CT + credentials | § 36a-701b(f) declared advisory present |
+| CT + encryption (key not acquired) | Individual + AG suppressed (breach-definition exclusion); service does not compute |
+| CT + encryption, key also acquired | Computes (conservative — no statutory key proviso; see 10.5) |
+
+*(All implemented as executable engine tests in this change — see the
+"Connecticut" category in `engine.js` TEST_CASES.)*
 
 ---
 
@@ -1858,6 +2189,7 @@ authorized engine change.)*
 | New York | 30 days from discovery | No clock (AG + Dept of State + State Police); no clock for CRA | None for AG/DOS/State Police; >5,000 (gt) for CRA | Breach-definition exclusion |
 | Virginia | No clock | No clock (AG); no clock for CRA | None for AG; >1,000 (gt) for CRA | Breach-definition exclusion |
 | Delaware | 60 days from determination | Not later than resident notice (cascaded, AG) | >500 (gt) for AG | Breach-definition exclusion |
+| Connecticut | 60 days from discovery | Not later than resident notice (same 60-day clock, AG) | None (AG required regardless of count) | Breach-definition exclusion (no key proviso — see § 10.5) |
 
 # Appendix: Model features used
 
@@ -1865,9 +2197,13 @@ authorized engine change.)*
 - `deadline_relative_to: { parent_authority }` — cascading deadlines (CA; DE as of 2026-07-17, with a 0-hour offset)
 - `gating: { highRiskRequired }` — gates obligations on sensitivity categories
 - `gating: { residentThreshold, comparator }` — gates obligations on resident count, with `gt` / `gte` precision
+- `gating: { categories: { anyOf } }` — array-membership category gate (added 2026-07-25; see § 0.2). AND-composed with resident thresholds. Used by the CT/DE/MA `service` obligations (`ssn`) and the CT/DE `advisory` obligations (`credentials`).
+- `kind: "service"` — computed, category-gated remedial duty with a statutory duration (`service_duration_display`) instead of a deadline (added 2026-07-25; see § 0.3). Used by CT § 36a-701b(b)(2)(B) ("2 years"), DE § 12B-102(e) ("1 year"), MA c. 93H § 3A ("18 months").
+- `kind: "advisory"` — category-gated advisory content, never a deadline (added 2026-07-25; see § 0.3). Used by CT § 36a-701b(f) and DE § 12B-102(f).
+- `deadline_phrase` — per-obligation statutory deadline language; the engine composes the basis line as `{citation} — {deadline_phrase}` and hardcodes no phrases (added 2026-07-25; see § 0.5).
 - `breachDefinitionExcludesEncrypted: { applies, citation, description }` — for jurisdictions whose statutory definition of "breach" excludes encrypted data with uncompromised key (per-se rule). Used by CA, TX, CO, MA.
 - Per-obligation `conditionalGates` safe-harbor gate keyed to the `gdprUnintelligibility` input (`role: "safeHarbor"`, `onSatisfied: "suppress"`, `suppressionType: "unintelligibility_exemption"`, with `citation` and `description`) — for jurisdictions where the obligation exists but is conditionally exempted when appropriate technical and organisational measures rendered the data unintelligible (judgment-based, with the supervisory authority retaining override power). Used by EU GDPR Art. 34(3)(a) and UK GDPR Art. 34(3)(a).
-- `counselNotes: [{ id, title, content, citation, source_url }]` — jurisdiction-level prose flags rendered on the results page and in the downloadable memo. Used for substantive judgments, sectoral overlays, definitional nuances, and obligations that the engine cannot model. Currently used by CA (1 note: § 1280.15 healthcare regime), MA (2 notes: § 3(b) dual trigger; § 3A credit monitoring (standing, added 2026-07-17)), NY (3 notes: NYDFS sectoral overlay, HIPAA / HITECH cross-link, inadvertent-disclosure exception (§ 899-aa(2)(a))), VA (4 notes: substantive harm threshold under § 18.2-186.6, § 32.1-127.1:05 medical-information regime, § 18.2-186.6(M) employer/payroll tax-data regime, good-faith employee/agent carve-out), and DE (6 notes: § 12B-102(a) risk-of-harm exception, § 12B-101(5) notice methods / substitute notice, § 12B-102(f) email-credential notice restriction (standing), § 12B-102(e) credit monitoring (standing), § 12B-100 security duty (standing), § 12B-101(1)a good-faith employee/agent carve-out (added 2026-07-17 for VA parity)). Pattern available for other substantive judgments and sectoral overlays.
+- `counselNotes: [{ id, title, content, citation, source_url }]` — jurisdiction-level prose flags rendered on the results page and in the downloadable memo. Used for substantive judgments, sectoral overlays, definitional nuances, and obligations that the engine cannot model. Currently used by CA (1 note: § 1280.15 healthcare regime), MA (1 note: § 3(b) dual trigger — the § 3A credit-monitoring standing note was upgraded to a computed service obligation 2026-07-25), NY (3 notes: NYDFS sectoral overlay, HIPAA / HITECH cross-link, inadvertent-disclosure exception (§ 899-aa(2)(a))), VA (4 notes: substantive harm threshold under § 18.2-186.6, § 32.1-127.1:05 medical-information regime, § 18.2-186.6(M) employer/payroll tax-data regime, good-faith employee/agent carve-out), DE (4 notes: § 12B-102(a) risk-of-harm exception, § 12B-101(5) notice methods / substitute notice, § 12B-100 security duty, § 12B-101(1)a good-faith employee/agent carve-out — the § 12B-102(e)/(f) standing notes were upgraded to computed obligations 2026-07-25), and CT (4 notes: harm exemption (self-determination standard), no-key-compromise proviso in the § 36a-701b(a) exclusion, § 36a-701b(g)/(h) deemed compliance, CUTPA enforcement context (§ 36a-701b(j))). Pattern available for other substantive judgments and sectoral overlays.
 
 # Appendix: Model gaps (not yet hit by current jurisdictions)
 

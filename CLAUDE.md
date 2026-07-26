@@ -59,10 +59,11 @@ post-SB-446 verification") rather than generic messages.
 ### `src/breach-clock/engine.js` — rules engine
 
 Pure JavaScript, no React. Contains `computeDeadlines(facts)`, `isHighRisk`,
-`runTests`, and 60 test cases as of the risk-assessment addition (every EU/UK
-case now carries an explicit `riskLevel`). After any engine change, the test
-harness must pass — check the in-app Tests view (footer link in the rendered
-component) or run programmatically.
+`runTests`, and 96 test cases as of the category-conditioned pass (60 as of
+the risk-assessment addition; every EU/UK case carries an explicit
+`riskLevel`). After any engine change, the test harness must pass — check the
+in-app Tests view (footer link in the rendered component) or run
+programmatically, plus `node scripts/adversarial-engine-tests.mjs` (63 cases).
 
 The engine is the correctness instrument for the substantive layer. If a
 test fails after a `data.js` edit, the substantive change is wrong, not the
@@ -203,6 +204,36 @@ secondary + memo card slots) carry an inline "Due " label; memo right slots are
 uniformly Ember for dates and phrases; composition is "Due {statutory phrase}"
 so the queued phrase repair swaps under the prefix. Recorded/closed Mist due
 lines stay demoted and unlabeled beyond their existing "Due" text.
+
+**Category-conditioned durable decisions (2026-07-25 review; landed
+2026-07-26, commit 1 of 2 — data/engine/tests/intake only; service/advisory
+rendering is commit 2).** Data categories: standalone `ssn` element (SSN /
+ITIN / other taxpayer IDs); `gov_id` excludes SSN (relabelled "Government IDs
+(passport, driver's license, state ID)"). The canonical category list is
+`SENSITIVITY_OPTIONS` in `data.js`; the UI adopts it in commit 2.
+`gating.categories` is an `{ anyOf: [...] }` array-membership gate (object
+form reserves allOf/noneOf), AND-composed with resident thresholds.
+Statutory deadline phrases live per-obligation in `data.js`
+(`deadline_phrase`); the engine composes the basis as
+`{citation} — {deadline_phrase}` — no hardcoded phrases in `engine.js`
+(pinned by the adversarial harness's source-grep case). Service obligations
+(`kind: "service"`) display statutory duration units — "2 years" CT, "1 year"
+DE, "18 months" MA — and land in the additive `services` output array;
+declared advisories (`kind: "advisory"`) and the auto-generated conditional
+advisories land in the additive `advisories` array; neither ever enters
+deadlines/suppressed/pending/review (a service whose encryption harbor is
+satisfied simply does not compute — the jurisdiction's notification cards
+carry the explanation). Entity-type conditions (e.g. MA's 42-month
+consumer-reporting-agency variant) stay in conditional language, never
+inputs. User-facing terminology: **computed**, not fired ("fires" survives in
+engine internals/tests only). Advisory state: category-gated obligations
+render advisories (reason `ssn_unconfirmed`) when `gov_id` is present without
+`ssn`; no advisory when neither is present. Connecticut's § 36a-701b(a)
+encryption exclusion has NO statutory key-compromise proviso, but the gate
+deliberately keeps the canonical `defeatedBy: keyAcquired` shape
+(conservative — an acquired key computes rather than silently excusing);
+the `ct-no-key-proviso-36a-701b-a` counsel note documents the difference —
+do not "fix" the gate to match the literal statute without JDC sign-off.
 
 ### `src/breach-clock/BreachClock.jsx` — React UI
 

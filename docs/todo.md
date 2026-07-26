@@ -565,28 +565,32 @@ history share a Supabase backend and should be sequenced together.
   files; see account-maintenance.md [JDC] markers). Supabase Storage,
   attachments metadata table, editor tab IA. Log entry JSONB needs no
   forward-compat work.
-- **Category-conditioned engine outputs (design pass required BEFORE
-  Connecticut)** `[substance]` (queued 2026-07-17): engine gates currently
-  read scalar inputs only; sensitivity categories cannot condition obligations
-  or notes. Needed: input-model decision (standalone SSN element vs. gov_id
-  sub-element), array-membership gate semantics, rendering for computed
-  conditional obligations. When it lands: upgrade DE § 12B-102(e)/(f) and MA
-  c. 93H § 3A standing notes to computed outputs. Identified 2026-07-17 during
-  Delaware intake (CC blocked-report; JDC ruled standing notes interim).
-  - Statutory deadline-phrase repair — four instances of hardcoded generic
-    phrasing misstating statutory language (gates Connecticut alongside the
-    existing scope; found in the 2026-07-24 gate render): (1) engine.js:328
-    pushes "without undue delay" (GDPR wording) as the basis label for ALL
-    no-fixed-clock obligations — wrong for Va. Code § 18.2-186.6(B) and
-    Colo. Rev. Stat. § 6-1-716(2)(d), which say "without unreasonable
-    delay"; (2) the no-deadline display slot (memo right slot and UI card)
-    hardcodes "Without unreasonable delay" — wrong for EU Art. 34, which
-    says "without undue delay"; (3) EU Art. 33 basis renders "3 days from
-    awareness" — statutory language is 72 hours; (4) the previously recorded
-    § 12B-102(d) "0 days from notification" artifact. Fix: per-obligation
-    statutory deadline phrase field in data.js, consumed by both the basis
-    composer and the no-deadline display label. Protected files — JDC
-    sign-off required.
+- **Category-conditioned engine pass — DONE 2026-07-26** (commit 1 of 2;
+  design pass + engine + data + tests + intake record; JDC sign-off
+  2026-07-25). Standalone `ssn` element (gov_id excludes SSN);
+  `gating.categories { anyOf }`; obligation kinds `service` / `advisory`
+  with additive `services` / `advisories` engine outputs; Connecticut
+  (Conn. Gen. Stat. § 36a-701b) added as the tenth jurisdiction; DE
+  § 12B-102(e)/(f) and MA c. 93H § 3A standing notes upgraded to computed
+  obligations. The **four statutory-phrase repairs are DONE** in the same
+  commit: per-obligation `deadline_phrase` in data.js, basis composed as
+  `{citation} — {deadline_phrase}`, no hardcoded phrases left in engine.js
+  (pinned by the adversarial source-grep case) — fixes the VA/CO "without
+  undue delay" mislabel, the EU Art. 34 "Without unreasonable delay" display
+  slot (data now correct; the display-slot rendering itself is commit 2), the
+  EU Art. 33 "3 days from awareness" label (now "72 hours from awareness"),
+  and the DE AG "0 days from notification" artifact. Commit 2 (service /
+  advisory rendering in BreachClock.jsx and the memo) follows; until it
+  lands, the UI ignores the new arrays.
+- **Harm-gate form question** `[substance]` — design settled in principle
+  (single generic question, per-jurisdiction harmGate mechanism carrying each
+  statute's exact standard and character: exemption CT/DE, misuse
+  determination CO, duty element VA, definitional-with-dual-trigger-bypass
+  MA; "Not assessed" computes everything; never blocks like EU risk).
+  Deferred to the primary-source review cycle for CA/TX/CO/VA/NY/MA/DE/CT
+  harm language verification. JDC 2026-07-25.
+- **Primary-source review cycle for all shipped jurisdictions** — planned
+  with Claude, post-push.
 
 ---
 
