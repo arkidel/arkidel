@@ -197,7 +197,16 @@ section order: the Notification Record (Authority/Due/Notified table) renders
 after the deadline analysis; the Incident Log renders after the incident
 report — on screen the Incident Log likewise sits after the incident-report
 recap, before Further Considerations. notifications/incident_log JSONB never
-enters facts or the engine.
+enters facts or the engine. **Stripe semantics (corrected 2026-07-26;
+documentation-only — no code change, the app was always right).** An earlier
+reading of this entry overstated "live = Ember." The shipped semantics: the
+base (live) deadline card carries the **Midnight** stripe; `.urgent`
+(deadline within 24h) is the Ember stripe on the cream `#FBF5EE` surface;
+`.missed` (overdue) is the Midnight surface with the Ember stripe; recorded
+cards are **Moss** (notified at-or-before a computed due date) or **Mist**
+(notified after due, or no computed due date); closed incidents render Mist
+static treatments throughout. Ember on live cards is an **urgency signal**,
+never the live default.
 
 **Due-label durable decision (2026-07-25).** Deadline right slots (UI countdown
 secondary + memo card slots) carry an inline "Due " label; memo right slots are

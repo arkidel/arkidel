@@ -1046,18 +1046,19 @@ export default function BreachClock() {
     });
   };
 
-  // From an auto-advisory card ("Edit data categories"): return to the form and
-  // jump to the data section holding the Q1 category checkboxes — the same
-  // mechanism as the risk-assessment pending card's jump, plus opening the
-  // collapsible Data section first (mirroring the submit-validation path) so
-  // the anchor isn't collapsed shut. No-ops harmlessly in quick mode.
+  // From an auto-advisory card ("Edit data categories"): return to the form,
+  // open the collapsible Data section (mirroring the submit-validation path),
+  // and jump to the Q1 sensitivity list itself (#form-data-categories — the
+  // ssn row the advisory directs counsel to sits at its top). The scroll rides
+  // the pendingScroll effect, which fires after the commit that re-rendered
+  // the form with the section expanded, so it aims at the final laid-out
+  // position — the earlier direct rAF scroll aimed at the pre-expand layout
+  // and overshot by ~300px (2026-07-25 gate render). Same NAV_CLEARANCE
+  // landing as the risk jump. No-ops harmlessly in quick mode.
   const handleEditDataCategories = () => {
     setSubmitted(false);
     setOpenSections((s) => ({ ...s, "form-data": true }));
-    requestAnimationFrame(() => {
-      const el = document.getElementById("form-data");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    scrollToSection("form-data-categories");
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1633,7 +1634,11 @@ export default function BreachClock() {
   };
 
   const renderQ1 = () => (
-    <div style={{ marginBottom: "24px" }}>
+    // Anchor for the auto-advisory "Edit data categories" jump: the target is
+    // the Q1 list itself (not the Data section top), with the same
+    // NAV_CLEARANCE scroll margin the section anchors carry, so the landing
+    // puts the top of the sensitivity list — the ssn row — comfortably in view.
+    <div id="form-data-categories" style={{ marginBottom: "24px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>
       {labelRow("Did the incident involve any of the following types of personal data?")}
       {multiCheck(SENSITIVITY_OPTIONS, sensitivity, toggleSensitivity, 2)}
       {isNarrow && <div style={{ marginTop: "14px" }}>{renderNote("q1")}</div>}
