@@ -575,6 +575,12 @@ this file for context on what's pending. The file was initialized on
   re-attachment, memo section order, unconditional Ember due dates, silent
   log filtering. Deadline-phrase defects found and queued to the engine
   design pass; not caused by these commits.
+- 2026-07-26: category-conditioned pass (f02f0ef, 15a2a85, b31b7ed)
+  gate-rendered and PASSED — services (three statutory durations), advisories
+  (declared + auto with composed titles), conditional party of the phrase
+  repairs on live cards, memo service/advisory sections with silent
+  screen-only affordances, jump fix verified live. Findings: compute/persist
+  divergence (queued); no code defects in the shipped trio.
 
 ---
 

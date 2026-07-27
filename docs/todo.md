@@ -550,6 +550,16 @@ history share a Supabase backend and should be sequenced together.
     submit, review results, close tab, and lose everything silently. Decide
     whether explicit submit should create the row (compute-without-persist
     arguably belongs to quick mode only). (Gate render 2026-07-24.)
+  - Compute/persist divergence, observed twice at the 2026-07-26 gate: (a) on
+    a SAVED incident, Submit & compute persists the status transition but NOT
+    the edited facts — only Save persists payload; (b) the memo prints from
+    the in-memory computed results, so a facts-save without recompute (or a
+    recompute without save) yields a memo or a stored record that disagrees
+    with the other. Stale-memo hazard is real: a memo generated tonight
+    reflected superseded analysis with no warning. Decide: unify
+    Submit-to-also-save on saved incidents, and/or a staleness warning when
+    facts differ from the last compute. Same family as the never-saved-submit
+    trap.
   - Edit → Submit & compute on a closed incident reactivates it with zero
     fact changes (documented behavior in changeStatus). Decide whether a
     no-op resubmit should transition, prompt, or return to results without
@@ -594,12 +604,14 @@ history share a Supabase backend and should be sequenced together.
   assertions). Commits f02f0ef and the rendering commit ship together —
   never push commit 1 alone (interim rendering regression documented in the
   commit-1 report).
-  - **Fixture data-category updates (post-gate, JDC to drive):** the saved
-    fixtures "Delaware Test 1" and "Test Incident 2" predate the ssn split
-    and carry the bundled gov_id selection — update their data categories
-    via the UI (explicit ssn / gov_id selections) after the JDC + Claude
-    gate render, so their computed services and advisories reflect the
-    split model.
+  - **Fixture data-category updates — COMPLETE (2026-07-26).** Correction to
+    the commit-2 note: "Test Incident 2" carries [identifiers, financial] —
+    no bundled gov_id, so no migration was needed. "Delaware Test 1"'s
+    category migration is DONE (2026-07-26, driven via the UI: ssn added,
+    saved, closed status restored). Fixture work complete.
+  - Gate verified the edit-data-categories jump fix live: the SSN row lands
+    in view; the row top sits flush against the nav clearance — cosmetic
+    tightness only, revisit only if it bothers JDC. (Gate render 2026-07-26.)
 - **Harm-gate form question** `[substance]` — design settled in principle
   (single generic question, per-jurisdiction harmGate mechanism carrying each
   statute's exact standard and character: exemption CT/DE, misuse
@@ -636,7 +648,9 @@ history share a Supabase backend and should be sequenced together.
 - **Working-tree noise needs a .gitignore decision.** `.claude/*`,
   `scripts/*`, and `sample-incident-memo.pdf` sit untracked and clutter every
   `git status`. Decide per item whether it belongs in `.gitignore` or in the
-  repo, so the tree reads clean.
+  repo, so the tree reads clean. `scripts/_dump-pdf-text.mjs` added
+  2026-07-26 as an untracked scratch utility (PDF text dump via pdfjs-dist) —
+  joins the known scratch pile.
 
 ---
 
