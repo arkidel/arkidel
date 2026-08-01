@@ -383,6 +383,16 @@ threshold may be met").
   rule, threshold, citation, deadline, conditional language, or the substance of
   the Art. 34(3)(a) exemption. The supersession history recorded in the
   2026-06-14 entry above is unchanged.
+- **Primary-source review: 2026-08-01 (JDC + Claude).** Official source verified
+  as cited above. Harm/risk standard captured verbatim for harm-gate design.
+  **No changes** — Arts. 33 and 34 verified verbatim against the EUR-Lex
+  consolidated text; pinpoint URLs unchanged. Risk-standard record for the
+  harm-gate design: Art. 33 gates on "unlikely to result in a risk to the
+  rights and freedoms of natural persons" (Art. 33(1)); Art. 34 gates on
+  "likely to result in a high risk to the rights and freedoms of natural
+  persons" (Art. 34(1)). Both are modelled through the explicit `riskLevel`
+  input, not the harm gate — the EU/UK risk gate is the existing, separate
+  mechanism and is out of the harm-gate question's scope.
 - **Reviewer:** *(pending)*
 
 ---
@@ -486,6 +496,14 @@ Same as EU GDPR. ICO guidance closely tracks WP29 / EDPB awareness guidance.
   `https://ico.org.uk/for-organisations/report-a-breach/personal-data-breach/personal-data-breaches-a-guide/`.
 - DUAA 2025 amendments do NOT touch Arts. 33/34. Earlier drafts didn't address
   this; the verification confirmed it.
+- **In-app counsel note: PECR sectoral overlay (added 2026-08-01).** Note id:
+  `uk-pecr-breach-clock-duaa-2025` (placement: sectoral). Flags the separate
+  PECR breach-notification regime for providers of public electronic
+  communications services, whose clock the DUAA 2025 aligned to 72 hours
+  (formerly 24 hours under the EU-derived rules). Entity-type-dependent;
+  NYDFS-precedent treatment (not modelled — surfaced as a counsel note).
+  Cites: Data (Use and Access) Act 2025; ICO personal-data-breaches guide
+  (accessed 2026-08-01). See the §2.7 legislative-context record.
 
 ## 2.12 Recommended test cases
 
@@ -531,6 +549,17 @@ UK in parallel).
   reconciliation only — no change to any rule, threshold, citation, deadline,
   conditional language, or the substance of the Art. 34(3)(a) UK GDPR exemption.
   The supersession history recorded in the 2026-06-14 entry above is unchanged.
+- **Primary-source review: 2026-08-01 (JDC + Claude).** Official source verified
+  as cited above. Harm/risk standard captured verbatim for harm-gate design.
+  **No changes to Arts. 33/34** (ICO guidance current through the 2025-08-20
+  DUAA update). Risk standards are the Art. 33(1)/34(1) formulations, modelled
+  through the explicit `riskLevel` input (out of the harm-gate question's
+  scope, as for the EU). **New counsel note added** in `data.js`:
+  `uk-pecr-breach-clock-duaa-2025` — the DUAA 2025 aligned the PECR breach
+  clock for public electronic communications providers to 72 hours; sectoral,
+  entity-type-dependent, NYDFS-precedent treatment. Cites: Data (Use and
+  Access) Act 2025; ICO personal-data-breaches guide (accessed 2026-08-01).
+  Ruled ADD NOW by JDC, 2026-08-01. See §§ 2.7 and 2.11.
 - **Reviewer:** *(pending)*
 
 ---
@@ -579,10 +608,13 @@ UK in parallel).
 - **Trigger event:** Notification of California residents (parent obligation).
 - **Citation:** Cal. Civ. Code § 1798.82(f)
 - **Source URL:** `https://oag.ca.gov/privacy/databreach/reporting`
-- **Conditional language:** Submit a sample copy of the consumer notice via the
-  California AG's electronic breach reporting portal within 15 calendar days of
-  notifying affected California residents. The 15-day deadline was added by
-  SB-446 (chaptered October 3, 2025), effective January 1, 2026.
+- **Conditional language:** Electronically submit a single sample copy of the
+  notification, excluding any personally identifiable information, via the
+  California AG's breach reporting portal within 15 calendar days of notifying
+  affected California residents. The 15-day deadline was added by SB-446
+  (chaptered October 3, 2025), effective January 1, 2026. *(Sample-copy
+  language conformed to the statute — "single," "excluding personally
+  identifiable information" — in the 2026-08-01 primary-source review.)*
 - **Practical effect:** AG notice falls due 30 + 15 = **45 calendar days from
   awareness** at the latest.
 
@@ -593,10 +625,14 @@ UK in parallel).
 - **Citation:** Cal. Civ. Code § 1798.82(a)
 - **Description:** Notification is required only where unencrypted personal
   information was acquired, OR where encrypted data was acquired AND the
-  encryption key/security credential was also acquired and could render the
-  data readable. If only encrypted data was acquired and the key was not
-  compromised, no notification obligation arises — and because the AG
-  obligation is dependent on resident notification, it also does not arise.
+  encryption key or security credential was also acquired (or is reasonably
+  believed to have been acquired) AND the person has a reasonable belief that
+  the key or credential could render the personal information readable or
+  usable (Cal. Civ. Code § 1798.82(a)(1) — key-usability element added in the
+  2026-08-01 primary-source review). If only encrypted data was acquired and
+  the key was not compromised, no notification obligation arises — and because
+  the AG obligation is dependent on resident notification, it also does not
+  arise.
 
 ## 3.6 Other obligations not modelled
 
@@ -693,6 +729,25 @@ UK in parallel).
   to per-obligation data. No change to any deadline, threshold, citation, or
   prose. Build-of-record: the "Encryption gate build plan" addendum in
   `docs/todo.md`.
+- **Primary-source review: 2026-08-01 (JDC + Claude).** Official source verified
+  as cited above. Harm/risk standard captured verbatim for harm-gate design.
+  **Zero substantive errors** — no deadline, threshold, comparator, or citation
+  change. Refinements applied in `data.js`: both `deadline_phrase` values now
+  carry "calendar" ("30 calendar days from discovery or notification of
+  breach"; "15 calendar days from notice to residents"), matching the
+  statutory "within 30 calendar days of discovery or notification" / "within
+  15 calendar days of notifying affected consumers"; the AG condition conformed
+  to the electronic submission of a **single** sample copy of the notification,
+  **excluding personally identifiable information** (§ 3.4); the encryption
+  mechanism description gained the key-usability element — the duty extends to
+  encrypted PI where the key or security credential was also acquired (or
+  reasonably believed acquired) AND the person reasonably believes it could
+  render the PI readable or usable, Cal. Civ. Code § 1798.82(a)(1) (§ 3.5).
+  **Harm standard (verbatim record): NONE** — acquisition-based duty; zero
+  occurrences of "harm" in § 1798.82. `harmGate`: absent (a form answer is
+  inert for California). **Source note:** leginfo.legislature.ca.gov disallows
+  automated access; verified via browser session 2026-08-01. URL unchanged
+  (official).
 - **Reviewer:** *(pending)*
 
 ---
@@ -735,7 +790,9 @@ UK in parallel).
   September 1, 2023; was 60 days previously).
 - **Trigger event:** Determination of breach.
 - **Citation:** Tex. Bus. & Com. Code § 521.053(i)
-- **Source URL:** `https://www.texasattorneygeneral.gov/consumer-protection/file-consumer-complaint/report-data-breach`
+- **Source URL:** `https://www.texasattorneygeneral.gov/consumer-protection/data-breach-reporting`
+  *(conformed 2026-08-01 to the URL `data.js` has carried since the 2026-06-14
+  refresh — this line had retained the superseded 404 URL; see Sign-off)*
 - **Conditional language:** As soon as practicable and no later than 30 days
   after determination. Electronic submission via the Texas AG's online breach
   reporting form.
@@ -843,6 +900,20 @@ UK in parallel).
   is unchanged; only the modeling moved from a global boolean to per-obligation
   data. No change to any deadline, threshold, citation, or prose. Build-of-record:
   the "Encryption gate build plan" addendum in `docs/todo.md`.
+- **Primary-source review: 2026-08-01 (JDC + Claude).** Official source verified
+  as cited above. Harm/risk standard captured verbatim for harm-gate design.
+  **Verification record only; no changes.** § 521.053(b) 60th-day ceiling,
+  (i) AG 30th-day with "at least 250" (gte), and (h) CRA "more than 10,000"
+  and "without unreasonable delay" all confirmed verbatim at
+  statutes.capitol.texas.gov, 2026-08-01. Subsection (i) letter confirmed in
+  situ. **Harm standard (verbatim record): NONE** — the sole occurrence of
+  "harm" in the chapter is in the identity-theft remedies, not the
+  notification duty. `harmGate`: absent (a form answer is inert for Texas).
+  **§ 4.4 source-URL conform:** the § 4.4 Source URL line had retained the
+  superseded `…/file-consumer-complaint/report-data-breach` 404 URL after the
+  2026-06-14 `data.js` refresh; conformed in this review to
+  `https://www.texasattorneygeneral.gov/consumer-protection/data-breach-reporting`
+  (documentation catch-up only — `data.js` was already correct).
 - **Reviewer:** *(pending)*
 
 ---
@@ -870,7 +941,9 @@ UK in parallel).
 - **Trigger event:** Determination of breach.
 - **Authority name:** Affected Colorado Residents
 - **Citation:** Colo. Rev. Stat. § 6-1-716(2)(a)
-- **Source URL:** `https://law.justia.com/codes/colorado/title-6/fair-trade-and-restraint-of-trade/article-1/part-7/section-6-1-716/`
+- **Source URL:** `https://content.leg.colorado.gov/sites/default/files/2018a_1128_signed.pdf`
+  *(enacted HB18-1128; primary as of the 2026-08-01 source-policy ruling —
+  see Sign-off; Justia retired)*
 - **Conditional language:** In the most expedient time possible and without
   unreasonable delay, but not later than 30 days. Notification not required if
   a prompt good-faith investigation determines misuse has not occurred and is
@@ -894,7 +967,9 @@ UK in parallel).
 - **Deadline:** Without unreasonable delay (no fixed clock).
 - **Trigger event:** Determination of breach.
 - **Citation:** Colo. Rev. Stat. § 6-1-716(2)(d)
-- **Source URL:** `https://law.justia.com/codes/colorado/title-6/fair-trade-and-restraint-of-trade/article-1/part-7/section-6-1-716/`
+- **Source URL:** `https://content.leg.colorado.gov/sites/default/files/2018a_1128_signed.pdf`
+  *(enacted HB18-1128; primary as of the 2026-08-01 source-policy ruling —
+  see Sign-off; Justia retired)*
 - **Conditional language:** Where more than 1,000 Colorado residents must be
   notified, the entity must also notify all nationwide consumer reporting
   agencies of the anticipated date of notification and approximate number of
@@ -909,8 +984,11 @@ UK in parallel).
 - **Description:** Colorado defines "security breach" as the unauthorized
   acquisition of UNENCRYPTED computerized data. Encrypted data with an
   uncompromised key falls outside the breach definition. Note that
-  § 6-1-716(2)(a.4) requires disclosure if the encryption key or other means
-  to decipher the data was also acquired in the breach.
+  § 6-1-716(2)(a.4) and (2)(g) require disclosure for encrypted or otherwise
+  secured personal information "if the confidential process, encryption key,
+  or other means to decipher the secured information was also acquired... or
+  was reasonably believed to have been acquired" (key-proviso cites added in
+  the 2026-08-01 primary-source review).
 
 ## 5.7 Other obligations not modelled
 
@@ -919,8 +997,23 @@ UK in parallel).
   likely to occur. This is a substantive judgment, not a clean fact, and is not
   modelled. Worth surfacing in a Counsel's Note.
 - **GLBA carve-out for CRA notification** — entities subject to GLBA Title V
-  are exempt from the CRA-notification requirement only. Surfaced in the
-  conditional language but not modelled as gating.
+  are exempt from the CRA-notification requirement only (§ 6-1-716(2)(d)).
+  Surfaced in the conditional language but not modelled as gating. *(Verified
+  present in the encoded condition text, 2026-08-01 primary-source review.)*
+- **Login-credential direction (§ 6-1-716(2)(a.3)) — computed advisory as of
+  2026-08-01.** Where the investigation determines that online-account login
+  credentials (§ 6-1-716(1)(g)(I)(B)) have been or are reasonably likely to be
+  misused, the covered entity must direct the affected person to promptly
+  change passwords/security answers or take other protective steps; for login
+  credentials of an email account furnished by the covered entity, notice to
+  that email address does not comply — another § 6-1-716(1)(f) method or clear
+  and conspicuous online notice at a known IP address/online location is
+  required. Implemented as a `kind: "advisory"` obligation gated
+  `{ anyOf: ["credentials"] }`, parallel to DE § 12B-102(f) and CT
+  § 36a-701b(f). **Unlike the DE/CT parallels, the CO provision is textually
+  conditioned on a misuse determination for credential-type PI — carried in
+  the advisory's conditional language** (JDC ruling, 2026-08-01), per the
+  house rule for conditions that are not clean inputs.
 
 ## 5.8 Trigger nuances
 
@@ -956,6 +1049,8 @@ UK in parallel).
 | 1,000 CO residents | Resident + AG fire; CRA does NOT (gt 1,000 false) |
 | 1,001 CO residents | All three fire |
 | Any count, encryption | All obligations suppressed |
+| CO + credentials *(added 2026-08-01)* | § 6-1-716(2)(a.3) declared advisory present |
+| CO without credentials *(added 2026-08-01)* | No § 6-1-716(2)(a.3) advisory |
 
 ## 5.12 Sign-off
 
@@ -986,6 +1081,30 @@ UK in parallel).
   to per-obligation data. No change to any deadline, threshold, citation, or
   prose. Build-of-record: the "Encryption gate build plan" addendum in
   `docs/todo.md`.
+- **Primary-source review: 2026-08-01 (JDC + Claude).** Official source verified
+  as cited below. Harm/risk standard captured verbatim for harm-gate design.
+  **Zero substantive errors** — no deadline, threshold, comparator, or citation
+  change. Changes applied: (1) **new declared advisory** for the
+  § 6-1-716(2)(a.3) login-credential direction, gated
+  `{ anyOf: ["credentials"] }`, misuse-determination condition carried in the
+  conditional language (see § 5.7; test additions in § 5.11 implemented as
+  executable engine tests); (2) encryption mechanism description gained the
+  § 6-1-716(2)(a.4) and (2)(g) key-proviso cites with the
+  reasonably-believed-acquired language (§ 5.6); (3) GLBA Title V exclusion
+  `[CC-CHECK]` verified already present in the CRA condition text — no edit
+  needed. **Harm standard (verbatim record, DUAL):** residents, (2)(a) —
+  notice required unless the investigation determines misuse "has not occurred
+  and is not reasonably likely to occur"; AG, (2)(f)(I) — unless misuse "has
+  not occurred and is not likely to occur." MISUSE DETERMINATION; the
+  `harmGate` design carries both standards. **Source-policy ruling (JDC,
+  2026-08-01):** primary sources are the Colorado AG data-protection FAQ
+  (regulator), `https://coag.gov/resources/data-protection-laws/`, and the
+  enacted HB18-1128,
+  `https://content.leg.colorado.gov/sites/default/files/2018a_1128_signed.pdf`
+  (both accessed 2026-08-01). The codified CRS is published via the LexisNexis
+  arrangement — cited but not linked. Justia retired. (Noted: the signed
+  session-law PDF is frozen at 2018; the review-cycle cadence is what keeps
+  Colorado current.)
 - **Reviewer:** *(pending)*
 
 ---
@@ -1064,6 +1183,14 @@ the model to support an `authorities[]` array on a single obligation.
   and the encryption key was not also compromised, the incident does not meet
   the statutory definition of a "breach of security" — no notification
   obligation arises.
+- **Verbatim § 1 "Encrypted" definition (captured 2026-08-01 primary-source
+  review, malegislature.gov):** "Encrypted" means transformed through a
+  **128-bit or higher algorithmic process** into a form in which there is a
+  **low probability of assigning meaning without use of a confidential process
+  or key**, **unless further defined by regulation of the office of consumer
+  affairs and business regulation**. The OCABR-regulation tail means the
+  definition is delegable; the encoded `requiresStrength: "ge_128"` floor
+  tracks the statutory default.
 
 ## 6.6 Other obligations not modelled
 
@@ -1100,6 +1227,19 @@ the model to support an `authorities[]` array on a single obligation.
   (id: `ma-dual-trigger-section-3b`). Respond's encryption-suppression
   flag operates at the § 1 level only, so the suppressed-obligation cards may
   understate exposure when the second trigger could fire.
+- **Verbatim § 1 "breach of security" capture (2026-08-01 primary-source
+  review, malegislature.gov):** the definition covers the unauthorized
+  acquisition or unauthorized use of "...unencrypted data or, encrypted
+  electronic data and the confidential process or key... that creates a
+  substantial risk of identity theft or fraud..." against a resident of the
+  commonwealth, together with the good-faith carve-out: a good faith but
+  unauthorized acquisition of personal information by a person or agency, or
+  employee or agent thereof, for the lawful purposes of such person or
+  agency, is not a breach of security unless the personal information is used
+  in an unauthorized manner or subject to further unauthorized disclosure.
+  Verbatim capture lives in this intake record only — the in-app
+  `ma-dual-trigger-section-3b` counsel note keeps its (accurate) paraphrase
+  per JDC ruling, 2026-08-01.
 - **"Substantial risk of identity theft or fraud"** — part of the breach
   definition under § 1, not a separate threshold. In practice rarely a defense
   for incidents involving SSNs/financial accounts/government IDs. Captured by
@@ -1222,6 +1362,30 @@ the model to support an `authorities[]` array on a single obligation.
   `https://malegislature.gov/Laws/GeneralLaws/PartI/TitleXV/Chapter93h/Section3A`
   (verified 2026-07-25). Test additions in 6.10 implemented as executable
   engine tests. **Reviewer: JDC, 2026-07-25.**
+- **Primary-source review: 2026-08-01 (JDC + Claude).** Official source verified
+  as cited above. Harm/risk standard captured verbatim for harm-gate design.
+  **Verification record; no encoded-rule changes.** Confirmed verbatim at
+  malegislature.gov, 2026-08-01: § 3 "as soon as practicable and without
+  unreasonable delay" (all three notification obligations); the dual-trigger
+  structure; the OCABR-identified CRA/state-agency mechanism; the notice
+  content rules (police-report right, free security freeze, mitigation
+  services, and the PROHIBITION on stating the nature of the breach or the
+  resident count in the resident notice); no delay for a not-yet-ascertained
+  count; the § 4 law-enforcement delay; § 3A verbatim (18 months / 42 months
+  for consumer reporting agencies). `[CC-CHECK]` conform applied: the § 1
+  breach-of-security and "Encrypted" definitions are now captured verbatim in
+  §§ 6.5 and 6.7 — **intake-record-only** per JDC ruling 2026-08-01; the
+  in-app dual-trigger counsel note keeps its paraphrase. **Citation-reference
+  flag for gate review:** the review-cycle record referenced the dual trigger
+  at "§ 3(a)"; the encoded materials and this form cite the owner/licensor
+  duty at § 3(b). Recorded here as trigger-two of the modelled owner-side
+  duty (§ 3(b), as encoded — the cycle found zero substantive errors against
+  the encoded materials); the (a)/(b) reference is flagged for JDC
+  confirmation at gate. **Harm standard (verbatim record): DEFINITIONAL
+  ("substantial risk of identity theft or fraud") WITH TRIGGER-TWO BYPASS** —
+  the `harmGate` can inform the § 1 analysis but can never suppress the
+  second-trigger duty (unauthorized acquisition or use), which has no harm
+  qualifier.
 - **Reviewer:** *(pending)*
 
 ---
@@ -1322,6 +1486,9 @@ multi-authority array.
   "private information" acquired in a breach. Same per-se shape as CA, TX, CO,
   MA. Applies to all five obligations (individual, AG, Department of State,
   State Police, CRA) — when encryption is reported, all five are suppressed.
+- **Verbatim key proviso (captured 2026-08-01 primary-source review):**
+  § 899-aa(1)(b) covers private information that is "not encrypted, or is
+  encrypted with an encryption key that has also been accessed or acquired."
 
 ## 7.7 Other obligations not modelled (handled via counsel notes)
 
@@ -1484,6 +1651,30 @@ multi-authority array.
   unchanged; only the modeling moved from a global boolean to per-obligation data.
   No change to any deadline, threshold, citation, or prose. Build-of-record: the
   "Encryption gate build plan" addendum in `docs/todo.md`.
+- **Primary-source review: 2026-08-01 (JDC + Claude).** Official source verified
+  as cited above. Harm/risk standard captured verbatim for harm-gate design.
+  **Zero substantive errors.** The proposed "at one time" addition to the CRA
+  condition was found **already present** in both the encoded condition text
+  (`data.js`) and § 7.5 — verification record only, no edit. Encryption key
+  proviso captured verbatim at § 7.6 ("not encrypted, or is encrypted with an
+  encryption key that has also been accessed or acquired," § 899-aa(1)(b)).
+  The § 899-aa(2)(a) exception record confirmed as verbatim-complete in the
+  consolidated counsel note and § 7.7: inadvertent disclosure by persons
+  authorized to access; reasonable determination of no likely misuse,
+  financial harm, or (for online credentials) emotional harm; written
+  determination retained 5 years; more than 500 NY residents → written
+  determination to the AG within 10 days. **Harm standard (record): NARROW
+  COMPOUND** — conditioned on inadvertent-disclosure-by-an-authorized-person,
+  not low harm alone. `harmGate`: not gateable by the generic harm question
+  as designed — the generic question can attest only to the no-likely-harm
+  element, never the inadvertent-by-authorized-person element; remains
+  counsel-note territory **(design ruling pending — final determination
+  deferred to the harm-gate design conversation)**. **Source upgrades
+  deferred:** the Department of State and Division of State Police
+  `source_url`s remain agency homepages; locating each agency's actual
+  breach-reporting page requires live research, deferred to implementation
+  (queued in `docs/todo.md`; if no reporting page exists, the homepage is
+  retained with a note).
 - **Reviewer:** *(pending)*
 
 ---
@@ -1559,6 +1750,13 @@ multi-authority array.
   encryption key was not accessed or acquired, the incident does not meet the
   statutory definition of a breach. Same per-se shape as CA, TX, CO, MA, NY.
   Applies to all three obligations (individual, AG, CRA).
+- **Subsection (C) — explicit encryption boundary (added 2026-08-01
+  primary-source review):** § 18.2-186.6(C) makes the proviso explicit —
+  notification is required where encrypted information is **accessed and
+  acquired in an unencrypted form**, or where the breach involves **a person
+  with access to the encryption key**. The first prong (post-decryption
+  acquisition) was previously only implicit in the mechanism description; the
+  encoded gate description now addresses (C) explicitly with the cite.
 
 ## 8.7 Other obligations not modelled (handled via counsel notes or out of scope)
 
@@ -1693,6 +1891,21 @@ multi-authority array.
   boolean to per-obligation data. No change to any deadline, threshold, citation,
   or prose. Build-of-record: the "Encryption gate build plan" addendum in
   `docs/todo.md`.
+- **Primary-source review: 2026-08-01 (JDC + Claude).** Official source verified
+  as cited above (law.lis.virginia.gov — official, unchanged, accessed
+  2026-08-01). Harm/risk standard captured verbatim for harm-gate design.
+  **Zero substantive errors.** `[CC-CHECK]` conform applied: the encryption
+  mechanism description (§ 8.6 and the `data.js` encryption-gate description
+  on the individual obligation) now addresses § 18.2-186.6(C) explicitly —
+  disclosure required where encrypted information is accessed and acquired in
+  an unencrypted form, or where the breach involves a person with access to
+  the encryption key. **Harm standard (verbatim record, DUTY ELEMENT):**
+  "...and causes, or the individual or entity reasonably believes has caused
+  or will cause, identity theft or another fraud to any resident of the
+  Commonwealth" — present in both the (A) definition and the (B) operative
+  duty. `harmGate`: element-negation form, not an exemption — the duty
+  never arises absent the harm element, rather than arising and being
+  excused.
 - **Reviewer:** *(pending)*
 
 ---
@@ -1977,6 +2190,24 @@ categories in `engine.js` TEST_CASES.)*
   definition), content unchanged. Both former standing notes removed from
   `counselNotes`; see §§ 9.6, 9.9, and the test additions in § 9.10.
   **Reviewer: JDC, 2026-07-25.**
+- **Primary-source review: 2026-08-01 (JDC + Claude).** Official source verified
+  as cited above. Harm/risk standard captured verbatim for harm-gate design.
+  **Zero substantive errors.** Source upgrade applied: the § 12B-102(e)
+  service obligation's `source_url` in `data.js` (the last remaining Justia
+  link for Delaware) repointed to the official
+  `https://delcode.delaware.gov/title6/c012b/index.html` (accessed
+  2026-08-01); Justia retired. Encryption key proviso verified verbatim at
+  § 12B-101(1) — "...encrypted, unless such unauthorized acquisition
+  includes, or is reasonably believed to include, the encryption key and the
+  person... has a reasonable belief that the encryption key could render
+  that personal information readable or useable" — and confirmed already
+  reflected in the encoded gate description (no edit needed). AG threshold
+  confirmed "exceeds 500" (gt) and the cascade timing verbatim at (d).
+  **Harm standard (verbatim record): GENERAL SELF-DETERMINATION** — notice
+  not required if the person "reasonably determines that the breach of
+  security is unlikely to result in harm to the individuals whose personal
+  information has been breached." Wording differs from Connecticut's; the
+  `harmGate` design carries each statute's standard verbatim.
 
 ---
 
@@ -2013,7 +2244,9 @@ categories in `engine.js` TEST_CASES.)*
 - **Authority name:** Affected Connecticut Residents
 - **`deadline_phrase`:** "60 days from discovery of breach"
 - **Citation:** Conn. Gen. Stat. § 36a-701b(b)(1)
-- **Source URL:** `https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/`
+- **Source URL:** `https://www.cga.ct.gov/current/pub/chap_669.htm`
+  *(official CGA text, primary as of 2026-08-01; Justia retired to secondary —
+  see Sign-off)*
 - **Conditional / exception language:** Without unreasonable delay but no
   later than 60 days after discovery of the breach, unless a shorter
   timeframe is required under federal law or delay is requested by law
@@ -2058,7 +2291,8 @@ categories in `engine.js` TEST_CASES.)*
   conservative modeling choice — an acquired key arguably leaves the data no
   longer "unreadable or unusable," and the engine must never silently excuse
   an obligation on a contestable reading. Surfaced as counsel note
-  `ct-no-key-proviso-36a-701b-a`.
+  `ct-no-key-proviso-36a-701b-a`. **CONFIRMED AT SOURCE (2026-08-01):** the
+  CGA text carries no key language within the § 36a-701b(a) exclusion.
 - **Specific encryption standard, if any:** None — no bit-strength floor.
 
 ## 10.6 Identity theft prevention services (§ 36a-701b(b)(2)(B)) — service obligation
@@ -2084,6 +2318,13 @@ categories in `engine.js` TEST_CASES.)*
 - **Encryption cascade:** carries the same § 36a-701b(a) breach-definition
   harbor as the notification obligations — a suppressed breach computes no
   service.
+- **Cross-reference note (2026-08-01 primary-source review):** the (b)(2)(B)
+  trigger is formally a cross-reference to "clause (i) or (ii) of subparagraph
+  (A) of subdivision (2) of subsection (a)" — Social Security number and
+  taxpayer identification number are the resolved reference. The quoted
+  service text above is operative current language: "not less than two years"
+  confirmed at the CGA text; "twenty-four months" appears only in superseded
+  history.
 - **`gov_id`-without-`ssn` advisory state:** per § 0.4, when `gov_id` is
   selected without `ssn`, the engine emits an `ssn_unconfirmed` conditional
   advisory for this obligation instead of computing it.
@@ -2100,7 +2341,8 @@ categories in `engine.js` TEST_CASES.)*
 - **NO key-compromise proviso in the § 36a-701b(a) encryption exclusion** —
   unlike CO/NY, the definition does not condition the exclusion on the key
   remaining uncompromised; counsel should not assume the CO/NY analysis
-  transfers. See 10.5 for the conservative gate shape.
+  transfers. See 10.5 for the conservative gate shape. **Confirmed at source
+  (2026-08-01):** verified against the CGA text directly.
 - **Law-enforcement delay** — § 36a-701b(d).
 - **Late-identified residents** — residents identified only after the 60-day
   window must be notified **as expediently as possible**, unless the risk
@@ -2140,9 +2382,14 @@ categories in `engine.js` TEST_CASES.)*
   primary-source verification of Conn. Gen. Stat. § 36a-701b.
 - **IAPP chart consistency:** Cross-checked against the IAPP US State Breach
   Notification Chart (version: February 2026 update), p. 4, on 2026-07-25.
-- **Sources confirmed:** Conn. Gen. Stat. § 36a-701b (Justia current-code
-  mirror, `https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/`,
-  accessed 2026-07-25); Connecticut AG "Reporting a Data Breach,"
+- **Sources confirmed:** Conn. Gen. Stat. § 36a-701b — **primary:** official
+  CGA text, `https://www.cga.ct.gov/current/pub/chap_669.htm` (accessed
+  2026-08-01; chapter-level page — less pinpoint than the retired Justia
+  section link, accepted as the official-source trade-off); **secondary:**
+  Justia current-code mirror,
+  `https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/`
+  (accessed 2026-07-25; retired from `data.js` 2026-08-01). Connecticut AG
+  "Reporting a Data Breach,"
   `https://portal.ct.gov/ag/sections/privacy/reporting-a-data-breach`
   (accessed 2026-07-25).
 - **Sources confirmed via project knowledge base:** IAPP US State Breach
@@ -2156,6 +2403,25 @@ categories in `engine.js` TEST_CASES.)*
   § 36a-701b(b)(2)(A); § 10.6 carrying the exact statutory service text with
   duration "2 years" and the card title "Identity Theft Prevention Services
   for Affected Connecticut Residents").
+- **Primary-source review: 2026-08-01 (JDC + Claude).** Official source verified
+  as cited above. Harm/risk standard captured verbatim for harm-gate design.
+  **Zero substantive errors.** § 10.6: the (b)(2)(B) trigger recorded as a
+  formal cross-reference to "clause (i) or (ii) of subparagraph (A) of
+  subdivision (2) of subsection (a)" — SSN and taxpayer identification number
+  are the resolved reference; "not less than two years" confirmed as the
+  operative current language at the CGA ("twenty-four months" only in
+  superseded history). § 10.7: the no-key-proviso reading is now **confirmed
+  at source** — no key language within the § 36a-701b(a) exclusion in the CGA
+  text; the conservative `defeatedBy: keyAcquired` gate shape and the
+  `ct-no-key-proviso-36a-701b-a` counsel note stand unchanged. Source
+  upgrade: all Connecticut statutory `source_url`s in `data.js` repointed
+  from the Justia mirror to the official CGA text (§ 10.3 and the four
+  counsel notes plus the credentials advisory); Justia retired to secondary.
+  **Harm standard (verbatim record, as already quoted in § 10.7): GENERAL
+  SELF-DETERMINATION** — "Such notification shall not be required if, after
+  an appropriate investigation the person reasonably determines that the
+  breach will not likely result in harm to the individuals whose personal
+  information has been acquired or accessed."
 
 ## 10.10 Recommended test cases
 

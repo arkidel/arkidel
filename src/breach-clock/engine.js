@@ -1544,6 +1544,25 @@ const TEST_CASES = [
     ),
   },
   {
+    name: "Colorado + credentials → § 6-1-716(2)(a.3) declared advisory (login-credential misuse direction)",
+    category: "Service obligations",
+    facts: { jurisdictions: { co: true }, residentCounts: { co: 100 }, sensitivity: ["credentials"] },
+    expect: expectAll(
+      expectAdvisory("Colorado", "Login-credential"),
+      expectAdvisoryCount(1),
+      expectServiceCount(0)
+    ),
+  },
+  {
+    name: "Colorado without credentials → no § 6-1-716(2)(a.3) advisory",
+    category: "Service obligations",
+    facts: { jurisdictions: { co: true }, residentCounts: { co: 100 }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectAdvisoryCount(0),
+      expectServiceCount(0)
+    ),
+  },
+  {
     name: "Delaware + ssn + encryption (key not acquired) → service does not compute; obligations suppressed",
     category: "Service obligations",
     facts: { jurisdictions: { de: true }, residentCounts: { de: 501 }, sensitivity: ["ssn"], encrypted: "yes", keyAcquired: "no" },

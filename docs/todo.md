@@ -618,9 +618,28 @@ history share a Supabase backend and should be sequenced together.
   determination CO, duty element VA, definitional-with-dual-trigger-bypass
   MA; "Not assessed" computes everything; never blocks like EU risk).
   Deferred to the primary-source review cycle for CA/TX/CO/VA/NY/MA/DE/CT
-  harm language verification. JDC 2026-07-25.
-- **Primary-source review cycle for all shipped jurisdictions** — planned
-  with Claude, post-push.
+  harm language verification. JDC 2026-07-25. **Verification complete
+  2026-08-01** — every jurisdiction's harm standard captured verbatim in the
+  intake-forms sign-off blocks (primary-source review entries). Character
+  map confirmed: CA and TX have NO harm standard (`harmGate` absent — a form
+  answer is inert); CT and DE general self-determination (different
+  wording, carried verbatim each); CO misuse determination (dual: (2)(a)
+  residents / (2)(f)(I) AG); VA duty element (element-negation form); MA
+  definitional with trigger-two bypass (can inform § 1, can never suppress
+  the second-trigger duty); NY narrow compound — recorded as not gateable by
+  the generic question (design ruling pending, to be made properly in the
+  harm-gate design conversation). The design conversation now sits on
+  verified language: the question is purely how one form question applies
+  eight different standards honestly.
+- **Primary-source review cycle for all shipped jurisdictions — DONE
+  2026-08-01** (JDC + Claude). All ten jurisdictions verified against
+  official statute publications or regulatory authorities. ZERO substantive
+  errors — no deadline, threshold, comparator, citation, or duration change
+  anywhere. Amendments landed 2026-08-01: verification records +
+  phrase/condition refinements (CA), one new advisory (CO § 6-1-716(2)(a.3)),
+  source upgrades (CO/CT/DE official sources; Justia retired), § 18.2-186.6(C)
+  conform (VA), verbatim § 1 captures (MA, intake-record-only), UK PECR/DUAA
+  counsel note, and verbatim harm-standard capture for the harm-gate design.
 
 ---
 
@@ -630,6 +649,23 @@ history share a Supabase backend and should be sequenced together.
   harmless, but consider dimming pre-org).
 - Home heading "Welcome back" shows for brand-new users on first visit;
   consider a first-visit variant.
+
+---
+
+## Horizon watch — legal landscape (queued 2026-08-01)
+
+Monitoring items from the 2026-08-01 primary-source review cycle. Nothing
+here is law yet; nothing changes any encoded rule.
+
+- **EU Digital Omnibus PROPOSAL** — floats GDPR amendments including
+  breach-notification changes. Not law; monitor. If enacted, re-run the
+  EU/UK intake against the amended text.
+- **NY Department of State / Division of State Police source upgrades**
+  `[task]` — the two `source_url`s in `data.js` remain agency homepages
+  (`dos.ny.gov`, `troopers.ny.gov`). Locate each agency's actual
+  breach-reporting page (live web research at implementation — deliberately
+  NOT done in the 2026-08-01 documentation pass); if no reporting page
+  exists, retain the homepage with a note in intake §7.11.
 
 ---
 

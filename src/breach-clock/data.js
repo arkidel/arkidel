@@ -138,6 +138,16 @@ const JURISDICTIONS = [
         ],
       },
     ],
+    counselNotes: [
+      {
+        id: "uk-pecr-breach-clock-duaa-2025",
+        placement: "sectoral",
+        title: "PECR sectoral overlay — 72-hour breach clock for public electronic communications providers (DUAA 2025)",
+        content: "If the entity is a provider of a public electronic communications service, personal data breaches are additionally governed by the breach-notification regime in the Privacy and Electronic Communications Regulations 2003 (PECR), separate from UK GDPR Arts. 33 and 34. The Data (Use and Access) Act 2025 aligned the PECR breach-notification clock to 72 hours, matching the UK GDPR Art. 33 timescale (it was previously 24 hours under the EU-derived rules). This is a sectoral, entity-type-dependent regime that Respond does not model — applicability depends on the entity's status as a communications provider rather than on the breach facts (same treatment as the NYDFS sectoral overlay for New York). If the entity is in scope, treat the PECR notification as a separate parallel clock to the ICO. UK GDPR Arts. 33 and 34 themselves are unchanged by the DUAA.",
+        citation: "Data (Use and Access) Act 2025; Privacy and Electronic Communications (EC Directive) Regulations 2003 (SI 2003/2426)",
+        source_url: "https://ico.org.uk/for-organisations/report-a-breach/personal-data-breach/personal-data-breaches-a-guide/",
+      },
+    ],
   },
   {
     id: "ca",
@@ -151,7 +161,7 @@ const JURISDICTIONS = [
         authority: "Affected California Residents",
         deadline_hours: 30 * 24, // SB-446, eff. Jan. 1, 2026
         deadline_trigger: "discovery or notification of breach",
-        deadline_phrase: "30 days from discovery or notification of breach",
+        deadline_phrase: "30 calendar days from discovery or notification of breach",
         citation: "Cal. Civ. Code § 1798.82(a)",
         source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1798.82.&lawCode=CIV",
         condition: "Within 30 calendar days following discovery or notification of the breach (SB-446, effective January 1, 2026). Delay permitted only to accommodate the legitimate needs of law enforcement or as necessary to determine the scope of the breach and restore the reasonable integrity of the data system.",
@@ -165,7 +175,7 @@ const JURISDICTIONS = [
             whenUnset: "fires",
             suppressionType: "breach_definition",
             citation: "Cal. Civ. Code § 1798.82(a)",
-            description: "Notification is required only where unencrypted personal information was acquired, OR where encrypted information was acquired AND the encryption key/security credential was also acquired and could render the information readable. If only encrypted data was acquired and the key was not compromised, no notification obligation arises.",
+            description: "Notification is required only where unencrypted personal information was acquired, OR where encrypted information was acquired AND the encryption key or security credential was also acquired (or is reasonably believed to have been acquired) AND the person has a reasonable belief that the key or credential could render the personal information readable or usable (Cal. Civ. Code § 1798.82(a)(1)). If only encrypted data was acquired and the key was not compromised, no notification obligation arises.",
           },
         ],
       },
@@ -175,12 +185,12 @@ const JURISDICTIONS = [
         deadline_hours: 15 * 24, // 15 days from resident notification
         deadline_relative_to: { parent_authority: "Affected California Residents" },
         deadline_trigger: "resident notification",
-        deadline_phrase: "15 days from notice to residents",
+        deadline_phrase: "15 calendar days from notice to residents",
         gating: { residentThreshold: 500, comparator: "gt" }, // SB-446 changed this to "more than 500"
         thresholdLabel: "AG notification",
         citation: "Cal. Civ. Code § 1798.82(f)",
         source_url: "https://oag.ca.gov/privacy/databreach/reporting",
-        condition: "Within 15 calendar days of notifying affected California residents (SB-446, effective January 1, 2026). Required where a single breach involves more than 500 California residents. Submit a sample copy of the consumer notice via the California AG's electronic breach reporting portal.",
+        condition: "Within 15 calendar days of notifying affected California residents (SB-446, effective January 1, 2026). Required where a single breach involves more than 500 California residents. Electronically submit a single sample copy of the notification, excluding any personally identifiable information, via the California AG's breach reporting portal.",
         conditionalGates: [
           {
             role: "safeHarbor",
@@ -303,7 +313,7 @@ const JURISDICTIONS = [
         deadline_trigger: "determination of breach",
         deadline_phrase: "30 days from determination of breach",
         citation: "Colo. Rev. Stat. § 6-1-716(2)(a)",
-        source_url: "https://law.justia.com/codes/colorado/title-6/fair-trade-and-restraint-of-trade/article-1/part-7/section-6-1-716/",
+        source_url: "https://content.leg.colorado.gov/sites/default/files/2018a_1128_signed.pdf",
         condition: "In the most expedient time possible and without unreasonable delay, but not later than 30 days after determination that a security breach occurred. Notification not required if a prompt good-faith investigation determines misuse has not occurred and is not reasonably likely to occur.",
         conditionalGates: [
           {
@@ -315,7 +325,7 @@ const JURISDICTIONS = [
             whenUnset: "fires",
             suppressionType: "breach_definition",
             citation: "Colo. Rev. Stat. § 6-1-716(1)(h)",
-            description: "Colorado defines 'security breach' as the unauthorized acquisition of UNENCRYPTED computerized data. Encrypted data with an uncompromised key falls outside the breach definition. Note: § 6-1-716(2)(a.4) requires disclosure if the encryption key or other means to decipher the data was also acquired in the breach.",
+            description: "Colorado defines 'security breach' as the unauthorized acquisition of UNENCRYPTED computerized data. Encrypted data with an uncompromised key falls outside the breach definition. Note: § 6-1-716(2)(a.4) and (2)(g) require disclosure for encrypted or otherwise secured personal information if the confidential process, encryption key, or other means to decipher the secured information was also acquired in the breach or was reasonably believed to have been acquired.",
           },
         ],
       },
@@ -353,7 +363,7 @@ const JURISDICTIONS = [
         gating: { residentThreshold: 1000, comparator: "gt" },
         thresholdLabel: "CRA notification",
         citation: "Colo. Rev. Stat. § 6-1-716(2)(d)",
-        source_url: "https://law.justia.com/codes/colorado/title-6/fair-trade-and-restraint-of-trade/article-1/part-7/section-6-1-716/",
+        source_url: "https://content.leg.colorado.gov/sites/default/files/2018a_1128_signed.pdf",
         condition: "Where more than 1,000 Colorado residents must be notified, the covered entity must also notify all nationwide consumer reporting agencies of the anticipated date of notification and approximate number of residents to be notified, without unreasonable delay. Does not apply to entities subject to GLBA Title V.",
         conditionalGates: [
           {
@@ -368,6 +378,20 @@ const JURISDICTIONS = [
             description: "CRA notification is contingent on the entity being required to notify residents, which itself depends on a security breach having occurred. Encrypted data with uncompromised key removes the breach.",
           },
         ],
+      },
+      {
+        // Primary-source review cycle (2026-08-01, JDC + Claude): declared
+        // advisory added. Unlike the DE § 12B-102(f) and CT § 36a-701b(f)
+        // parallels, the Colorado provision is textually conditioned on a
+        // misuse determination for credential-type personal information —
+        // that condition is carried in the conditional language below, per
+        // the house rule for conditions that are not clean inputs.
+        kind: "advisory",
+        authority: "Login-credential breaches — misuse-conditioned direction and notice method under § 6-1-716(2)(a.3)",
+        gating: { categories: { anyOf: ["credentials"] } },
+        citation: "Colo. Rev. Stat. § 6-1-716(2)(a.3)",
+        source_url: "https://content.leg.colorado.gov/sites/default/files/2018a_1128_signed.pdf",
+        condition: "Where the investigation determines that login credentials for an online account (§ 6-1-716(1)(g)(I)(B)) have been misused or are reasonably likely to be misused, direct the affected person to promptly change the person's password and security question or answer, as applicable, or to take other steps appropriate to protect the online account and all other online accounts for which the person uses the same login credentials. Where the breached credentials are login credentials of an email account furnished by the covered entity, notice to that email address does not comply — provide notice by another method permitted under § 6-1-716(1)(f), or by clear and conspicuous notice delivered to the affected person online when the person is connected to the online account from an Internet protocol address or online location from which the covered entity knows the person customarily accesses the account.",
       },
     ],
   },
@@ -669,7 +693,7 @@ const JURISDICTIONS = [
             whenUnset: "fires",
             suppressionType: "breach_definition",
             citation: "Va. Code § 18.2-186.6(A)",
-            description: "The statute applies only to unencrypted or unredacted personal information. If the data was encrypted or redacted and the encryption key was not accessed or acquired, the incident does not meet the statutory definition of a breach.",
+            description: "The statute applies only to unencrypted or unredacted personal information. If the data was encrypted or redacted and the encryption key was not accessed or acquired, the incident does not meet the statutory definition of a breach. Section 18.2-186.6(C) makes the encryption boundary explicit: notification is required where encrypted information is accessed and acquired in an unencrypted form, or where the breach involves a person with access to the encryption key.",
           },
           {
             role: "safeHarbor",
@@ -858,7 +882,7 @@ const JURISDICTIONS = [
         service_duration_display: "1 year",
         trigger_note: "Breach including a resident's Social Security number.",
         citation: "6 Del. C. § 12B-102(e)",
-        source_url: "https://law.justia.com/codes/delaware/title-6/chapter-12b/section-12b-102",
+        source_url: "https://delcode.delaware.gov/title6/c012b/index.html",
         condition: "Credit monitoring services at no cost for a period of 1 year to each resident whose personal information, including Social Security number, was breached or is reasonably believed to have been breached. Provide all information necessary to enroll in the services and information on how the resident can place a credit freeze on the resident's credit file. Services are not required if, after an appropriate investigation, the person reasonably determines the breach of security is unlikely to result in harm to the affected individuals — the same risk-of-harm determination that excuses notice (see the § 12B-102(a) counsel note).",
         conditionalGates: [
           {
@@ -939,7 +963,7 @@ const JURISDICTIONS = [
         deadline_trigger: "discovery of breach",
         deadline_phrase: "60 days from discovery of breach",
         citation: "Conn. Gen. Stat. § 36a-701b(b)(1)",
-        source_url: "https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/",
+        source_url: "https://www.cga.ct.gov/current/pub/chap_669.htm",
         condition: "Without unreasonable delay but no later than 60 days after discovery of the breach, unless a shorter timeframe is required under federal law or delay is requested by law enforcement under § 36a-701b(d). Residents identified only after the 60-day window must be notified as expediently as possible, unless the risk exemption applies.",
         conditionalGates: [
           {
@@ -1006,7 +1030,7 @@ const JURISDICTIONS = [
         authority: "Login-credential breaches — notice method under § 36a-701b(f)",
         gating: { categories: { anyOf: ["credentials"] } },
         citation: "Conn. Gen. Stat. § 36a-701b(f)",
-        source_url: "https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/",
+        source_url: "https://www.cga.ct.gov/current/pub/chap_669.htm",
         condition: "Where the breach involves online-account login credentials, notice may be provided by directing the resident to promptly change the credentials. Where the breached credentials are for an email account furnished by the entity, notice to that email address does not comply — use another permitted method or clear and conspicuous online notice delivered when the resident connects from an IP address or online location from which the entity knows the resident customarily accesses the account.",
       },
     ],
@@ -1017,7 +1041,7 @@ const JURISDICTIONS = [
         title: "Harm exemption — self-determination standard, not modelled",
         content: "Connecticut's notification duty carries a harm exemption: \"Such notification shall not be required if, after an appropriate investigation the person reasonably determines that the breach will not likely result in harm to the individuals whose personal information has been acquired or accessed.\" This is a self-determination standard with no law-enforcement-consultation element. It is a substantive judgment the engine does not model (a form-level harm gate is queued in docs/todo.md); Respond's deadlines reflect the default position that notification is required. If the entity concludes after an appropriate investigation that harm is not likely, the obligations may not arise. Document that determination contemporaneously and consult counsel before relying on it.",
         citation: "Conn. Gen. Stat. § 36a-701b(b)(1)",
-        source_url: "https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/",
+        source_url: "https://www.cga.ct.gov/current/pub/chap_669.htm",
       },
       {
         id: "ct-no-key-proviso-36a-701b-a",
@@ -1025,7 +1049,7 @@ const JURISDICTIONS = [
         title: "No key-compromise proviso in the § 36a-701b(a) encryption exclusion",
         content: "Unlike Colorado and New York, Connecticut's definitional exclusion for encrypted data does not condition the exclusion on the encryption key remaining uncompromised — the definition excludes data secured by encryption or by any other method or technology that renders the personal information unreadable or unusable, with no express key proviso. Counsel should not assume the CO/NY key-compromise analysis transfers to Connecticut. Respond's gate conservatively treats an acquired key as defeating the harbor (a compromised key arguably leaves the data no longer 'unreadable or unusable'), so the obligations compute in that case rather than being silently excused; counsel may reach a different conclusion under the literal statutory text.",
         citation: "Conn. Gen. Stat. § 36a-701b(a)",
-        source_url: "https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/",
+        source_url: "https://www.cga.ct.gov/current/pub/chap_669.htm",
       },
       {
         id: "ct-deemed-compliance-36a-701b-g-h",
@@ -1033,7 +1057,7 @@ const JURISDICTIONS = [
         title: "Own-procedures and functional-regulator deemed compliance — § 36a-701b(g), (h)",
         content: "Connecticut deems a person compliant if it maintains its own security-breach procedures consistent with the timing requirements of § 36a-701b and notifies residents in accordance with its policies in the event of a breach (subsection (g)), or if it complies with the security-breach requirements of its primary or functional regulator, including notice regimes under federal law such as HIPAA/HITECH (subsection (h)). These are entity-type-dependent provisions that Respond does not model (same treatment as the NYDFS sectoral overlay for New York). If the entity is subject to a functional regulator's breach regime, assess deemed compliance separately.",
         citation: "Conn. Gen. Stat. § 36a-701b(g), (h)",
-        source_url: "https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/",
+        source_url: "https://www.cga.ct.gov/current/pub/chap_669.htm",
       },
       {
         id: "ct-cutpa-enforcement-36a-701b-j",
@@ -1041,7 +1065,7 @@ const JURISDICTIONS = [
         title: "CUTPA enforcement context — § 36a-701b(j)",
         content: "Failure to comply with § 36a-701b constitutes an unfair trade practice for purposes of the Connecticut Unfair Trade Practices Act and is enforced by the Attorney General. This enforcement framing raises the stakes of a missed or late notification beyond the notification statute itself; it does not change any deadline modelled above.",
         citation: "Conn. Gen. Stat. § 36a-701b(j)",
-        source_url: "https://law.justia.com/codes/connecticut/title-36a/chapter-669/section-36a-701b/",
+        source_url: "https://www.cga.ct.gov/current/pub/chap_669.htm",
       },
     ],
   },
