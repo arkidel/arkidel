@@ -401,6 +401,28 @@ information, (2) how & when discovered, (3) when the incident occurred,
   returns to the form with all values intact. Quick mode's review shows the
   operative answers + obligations only (no incident-report recap, no
   further-considerations); full mode includes both.
+- **Compute/persist unification (JDC rulings 2026-08-02) — durable
+  decisions.** Submit & compute persists atomically (payload + transition,
+  one call — `updateIncident` takes an optional `status` for the single
+  PATCH; a never-saved form is created active in one insert, quick mode
+  included) and never renders results on failed save — the failure path
+  stays on the form with the save-error treatment; results render only
+  after confirmed persistence. Memos always compute fresh from current
+  facts at generation time (`handleDownloadMemo` re-runs the engine; never
+  a cached results state). A quiet Parchment staleness banner renders on
+  results when facts have changed since the displayed compute
+  (dirty-since-compute, implemented as a facts-signature comparison so a
+  Back-to-results that reverts to the exact computed facts never
+  false-alarms); it never renders immediately post-submit. Back-to-results
+  (ghost affordance beside Save, both modes) discards unsaved in-memory
+  edits — revert to last-saved payload — without save or status
+  transition, and renders only when a computed results state exists.
+  Closed-resubmit reactivates without prompt (Back is the non-mutating
+  exit). Save alone is unchanged — it parks a draft without computing and
+  never transitions status. OPERATIONAL NOTE FOR GATE-RENDERS: memory-only
+  fixture edits no longer survive Submit — gate-render fact patterns must
+  use disposable incidents or revert edits explicitly; the pre-2026-08-02
+  technique of submit-without-save is gone by design.
 - **Quick mode** is a focusing view over one shared state, not a separate
   workflow — it shows only the operative fields; entered record data persists
   across toggles.

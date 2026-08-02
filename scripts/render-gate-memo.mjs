@@ -21,6 +21,11 @@
 //   "Harm assessment" row.
 // Fixture 5: same facts under "" vs "harm_likely" — extracted memo text is
 //   identical except the Analysis Inputs harm row.
+// Fixture 6 (compute/persist unification, 2026-08-02): fresh-compute
+//   assertion — facts are mutated BETWEEN an initial compute and memo
+//   generation; the memo must reflect the mutation (it is generated from a
+//   fresh compute of current facts at generation time, mirroring
+//   handleDownloadMemo, never from the earlier cached compute).
 //
 // Run: node scripts/render-gate-memo.mjs   (exit code non-zero on failure)
 import fs from "node:fs/promises";
@@ -208,6 +213,44 @@ function check(label, ok) {
   check("texts differ before masking the harm row", notAssessed !== harmLikely);
   check("memo text identical except the Analysis Inputs harm row", a === b);
   check("neither renders any suppression or explainer", !a.includes("SUPPRESSED — HARM DETERMINATION") && !a.includes("obligations remain computed"));
+}
+
+// ── Fixture 6 — memo generates from a FRESH compute of current facts ──
+{
+  // Mirrors the app's generation contract (handleDownloadMemo): the memo path
+  // computes at generation time from whatever the current facts are — it
+  // never accepts a previously computed result.
+  const generateMemoFromCurrentFacts = async (facts) => {
+    const { deadlines, suppressed, review, services, advisories } = computeDeadlines(facts);
+    const bytes = await renderMemoPdfBytes(facts, deadlines, suppressed, renderOpts, review, null, services, advisories);
+    return extractText(bytes);
+  };
+
+  // Current facts object, computed once (the would-be "cached results state").
+  const facts = {
+    awarenessDate: new Date("2026-08-01T15:00:00Z"),
+    jurisdictions: { ca: true },
+    residentCounts: { ca: 10000 },
+    sensitivity: ["identifiers", "ssn"],
+    sensitivityLabels: [
+      "Identifiers (name, email, address)",
+      "Social Security numbers (or ITIN / other taxpayer IDs)",
+    ],
+  };
+  const stale = computeDeadlines(facts);
+  const staleHadCO = stale.deadlines.some((d) => d.jurisdiction === "Colorado");
+
+  // Mutate the facts AFTER that compute, then generate the memo.
+  facts.jurisdictions = { ...facts.jurisdictions, co: true };
+  facts.residentCounts = { ...facts.residentCounts, co: 5000 };
+  const text = await generateMemoFromCurrentFacts(facts);
+
+  console.log(`\nFixture 6 (fresh-compute assertion): stale compute had CO: ${staleHadCO}`);
+  check("stale (pre-mutation) compute carries no Colorado obligation", !staleHadCO);
+  check("memo reflects the post-mutation facts (Colorado AG obligation prints)", text.includes("Colorado Attorney General"));
+  check("memo reflects the post-mutation facts (CO citation prints)", text.includes("Colo. Rev. Stat. § 6-1-716"));
+  check("memo Analysis Inputs lists the mutated jurisdiction set", text.includes("Colorado"));
+  check("pre-mutation jurisdiction still prints (mutation is additive)", text.includes("California"));
 }
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);

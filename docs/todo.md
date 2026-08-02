@@ -546,24 +546,27 @@ history share a Supabase backend and should be sequenced together.
   value); a "no notification required" closed-state distinction downstream of
   risk-of-harm modeling; list filtering by status when the search stub is
   built.
-  - Submit & compute on a never-saved form persists nothing — user can fill,
-    submit, review results, close tab, and lose everything silently. Decide
-    whether explicit submit should create the row (compute-without-persist
-    arguably belongs to quick mode only). (Gate render 2026-07-24.)
-  - Compute/persist divergence, observed twice at the 2026-07-26 gate: (a) on
-    a SAVED incident, Submit & compute persists the status transition but NOT
-    the edited facts — only Save persists payload; (b) the memo prints from
-    the in-memory computed results, so a facts-save without recompute (or a
-    recompute without save) yields a memo or a stored record that disagrees
-    with the other. Stale-memo hazard is real: a memo generated tonight
-    reflected superseded analysis with no warning. Decide: unify
-    Submit-to-also-save on saved incidents, and/or a staleness warning when
-    facts differ from the last compute. Same family as the never-saved-submit
-    trap.
-  - Edit → Submit & compute on a closed incident reactivates it with zero
-    fact changes (documented behavior in changeStatus). Decide whether a
-    no-op resubmit should transition, prompt, or return to results without
-    transitioning. (Gate render 2026-07-24.)
+  - **Compute/persist divergence — RESOLVED (JDC rulings 2026-08-02, landed
+    same day).** Four rulings: (1) Submit & compute also saves, universally
+    including quick mode — a never-saved form is created active in one
+    insert; a saved incident gets ONE update carrying payload and the status
+    transition together (single PATCH, no divergence window); a failed save
+    keeps the user on the form with the save-error treatment — results
+    render only after confirmed persistence. (2) Memos always generate from
+    a fresh compute of current facts at generation time, never a cached
+    results state (belt-and-braces; protects the Save-without-Submit path).
+    (3) Edit mode gains a ghost Back-to-results affordance that discards
+    unsaved in-memory edits (revert to last-saved payload) with no save and
+    no status transition. (4) Closed-incident resubmit reactivates without a
+    confirmation prompt — Back to results is the non-mutating exit. A quiet
+    Parchment staleness banner renders on results when facts have changed
+    since the displayed compute. This resolves the never-saved-submit trap,
+    the saved-incident facts/status divergence, the stale-memo hazard, and
+    the closed-resubmit question (gate renders 2026-07-24 / 2026-07-26).
+  - **What-if / exploratory compute mode — deliberate future feature:** edit
+    facts and compute without persisting, visibly flagged as exploratory.
+    Replaces the accidental capability removed by Submit-also-saves. Design
+    conversation required.
   - No affordance to clear a recorded notification date — Edit date only.
     Decide whether a clear/remove control is needed and how it renders in
     the record. (Gate render 2026-07-24.)

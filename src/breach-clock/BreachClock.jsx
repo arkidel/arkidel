@@ -346,6 +346,29 @@ function InfoTip({ text, size = 13 }) {
   );
 }
 
+// Stable signature over the payload fields the engine actually sees (the
+// factsFromPayload inputs — quickMode and the record never affect the
+// analysis). Drives the staleness banner: the signature at the last explicit
+// compute is compared against the live one, so a Back-to-results that reverts
+// to the exact facts last computed shows no banner, while a Save of edited
+// facts followed by Back does. Key order is stable — jurisdiction/count maps
+// are always built by spreading over the full JURISDICTIONS key set.
+const factsSignatureOf = (p) =>
+  JSON.stringify([
+    p.awareness,
+    p.jurisdictions,
+    p.residentCounts,
+    p.sensitivity,
+    p.encrypted,
+    p.encryptionStrength,
+    p.redacted,
+    p.keyAcquired,
+    p.reidentificationAcquired,
+    p.gdprUnintelligibility,
+    p.riskLevel,
+    p.harmAssessment,
+  ]);
+
 export default function BreachClock() {
   usePageTitle("Respond");
   const [showTests, setShowTests] = useState(false);
@@ -427,11 +450,13 @@ export default function BreachClock() {
   // Incident status lifecycle: "draft" | "active" | "closed" (DB CHECK
   // constraint incidents_status_check). A DB column, NOT part of the payload —
   // applyPayload never touches it. Draft until the user explicitly submits
-  // (→ active, via handleSubmit only — the silent auto-compute on rehydrate
+  // (→ active, via handleSubmit only — carried in Submit's single persistence
+  // write, atomically with the payload; the silent auto-compute on rehydrate
   // shares the compute path but must never transition status); any value can
-  // also be set manually via the top-bar dropdown. Saved incidents persist
-  // status changes immediately (changeStatus); the unsaved form holds status
-  // in memory and the first save writes it through createIncident.
+  // also be set manually via the top-bar dropdown. Manual changes on saved
+  // incidents persist immediately (changeStatus); the unsaved form holds
+  // status in memory and the first save writes it (createIncident, from Save
+  // or Submit).
   const [status, setStatus] = useState("draft");
   // Notification record + incident log — DB columns siblings of payload, NOT
   // part of the payload (applyPayload never touches them) and never part of
@@ -451,6 +476,15 @@ export default function BreachClock() {
   // The id created by this session's first save. The load effect skips the
   // refetch for it — the form state IS the just-saved payload already.
   const justCreatedRef = useRef(null);
+  // The payload as last confirmed persisted (load hydrate, Save, or Submit's
+  // save). Back-to-results reverts to it, discarding unsaved in-memory edits.
+  const lastSavedPayloadRef = useRef(null);
+  // Facts signature at the last compute that produced the results view
+  // (explicit submit or the silent rehydrate auto-compute). Null until then —
+  // it doubles as "a computed results state exists", gating Back-to-results.
+  // Compared against the live signature for the staleness banner; a
+  // successful submit refreshes it, so the banner never renders post-submit.
+  const [computedSignature, setComputedSignature] = useState(null);
 
   // Hydrate every form state from a saved payload. Defensive on shape: each
   // field falls back to its blank default, jurisdiction/count maps are rebuilt
@@ -504,6 +538,8 @@ export default function BreachClock() {
     setSaveError("");
     if (!routeIncidentId) {
       justCreatedRef.current = null;
+      lastSavedPayloadRef.current = null;
+      setComputedSignature(null);
       setSavedAt(null);
       setStatus("draft");
       setNotifications({});
@@ -528,6 +564,11 @@ export default function BreachClock() {
           return;
         }
         applyPayload(incident.payload || {});
+        lastSavedPayloadRef.current = incident.payload || {};
+        // Reset before the auto-compute decides: an incomplete draft must not
+        // inherit a previous incident's computed state (which would offer a
+        // Back-to-results into the wrong incident's results).
+        setComputedSignature(null);
         setStatus(incident.status || "draft");
         setNotifications(incident.notifications && typeof incident.notifications === "object" ? incident.notifications : {});
         setIncidentLog(Array.isArray(incident.incident_log) ? incident.incident_log : []);
@@ -574,18 +615,20 @@ export default function BreachClock() {
     setSaveError("");
     try {
       const title = record.incidentTitle.trim() || "Untitled Incident";
+      const payload = buildPayload();
       if (routeIncidentId) {
-        await updateIncident(routeIncidentId, { title, payload: buildPayload() });
+        await updateIncident(routeIncidentId, { title, payload });
       } else {
         // First save writes the in-memory status too — an incident submitted
         // before ever being saved is created active, not draft — along with
         // any notification records / log entries made before the first save.
-        const row = await createIncident(activeOrg?.id, title, buildPayload(), status, notifications, incidentLog);
+        const row = await createIncident(activeOrg?.id, title, payload, status, notifications, incidentLog);
         justCreatedRef.current = row.id;
         // replace: back from the saved URL should not land on the blank form
         // and create a duplicate on the next save.
         navigate(`/breach-clock/${row.id}`, { replace: true });
       }
+      lastSavedPayloadRef.current = payload;
       setSavedAt(new Date());
     } catch (err) {
       console.error("Incident save failed:", err);
@@ -596,8 +639,10 @@ export default function BreachClock() {
     }
   };
 
-  // Change the incident's status — from the top-bar dropdown or the explicit
-  // submit transition (never the silent auto-compute). The control updates
+  // Change the incident's status from the top-bar dropdown. (The explicit
+  // submit transition no longer routes through here — it rides Submit's
+  // single persistence write so payload and status land atomically; the
+  // silent auto-compute never transitions at all.) The control updates
   // optimistically so the select never snaps back mid-write; a saved incident
   // persists the change immediately (status is not staged behind Save), and on
   // a failed write the control reverts and the error surfaces through the
@@ -884,6 +929,10 @@ export default function BreachClock() {
     setAutoComputePending(false);
     if (canCompute) {
       setExpandedCaveats(new Set());
+      // The silent equivalent of pressing Submit: record the computed facts
+      // signature (no banner over a fresh compute; enables Back-to-results)
+      // — but never a save or a status transition.
+      setComputedSignature(factsSignatureOf(buildPayload()));
       setSubmitted(true);
     }
   }, [autoComputePending, canCompute]);
@@ -1001,6 +1050,14 @@ export default function BreachClock() {
   const handleDownloadMemo = async () => {
     setDownloadError("");
     try {
+      // Memos always generate from a fresh compute of current facts at
+      // generation time (JDC ruling 2026-08-02) — never a cached results
+      // state. Belt-and-braces alongside Submit-also-saves; it exists for the
+      // Save-without-Submit path, where it guarantees the memo can never
+      // print superseded analysis. Shadows the render-scope destructure
+      // deliberately.
+      const { deadlines, suppressed, review, services, advisories } =
+        computeDeadlines(factsFromPayload(buildPayload()));
       const facts = {
         awarenessDate,
         jurisdictions,
@@ -1059,7 +1116,7 @@ export default function BreachClock() {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setAttemptedSubmit(true);
     if (!canCompute) {
       // A collapsed required field must never be a dead-end error: expand the
@@ -1076,18 +1133,62 @@ export default function BreachClock() {
       scrollToSection(firstId);
       return;
     }
-    setExpandedCaveats(new Set());
-    setSubmitted(true);
-    // Explicit submit → active. Bound to THIS handler only — the silent
-    // auto-compute on rehydrate flips submitted directly and must never
-    // transition status. Idempotent when already active (changeStatus no-ops
-    // on equal values); re-submitting a closed incident reactivates it.
-    changeStatus("active");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (saving) return;
+    // Submit & compute also saves (JDC ruling 2026-08-02, universal — quick
+    // mode included), and results render only after confirmed persistence.
+    // A saved incident gets ONE update carrying payload AND the active
+    // transition together (single PATCH — no facts/status divergence window);
+    // a never-saved form is created active in one insert. The explicit submit
+    // remains the only status-transitioning path — the silent rehydrate
+    // auto-compute shares the compute, never the transition. Re-submitting a
+    // closed incident reactivates it, deliberately without a prompt (Back to
+    // results is the non-mutating exit).
+    setSaving(true);
+    setSaveError("");
+    try {
+      const title = record.incidentTitle.trim() || "Untitled Incident";
+      const payload = buildPayload();
+      if (routeIncidentId) {
+        await updateIncident(routeIncidentId, { title, payload, status: "active" });
+      } else {
+        const row = await createIncident(activeOrg?.id, title, payload, "active", notifications, incidentLog);
+        justCreatedRef.current = row.id;
+        navigate(`/breach-clock/${row.id}`, { replace: true });
+      }
+      setStatus("active");
+      lastSavedPayloadRef.current = payload;
+      setSavedAt(new Date());
+      setExpandedCaveats(new Set());
+      setComputedSignature(factsSignatureOf(payload));
+      setSubmitted(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      // FAILURE PATH IS THE POINT: a compute that renders as if saved would
+      // reintroduce the divergence this path exists to kill. Stay on the
+      // form; the save-error treatment surfaces the failure; state is
+      // untouched so the user can retry.
+      console.error("Submit & compute save failed:", err);
+      setSaveError(err?.message ? `Save failed: ${err.message}` : "Save failed. Try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleEdit = () => {
     setSubmitted(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Back to results (JDC ruling 2026-08-02): discard unsaved in-memory edits
+  // by reverting to the last-saved payload, then return to the computed
+  // results view — no save, no status transition. Rendered only when a
+  // computed results state exists to return to (computedSignature non-null;
+  // absent on /new before the first submit). applyPayload ends by clearing
+  // submitted/attemptedSubmit; the setSubmitted(true) after it wins the batch.
+  const handleBackToResults = () => {
+    applyPayload(lastSavedPayloadRef.current || {});
+    setExpandedCaveats(new Set());
+    setSubmitted(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -2825,9 +2926,13 @@ export default function BreachClock() {
 
   // ── Save cluster (button + quiet "Saved · time" / visible error). Lives in
   //    the form's top control row — right-aligned, above the fold — in both
-  //    full mode (sharing the Expand all / Collapse all row) and quick mode. ──
+  //    full mode (sharing the Expand all / Collapse all row) and quick mode.
+  //    When a computed results state exists to return to, a ghost Back-to-
+  //    results sits beside Save: it discards unsaved in-memory edits (revert
+  //    to last-saved payload) and returns to the results view — no save, no
+  //    status transition (JDC ruling 2026-08-02). ──
   const saveControls = () => (
-    <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
       {saveError ? (
         <span role="alert" style={{ fontSize: "13px", color: "#C76E3A", lineHeight: 1.4 }}>
           {saveError}
@@ -2837,6 +2942,17 @@ export default function BreachClock() {
           Saved · {savedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
         </span>
       ) : null}
+      {computedSignature !== null && (
+        <button
+          type="button"
+          className="btn-ghost"
+          onClick={handleBackToResults}
+          disabled={saving}
+          style={{ padding: "8px 16px", fontSize: "13px" }}
+        >
+          <ArrowLeft size={13} /> Back to results
+        </button>
+      )}
       <button
         type="button"
         className="btn-ghost"
@@ -3121,8 +3237,17 @@ export default function BreachClock() {
         </div>
       )}
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
-        <button className="btn-primary" onClick={handleSubmit}>
-          Submit &amp; compute deadlines <ArrowRight size={14} />
+        {/* Submit persists before results render; a failed save keeps the
+            user here. The save cluster's error slot sits at the top of the
+            form, so mirror the message beside the button the user just
+            pressed (same treatment, point of action). */}
+        {saveError && (
+          <span role="alert" style={{ fontSize: "13px", color: "#C76E3A", lineHeight: 1.4 }}>
+            {saveError}
+          </span>
+        )}
+        <button className="btn-primary" onClick={handleSubmit} disabled={saving}>
+          {saving ? "Saving…" : <>Submit &amp; compute deadlines <ArrowRight size={14} /></>}
         </button>
       </div>
     </>
@@ -3173,10 +3298,12 @@ export default function BreachClock() {
             {downloadError}
           </div>
         )}
-        {/* The submit-driven active transition can fail its write while the
-            user is already here on review (the save cluster that normally
-            shows saveError lives on the form), so surface it in the same
-            error slot style as downloadError. */}
+        {/* Post-submit writes made from review (top-bar status changes,
+            notification records, log entries) can still fail while the user
+            is here — the save cluster that normally shows saveError lives on
+            the form — so surface it in the same error slot style as
+            downloadError. (Submit's own save failure never reaches review:
+            results render only after confirmed persistence.) */}
         {saveError && (
           <div role="alert" style={{ marginBottom: "20px", padding: "10px 14px", border: "1px solid #C76E3A", color: "#C76E3A", fontSize: "13px", lineHeight: 1.5, borderRadius: "8px" }}>
             {saveError}
@@ -3220,6 +3347,30 @@ export default function BreachClock() {
               )}
           </div>
         </div>
+
+        {/* Staleness banner (JDC ruling 2026-08-02): facts have changed since
+            the last explicit compute (live signature differs from the one
+            recorded at submit / auto-compute — a flag alone would false-alarm
+            after Back-to-results reverts to the exact computed facts). Quiet
+            Parchment treatment — informational, no Ember, no icon. Never
+            renders immediately post-submit: a successful submit refreshes the
+            recorded signature. */}
+        {computedSignature !== null && factsSignatureOf(buildPayload()) !== computedSignature && (
+          <div
+            style={{
+              marginBottom: "20px",
+              padding: "14px 20px",
+              background: "#E8DDC4",
+              border: "1px solid rgba(27,42,63,0.18)",
+              borderRadius: "12px",
+              fontSize: "14px",
+              lineHeight: 1.6,
+              color: "#2C2418",
+            }}
+          >
+            Facts have changed since this analysis — Submit &amp; compute to refresh.
+          </div>
+        )}
 
         {/* Computed obligations */}
         <div className="section-mark" style={{ marginBottom: "16px" }}>

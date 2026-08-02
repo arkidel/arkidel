@@ -55,12 +55,17 @@ describe("createIncident", () => {
     const result = await createIncident("org-1", "T", payload);
 
     expect(supabaseMock.from).toHaveBeenCalledWith("incidents");
-    // status defaults to 'draft' when the caller doesn't pass one.
+    // status defaults to 'draft' when the caller doesn't pass one; the
+    // notification record and incident log default to their empty shapes
+    // (both are insert columns since the 2026-07-24 notification-record
+    // commit — this expectation matches the shipped insert).
     expect(query.insert).toHaveBeenCalledWith({
       org_id: "org-1",
       title: "T",
       payload,
       status: "draft",
+      notifications: {},
+      incident_log: [],
     });
     expect(query.select).toHaveBeenCalled();
     expect(query.single).toHaveBeenCalled();
@@ -97,6 +102,31 @@ describe("updateIncident", () => {
     expect(query.update).toHaveBeenCalledWith({ title: "New title", payload });
     expect(query.eq).toHaveBeenCalledWith("id", "inc-1");
     expect(result).toEqual(updated);
+  });
+
+  it("carries a status transition in the SAME patch when passed (Submit & compute)", async () => {
+    // The atomicity ruling (JDC 2026-08-02): payload and the active
+    // transition land in one PATCH — no facts/status divergence window.
+    const updated = { id: "inc-1", title: "T", status: "active" };
+    const query = makeQuery({ data: updated, error: null });
+    supabaseMock.from.mockReturnValue(query);
+
+    const payload = { riskLevel: "high" };
+    await updateIncident("inc-1", { title: "T", payload, status: "active" });
+
+    expect(query.update).toHaveBeenCalledWith({ title: "T", payload, status: "active" });
+    expect(query.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("never touches status when the caller omits it (plain Save)", async () => {
+    const query = makeQuery({ data: { id: "inc-1" }, error: null });
+    supabaseMock.from.mockReturnValue(query);
+
+    const payload = { riskLevel: "high" };
+    await updateIncident("inc-1", { title: "T", payload });
+
+    expect(query.update).toHaveBeenCalledWith({ title: "T", payload });
+    expect(query.update.mock.calls[0][0]).not.toHaveProperty("status");
   });
 });
 

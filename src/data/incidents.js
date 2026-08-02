@@ -48,12 +48,18 @@ export async function createIncident(orgId, title, payload, status = "draft", no
   return data;
 }
 
-// Update an incident's title and payload. RLS scopes the write to the caller's
-// orgs; updated_at is bumped by the trigger.
-export async function updateIncident(id, { title, payload }) {
+// Update an incident's title and payload — and, when the caller passes one,
+// its status in the SAME PATCH. Submit & compute uses that third field so the
+// facts write and the active transition land atomically (no divergence window
+// where one succeeded and the other didn't — JDC ruling 2026-08-02); plain
+// Save omits it and never touches status. RLS scopes the write to the
+// caller's orgs; updated_at is bumped by the trigger.
+export async function updateIncident(id, { title, payload, status }) {
+  const patch = { title, payload };
+  if (status !== undefined) patch.status = status;
   const { data, error } = await supabase
     .from("incidents")
-    .update({ title, payload })
+    .update(patch)
     .eq("id", id)
     .select(INCIDENT_COLUMNS)
     .single();
