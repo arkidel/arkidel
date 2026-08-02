@@ -252,9 +252,11 @@ sign-off).*
 - **Massachusetts** carries no `harmGate`: the second notification trigger
   (unauthorized acquisition or use) has no harm qualifier, so a harm
   determination can inform the § 1 analysis but can never suppress the
-  duty. `harmNonGateExplainer`: "Massachusetts' § 3(a)(2) trigger operates
-  on unauthorized acquisition or use regardless of the § 1 risk element.
-  M.G.L. c. 93H §§ 1, 3."
+  duty. `harmNonGateExplainer` (citation corrected to § 3(b) per JDC ruling
+  2026-08-02 — the trigger-two bypass lives in the owner/licensor duty at
+  § 3(b); § 3(a) is the maintainer duty): "Massachusetts' second § 3(b)
+  trigger operates on unauthorized acquisition or use regardless of the § 1
+  risk element. M.G.L. c. 93H §§ 1, 3(b)."
 - Both explainers are pinned by engine tests asserting NY and MA are never
   suppressed under any `harmAssessment` value.
 
@@ -1513,14 +1515,18 @@ the model to support an `authorities[]` array on a single obligation.
   suppress any MA obligation or the § 3A service (pinned by engine test
   under all three answer values). The jurisdiction instead carries a
   `harmNonGateExplainer` (rendered by commit 2 when a harm determination is
-  recorded): "Massachusetts' § 3(a)(2) trigger operates on unauthorized
+  recorded): "Massachusetts' second § 3(b) trigger operates on unauthorized
   acquisition or use regardless of the § 1 risk element. M.G.L. c. 93H
-  §§ 1, 3." This applies the trigger-two-bypass record above: the
+  §§ 1, 3(b)." This applies the trigger-two-bypass record above: the
   determination can inform the § 1 analysis but never suppresses the
-  second-trigger duty. (Note the explainer's § 3(a)(2) reference sits within
-  the (a)/(b) citation-reference flag recorded above, still awaiting JDC
-  confirmation at gate; the explainer string is carried verbatim as
-  ratified.) See § 0A.4.
+  second-trigger duty.
+- **Explainer citation corrected to § 3(b) (2026-08-02; reviewer: JDC,
+  2026-08-02):** The (a)/(b) citation-reference flag recorded in the
+  2026-08-01 primary-source review entry is **resolved — JDC confirmed
+  § 3(b)**: the modelled owner/licensor duty and its trigger-two bypass live
+  at § 3(b) (§ 3(a) is the maintainer duty; the earlier "§ 3(a)(2)" wording
+  was a conflation). The `harmNonGateExplainer` in `data.js` now reads as
+  quoted in the preceding entry, citing M.G.L. c. 93H §§ 1, 3(b).
 - **Reviewer:** *(pending)*
 
 ---

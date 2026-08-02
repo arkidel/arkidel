@@ -451,8 +451,10 @@ const JURISDICTIONS = [
     // second notification trigger has no harm qualifier, so a harm
     // determination can inform the § 1 analysis but can never suppress the
     // duty. Commit 2 renders this explainer when a harm determination is
-    // recorded.
-    harmNonGateExplainer: "Massachusetts' § 3(a)(2) trigger operates on unauthorized acquisition or use regardless of the § 1 risk element. M.G.L. c. 93H §§ 1, 3.",
+    // recorded. Citation corrected per JDC ruling 2026-08-02: the trigger-two
+    // bypass lives in the owner/licensor duty at § 3(b) (§ 3(a) is the
+    // maintainer duty).
+    harmNonGateExplainer: "Massachusetts' second § 3(b) trigger operates on unauthorized acquisition or use regardless of the § 1 risk element. M.G.L. c. 93H §§ 1, 3(b).",
     obligations: [
       {
         kind: "individual",
