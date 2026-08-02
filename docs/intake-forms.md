@@ -282,6 +282,15 @@ sign-off).*
 - The Colorado § 6-1-716(2)(a.3) credentials advisory and the CT/DE
   credential advisories are NOT harm-gated (each carries its own condition
   in its language).
+- **Standing counsel notes conformed (JDC 2026-08-02):** the four
+  harm-related counsel notes (`va-harm-threshold-186-6`,
+  `ct-harm-exemption-36a-701b-b1`, `de-risk-of-harm-12b-102-a`, and the
+  newly added `co-harm-exemption-6-1-716`) now say "modelled via the
+  harm-assessment question" rather than "not modelled" — the earlier framing
+  contradicted the live gate once it shipped. Each preserves that the
+  determination itself remains counsel's substantive judgment, made and
+  documented outside the tool. The NY and MA notes are untouched (correctly
+  unmodelled — see § 0A.4).
 
 ---
 
@@ -1106,8 +1115,12 @@ UK in parallel).
 
 - **Misuse-investigation gate** — § 6-1-716(2)(a) excuses notification entirely
   if the entity determines that misuse has not occurred and is not reasonably
-  likely to occur. This is a substantive judgment, not a clean fact, and is not
-  modelled. Worth surfacing in a Counsel's Note.
+  likely to occur. **Modelled via the harm-assessment question as of the
+  harm-gate pass** (see § 0A): recording a documented determination suppresses
+  each obligation under its own standard ((2)(a) residents/CRA; (2)(f)(I) AG);
+  the misuse determination itself remains counsel's substantive judgment, made
+  and documented outside the tool. Surfaced as counsel note
+  `co-harm-exemption-6-1-716`. *(Conformed to modelled gate: JDC 2026-08-02.)*
 - **GLBA carve-out for CRA notification** — entities subject to GLBA Title V
   are exempt from the CRA-notification requirement only (§ 6-1-716(2)(d)).
   Surfaced in the conditional language but not modelled as gating. *(Verified
@@ -1140,14 +1153,20 @@ UK in parallel).
 - [x] CRA notification with `gt` comparator (used)
 - [x] `breachDefinitionExcludesEncrypted` (used)
 - [x] Multiple obligations per jurisdiction with different deadlines/triggers (used)
-- [ ] Misuse-investigation gate not modelled — substantive judgment, not data-driven.
+- [x] Misuse-investigation gate — modelled via the harm-assessment question
+  (`harmGate`, dual (2)(a)/(2)(f)(I) standards); the determination itself
+  remains counsel's judgment outside the tool. *(Conformed to modelled gate:
+  JDC 2026-08-02.)*
 
 ## 5.10 Counsel notes
 
 - The "misuse" gate is meaningful: in close cases, an entity may conclude after
-  prompt investigation that misuse is not reasonably likely. Respond
-  does not model this — its outputs assume notification is required. Surface
-  in a Counsel's Note.
+  prompt investigation that misuse is not reasonably likely. Modelled via the
+  harm-assessment question; absent a recorded determination, Respond's outputs
+  assume notification is required. Standing counsel note
+  `co-harm-exemption-6-1-716` added in the conformance pass — Colorado
+  previously carried the misuse language only in the (2)(a) condition text.
+  *(Conformed to modelled gate: JDC 2026-08-02.)*
 - Breach-definition exclusion for encrypted data was not modelled in earlier versions; now added.
 - The CRA notification's `gt` comparator (not `gte`) was the bug that motivated
   the comparator field generally.
@@ -1208,7 +1227,9 @@ UK in parallel).
   notice required unless the investigation determines misuse "has not occurred
   and is not reasonably likely to occur"; AG, (2)(f)(I) — unless misuse "has
   not occurred and is not likely to occur." MISUSE DETERMINATION; the
-  `harmGate` design carries both standards. **Source-policy ruling (JDC,
+  `harmGate` design carries both standards. *(Conformed to modelled gate:
+  JDC 2026-08-02 — standing counsel note `co-harm-exemption-6-1-716` added;
+  Colorado previously carried the misuse language only in condition text.)* **Source-policy ruling (JDC,
   2026-08-01):** primary sources are the Colorado AG data-protection FAQ
   (regulator), `https://coag.gov/resources/data-protection-laws/`, and the
   enacted HB18-1128,
@@ -1856,7 +1877,10 @@ multi-authority array.
   unauthorized person AND the breach has caused (or the entity reasonably
   believes has caused or will cause) identity theft or other fraud to a
   Virginia resident. The harm threshold is built into the breach definition
-  itself — see counsel notes 8.9 — and is not modelled as a discrete gate.
+  itself — see counsel notes 8.9 — and is modelled via the harm-assessment
+  question as a negated duty element (`harmGate`, character `duty_element`);
+  the determination itself remains counsel's judgment outside the tool.
+  *(Conformed to modelled gate: JDC 2026-08-02.)*
 - **Deadline:** No fixed clock — "without unreasonable delay."
 - **Trigger event:** Discovery of breach.
 - **Authority name:** Affected Virginia Residents
@@ -1917,8 +1941,12 @@ multi-authority array.
 - **Substantive harm threshold under § 18.2-186.6(A), (B), and (M)** — both
   the main breach-notification regime and the subsection (M) employer/payroll
   regime require that the breach caused or be reasonably believed to cause
-  identity theft or other fraud. Substantive judgment, not modelled. Surfaced
-  as counsel note (id: `va-harm-threshold-186-6`).
+  identity theft or other fraud. The main-regime element is **modelled via the
+  harm-assessment question** (negated duty element; the determination remains
+  counsel's substantive judgment, made and documented outside the tool); the
+  subsection (M) regime stays unmodelled (entity-type-dependent). Surfaced as
+  counsel note (id: `va-harm-threshold-186-6`, conformed). *(Conformed to
+  modelled gate: JDC 2026-08-02.)*
 - **Medical information regime under § 32.1-127.1:05** — separate sectoral
   statute for medical information breaches. Surfaced as counsel note (id:
   `va-medical-information-32-1-127-1-05`). Same modeling principle as CA
@@ -2059,7 +2087,8 @@ multi-authority array.
   Commonwealth" — present in both the (A) definition and the (B) operative
   duty. `harmGate`: element-negation form, not an exemption — the duty
   never arises absent the harm element, rather than arising and being
-  excused.
+  excused. *(Conformed to modelled gate: JDC 2026-08-02 — counsel note
+  `va-harm-threshold-186-6` retitled and reworded to reflect the live gate.)*
 - **Harm-assessment gate encoded (2026-08-02, commit 1; reviewer: JDC,
   2026-08-02):** `harmGate` added to all three obligations, character
   `"duty_element"`, standard verbatim per the 2026-08-01 capture: "causes,
@@ -2093,9 +2122,11 @@ multi-authority array.
 ## 9.3 Resident notification (§ 12B-102(a), (c))
 
 - **Required?** Yes, where personal information of a Delaware resident was
-  breached, subject to the § 12B-102(a) risk-of-harm exception (substantive
-  judgment; surfaced as counsel note `de-risk-of-harm-12b-102-a`, not modelled
-  as a gate). Covered entity: any person conducting business in Delaware that
+  breached, subject to the § 12B-102(a) risk-of-harm exception (modelled via
+  the harm-assessment question; the determination itself remains counsel's
+  substantive judgment outside the tool — surfaced as counsel note
+  `de-risk-of-harm-12b-102-a`, conformed. *Conformed to modelled gate: JDC
+  2026-08-02.*). Covered entity: any person conducting business in Delaware that
   owns or licenses computerized data including personal information of a
   Delaware resident (§ 12B-102(a)); "person" is defined broadly at
   § 12B-101(6) and includes governmental entities.
@@ -2179,9 +2210,13 @@ multi-authority array.
 
 - **Risk-of-harm exception (§ 12B-102(a))** — no notice required if, after an
   appropriate investigation, the person reasonably determines the breach is
-  unlikely to result in harm to affected individuals. Substantive judgment,
-  not modelled as a gate. Surfaced as counsel note
-  (id: `de-risk-of-harm-12b-102-a`), following the VA harm-threshold pattern.
+  unlikely to result in harm to affected individuals. **Modelled via the
+  harm-assessment question** (see § 0A): recording a documented determination
+  suppresses the Delaware obligations, and the § 12B-102(e) service through
+  its own gate; the determination itself remains counsel's substantive
+  judgment, made and documented outside the tool. Surfaced as counsel note
+  (id: `de-risk-of-harm-12b-102-a`, conformed), following the VA
+  harm-threshold pattern. *(Conformed to modelled gate: JDC 2026-08-02.)*
 - **Credit monitoring (§ 12B-102(e))** — when Social Security numbers are
   involved: one year of credit monitoring at no cost, enrollment information,
   and credit-freeze instructions; excused by the same risk-of-harm
@@ -2371,7 +2406,9 @@ categories in `engine.js` TEST_CASES.)*
   not required if the person "reasonably determines that the breach of
   security is unlikely to result in harm to the individuals whose personal
   information has been breached." Wording differs from Connecticut's; the
-  `harmGate` design carries each statute's standard verbatim.
+  `harmGate` design carries each statute's standard verbatim. *(Conformed to
+  modelled gate: JDC 2026-08-02 — counsel note `de-risk-of-harm-12b-102-a`
+  retitled and reworded; the (e) service cross-reference preserved.)*
 - **Harm-assessment gate encoded (2026-08-02, commit 1; reviewer: JDC,
   2026-08-02):** `harmGate` added, character `"exemption"`, standard
   verbatim per the 2026-08-01 capture: "unlikely to result in harm to the
@@ -2410,8 +2447,10 @@ categories in `engine.js` TEST_CASES.)*
 
 - **Required?** Yes, where personal information of a Connecticut resident was
   breached, subject to the harm exemption (self-determination standard;
-  surfaced as counsel note `ct-harm-exemption-36a-701b-b1`, not modelled as a
-  gate — see 10.8).
+  modelled via the harm-assessment question, the determination itself
+  remaining counsel's judgment outside the tool; surfaced as counsel note
+  `ct-harm-exemption-36a-701b-b1`, conformed — see 10.8. *Conformed to
+  modelled gate: JDC 2026-08-02.*).
 - **Deadline:** 60 days (outer limit) — without unreasonable delay but no
   later than 60 days after discovery of the breach.
 - **Trigger event:** Discovery of the breach. Awareness-anchor convention
@@ -2512,8 +2551,12 @@ categories in `engine.js` TEST_CASES.)*
   reasonably determines that the breach will not likely result in harm to the
   individuals whose personal information has been acquired or accessed."
   Self-determination standard, with **no law-enforcement-consultation
-  element**. Substantive judgment, not modelled (the form-level harm gate is
-  queued in `docs/todo.md`); document the determination contemporaneously.
+  element**. Modelled via the harm-assessment question; the no-likely-harm
+  determination after an appropriate investigation remains counsel's
+  substantive judgment, made and documented outside the tool — document the
+  determination contemporaneously. *(Conformed to modelled gate: JDC
+  2026-08-02 — the former queued-form-gate clause is removed; the gate is
+  live.)*
 - **NO key-compromise proviso in the § 36a-701b(a) encryption exclusion** —
   unlike CO/NY, the definition does not condition the exclusion on the key
   remaining uncompromised; counsel should not assume the CO/NY analysis
@@ -2531,9 +2574,12 @@ categories in `engine.js` TEST_CASES.)*
 ## 10.8 Other obligations & counsel notes
 
 - **Harm exemption (§ 36a-701b(b)(1))** — self-determination standard quoted
-  in 10.7; substantive judgment, not modelled. Counsel note
-  `ct-harm-exemption-36a-701b-b1` (placement: caveat), which also records
-  that the form-level harm gate is queued in `docs/todo.md`.
+  in 10.7; modelled via the harm-assessment question (the (b)(2)(B) service
+  cascades with the notice it accompanies), the determination itself
+  remaining counsel's substantive judgment outside the tool. Counsel note
+  `ct-harm-exemption-36a-701b-b1` (placement: caveat), conformed — the
+  queued-form-gate clause is removed. *(Conformed to modelled gate: JDC
+  2026-08-02.)*
 - **No key-compromise proviso (§ 36a-701b(a))** — counsel note
   `ct-no-key-proviso-36a-701b-a` (placement: caveat); see 10.5.
 - **Own-procedures and functional-regulator deemed compliance
@@ -2597,7 +2643,9 @@ categories in `engine.js` TEST_CASES.)*
   SELF-DETERMINATION** — "Such notification shall not be required if, after
   an appropriate investigation the person reasonably determines that the
   breach will not likely result in harm to the individuals whose personal
-  information has been acquired or accessed."
+  information has been acquired or accessed." *(Conformed to modelled gate:
+  JDC 2026-08-02 — counsel note `ct-harm-exemption-36a-701b-b1` retitled and
+  reworded; the queued-form-gate clause removed.)*
 - **Harm-assessment gate encoded (2026-08-02, commit 1; reviewer: JDC,
   2026-08-02):** `harmGate` added, character `"exemption"`, standard the
   full verbatim § 36a-701b(b)(1) sentence recorded above. The residents and

@@ -440,6 +440,21 @@ const JURISDICTIONS = [
         condition: "Where the investigation determines that login credentials for an online account (§ 6-1-716(1)(g)(I)(B)) have been misused or are reasonably likely to be misused, direct the affected person to promptly change the person's password and security question or answer, as applicable, or to take other steps appropriate to protect the online account and all other online accounts for which the person uses the same login credentials. Where the breached credentials are login credentials of an email account furnished by the covered entity, notice to that email address does not comply — provide notice by another method permitted under § 6-1-716(1)(f), or by clear and conspicuous notice delivered to the affected person online when the person is connected to the online account from an Internet protocol address or online location from which the covered entity knows the person customarily accesses the account.",
       },
     ],
+    counselNotes: [
+      {
+        // Added in the harm-note conformance pass (JDC 2026-08-02):
+        // Colorado's misuse-determination language previously lived only in
+        // the (2)(a) condition text with no standing counsel note; the
+        // conformed note gives the modelled gate the same counsel-note
+        // treatment as VA/DE/CT, naming BOTH standards.
+        id: "co-harm-exemption-6-1-716",
+        placement: "caveat",
+        title: "Misuse-determination exemptions under § 6-1-716(2)(a) and (2)(f)(I) — modelled via the harm-assessment question",
+        content: "Colorado's notification duties carry misuse-determination exemptions under two deliberately different standards: resident notification (and the CRA duty that arises from it) is excused where a prompt good-faith investigation determines that misuse of the information has not occurred and is not reasonably likely to occur (§ 6-1-716(2)(a)); Attorney General notification is excused where the investigation determines that misuse has not occurred and is not likely to occur (§ 6-1-716(2)(f)(I)). Both are modelled via the harm-assessment question: recording a documented determination suppresses each obligation under its own standard. The misuse determination remains counsel's substantive judgment, made and documented outside the tool; absent that determination, Respond's deadlines reflect the default position that notification is required. Document the determination contemporaneously and consult counsel before relying on it.",
+        citation: "Colo. Rev. Stat. § 6-1-716(2)(a), (2)(f)(I)",
+        source_url: "https://content.leg.colorado.gov/sites/default/files/2018a_1128_signed.pdf",
+      },
+    ],
   },
   {
     id: "ma",
@@ -865,8 +880,11 @@ const JURISDICTIONS = [
       {
         id: "va-harm-threshold-186-6",
         placement: "caveat",
-        title: "Substantive harm threshold under § 18.2-186.6 — substantive judgment, not modelled",
-        content: "Virginia's breach definition incorporates a substantive harm element: notification under § 18.2-186.6(B) is required only where the breach has caused, or the entity reasonably believes has caused or will cause, identity theft or other fraud to a Virginia resident. The same harm-threshold language appears in subsection (M) for the employer / payroll-service-provider tax-data regime. This is a fact-specific judgment that may excuse notification entirely in cases where the breach mechanics would otherwise trigger the obligations above. Respond's deadlines reflect the default position that notification is required; if the entity concludes after reasonable investigation that no identity theft or fraud is reasonably likely, the obligations may not arise. Document that determination contemporaneously and consult counsel before relying on it.",
+        // Conformed to the modelled harm gate (JDC 2026-08-02): the former
+        // "substantive judgment, not modelled" framing contradicted the live
+        // harm-assessment question.
+        title: "Substantive harm threshold under § 18.2-186.6 — modelled via the harm-assessment question",
+        content: "Virginia's breach definition incorporates a substantive harm element: notification under § 18.2-186.6(B) is required only where the breach has caused, or the entity reasonably believes has caused or will cause, identity theft or other fraud to a Virginia resident. The same harm-threshold language appears in subsection (M) for the employer / payroll-service-provider tax-data regime. This element is modelled via the harm-assessment question: recording a documented determination suppresses the Virginia obligations as a negated duty element. The determination whether identity theft or another fraud has been or will be caused remains counsel's substantive judgment, made and documented outside the tool; absent that determination, Respond's deadlines reflect the default position that notification is required. Document the determination contemporaneously and consult counsel before relying on it.",
         citation: "Va. Code § 18.2-186.6(A), (B), (M)",
         source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
       },
@@ -1018,8 +1036,10 @@ const JURISDICTIONS = [
       {
         id: "de-risk-of-harm-12b-102-a",
         placement: "caveat",
-        title: "Risk-of-harm exception under § 12B-102(a) — substantive judgment, not modelled",
-        content: "Delaware's notification duty carries a risk-of-harm exception: notice is not required if, after an appropriate investigation, the person reasonably determines that the breach of security is unlikely to result in harm to the individuals whose personal information has been breached. This is a fact-specific judgment that may excuse notification entirely in cases where the breach mechanics would otherwise trigger the obligations above. Respond's deadlines reflect the default position that notification is required; if the entity concludes after appropriate investigation that harm is unlikely, the obligations may not arise. The same determination also excuses the § 12B-102(e) credit-monitoring offer. Document that determination contemporaneously and consult counsel before relying on it.",
+        // Conformed to the modelled harm gate (JDC 2026-08-02). The (e)
+        // service carve-out's cross-reference to this note is preserved.
+        title: "Risk-of-harm exception under § 12B-102(a) — modelled via the harm-assessment question",
+        content: "Delaware's notification duty carries a risk-of-harm exception: notice is not required if, after an appropriate investigation, the person reasonably determines that the breach of security is unlikely to result in harm to the individuals whose personal information has been breached. The exception is modelled via the harm-assessment question: recording a documented determination suppresses the Delaware obligations under this standard. The unlikely-to-result-in-harm determination after an appropriate investigation remains counsel's substantive judgment, made and documented outside the tool; absent that determination, Respond's deadlines reflect the default position that notification is required. The same determination also excuses the § 12B-102(e) credit-monitoring offer. Document that determination contemporaneously and consult counsel before relying on it.",
         citation: "6 Del. C. § 12B-102(a)",
         source_url: "https://delcode.delaware.gov/title6/c012b/index.html",
       },
@@ -1162,8 +1182,10 @@ const JURISDICTIONS = [
       {
         id: "ct-harm-exemption-36a-701b-b1",
         placement: "caveat",
-        title: "Harm exemption — self-determination standard, not modelled",
-        content: "Connecticut's notification duty carries a harm exemption: \"Such notification shall not be required if, after an appropriate investigation the person reasonably determines that the breach will not likely result in harm to the individuals whose personal information has been acquired or accessed.\" This is a self-determination standard with no law-enforcement-consultation element. It is a substantive judgment the engine does not model (a form-level harm gate is queued in docs/todo.md); Respond's deadlines reflect the default position that notification is required. If the entity concludes after an appropriate investigation that harm is not likely, the obligations may not arise. Document that determination contemporaneously and consult counsel before relying on it.",
+        // Conformed to the modelled harm gate (JDC 2026-08-02): the former
+        // "not modelled" framing and the queued-form-gate clause are removed.
+        title: "Harm exemption (§ 36a-701b(b)(1)) — modelled via the harm-assessment question",
+        content: "Connecticut's notification duty carries a harm exemption: \"Such notification shall not be required if, after an appropriate investigation the person reasonably determines that the breach will not likely result in harm to the individuals whose personal information has been acquired or accessed.\" This is a self-determination standard with no law-enforcement-consultation element. The exemption is modelled via the harm-assessment question: recording a documented determination suppresses the Connecticut obligations (and the § 36a-701b(b)(2)(B) service, which falls with the notice it accompanies) under this standard. The no-likely-harm determination after an appropriate investigation remains counsel's substantive judgment, made and documented outside the tool; absent that determination, Respond's deadlines reflect the default position that notification is required. Document that determination contemporaneously and consult counsel before relying on it.",
         citation: "Conn. Gen. Stat. § 36a-701b(b)(1)",
         source_url: "https://www.cga.ct.gov/current/pub/chap_669.htm",
       },
