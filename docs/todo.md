@@ -612,7 +612,9 @@ history share a Supabase backend and should be sequenced together.
   - Gate verified the edit-data-categories jump fix live: the SSN row lands
     in view; the row top sits flush against the nav clearance — cosmetic
     tightness only, revisit only if it bothers JDC. (Gate render 2026-07-26.)
-- **Harm-gate form question** `[substance]` — design settled in principle
+- **Harm-gate form question** `[substance]` — **DONE (commit 1 of 2)
+  2026-08-02**; UI/memo rendering is commit 2, which follows — the pair
+  ships together after one JDC + Claude gate. Design settled in principle
   (single generic question, per-jurisdiction harmGate mechanism carrying each
   statute's exact standard and character: exemption CT/DE, misuse
   determination CO, duty element VA, definitional-with-dual-trigger-bypass
@@ -631,6 +633,20 @@ history share a Supabase backend and should be sequenced together.
   harm-gate design conversation). The design conversation now sits on
   verified language: the question is purely how one form question applies
   eight different standards honestly.
+  - **Commit 1 landed 2026-08-02** (design locked and mock ratified by JDC
+    2026-08-02; protected-file edits authorized): `harmAssessment` fact
+    ("" | "determined_unlikely" | "harm_likely", facts.js passthrough);
+    per-obligation `harmGate { standard, citation, character }` in data.js
+    (CT/DE/CO exemption — CO dual (2)(a)/(2)(f)(I) standards; VA
+    duty_element; CT/DE services cascade via their own gates);
+    jurisdiction-level `harmNonGateExplainer` on NY and MA (render in
+    commit 2); engine suppression via the additive `suppression_reasons`
+    mechanism array ("determined_unlikely" is the only suppressing value;
+    encryption+harm double suppression stays one entry with both reasons);
+    intake-forms § 0A + six sign-off amendments. Both suites green:
+    111 in-file (was 98), 73 adversarial (was 63; new "J. Harm" group).
+    NY design ruling made: not gateable by the generic question —
+    `harmNonGateExplainer` instead.
 - **Primary-source review cycle for all shipped jurisdictions — DONE
   2026-08-01** (JDC + Claude). All ten jurisdictions verified against
   official statute publications or regulatory authorities. ZERO substantive

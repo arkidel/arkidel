@@ -575,6 +575,130 @@ T("I. Additive", "service/advisory entries never leak into deadlines/suppressed/
 });
 
 // =============================================================================
+// J. HARM-ASSESSMENT GATE (commit 1, 2026-08-02) — "determined_unlikely" is
+//    the ONLY suppressing value; harmGate absence is structural inertness
+//    (CA/TX/NY/MA/EU/UK); CO carries two deliberately different standards;
+//    VA's character is duty_element; encryption+harm double suppression is
+//    one entry with both reasons; EU/UK risk behavior is byte-identical
+//    under every harmAssessment value.
+// =============================================================================
+
+const HARM = (x) => (x?.suppression_reasons || []).find((m) => m.type === "harm");
+
+T("J. Harm", "EU/UK byte-identical under every harmAssessment value, at every riskLevel (no cross-contamination)", (a) => {
+  // EU/UK carry no harmGate, so even "determined_unlikely" must leave their
+  // output byte-identical — pending, suppressed, and fired states alike.
+  for (const riskLevel of ["", "unlikely", "risk", "high"]) {
+    const base = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true, uk: true }, riskLevel });
+    for (const harmAssessment of ["", "determined_unlikely", "harm_likely", "garbage"]) {
+      const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { eu: true, uk: true }, riskLevel, harmAssessment });
+      a.eq(J(r), J(base), `riskLevel=${J(riskLevel)} harmAssessment=${J(harmAssessment)}`);
+    }
+  }
+});
+
+T("J. Harm", "CA/TX byte-identical under all three harmAssessment values (harmGate absent — structural inertness)", (a) => {
+  const facts = { awarenessDate: AW, jurisdictions: { ca: true, tx: true }, residentCounts: { ca: 1000, tx: 20000 }, sensitivity: ["financial"] };
+  const base = computeDeadlines(facts);
+  for (const v of ["", "determined_unlikely", "harm_likely"]) {
+    a.eq(J(computeDeadlines({ ...facts, harmAssessment: v })), J(base), `harmAssessment=${J(v)}`);
+  }
+});
+
+T("J. Harm", "NY and MA are NEVER harm-suppressed under any harmAssessment value", (a) => {
+  // NY at 10000 (>5000) fires all 5; MA fires its count-independent 3; the
+  // MA § 3A service still computes on ssn. Nothing lands in suppressed.
+  for (const v of ["", "determined_unlikely", "harm_likely"]) {
+    const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { ny: true, ma: true }, residentCounts: { ny: 10000 }, sensitivity: ["ssn"], harmAssessment: v });
+    a.eq(r.suppressed.length, 0, `suppressed empty at ${J(v)}`);
+    a.eq(r.deadlines.length, 8, `NY 5 + MA 3 compute at ${J(v)}`);
+    a.eq(r.services.length, 1, `MA § 3A service still computes at ${J(v)}`);
+  }
+});
+
+T("J. Harm", "CO dual standards: residents/CRA carry (2)(a), AG carries (2)(f)(I); the two strings differ", (a) => {
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { co: true }, residentCounts: { co: 5000 }, harmAssessment: "determined_unlikely" });
+  a.eq(r.deadlines.length, 0, "nothing computes");
+  a.eq(r.suppressed.length, 3, "residents + AG + CRA suppressed");
+  const res = HARM(S(r, "Colorado", "Colorado Residents"));
+  const ag = HARM(S(r, "Colorado", "Attorney General"));
+  const cra = HARM(S(r, "Colorado", "Consumer Reporting"));
+  a.eq(res?.citation, "Colo. Rev. Stat. § 6-1-716(2)(a)", "residents citation");
+  a.eq(cra?.citation, "Colo. Rev. Stat. § 6-1-716(2)(a)", "CRA cascades on the resident standard");
+  a.eq(ag?.citation, "Colo. Rev. Stat. § 6-1-716(2)(f)(I)", "AG citation");
+  a.ok(res?.standard && ag?.standard && res.standard !== ag.standard, "the two standards are different strings");
+  a.eq(cra?.standard, res?.standard, "CRA shares the resident standard string");
+  a.eq(res?.character, "exemption", "CO character is exemption");
+});
+
+T("J. Harm", "VA mechanism character is 'duty_element' on all three obligations", (a) => {
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { va: true }, residentCounts: { va: 5000 }, harmAssessment: "determined_unlikely" });
+  a.eq(r.suppressed.length, 3, "all three suppressed");
+  a.eq(r.deadlines.length, 0, "nothing computes");
+  for (const au of ["Virginia Residents", "Attorney General", "Consumer Reporting"]) {
+    a.eq(HARM(S(r, "Virginia", au))?.character, "duty_element", `${au} character`);
+  }
+});
+
+T("J. Harm", "Encryption + harm double suppression: ONE entry per obligation, reasons [breach_definition, harm]", (a) => {
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { ct: true }, residentCounts: { ct: 800 }, sensitivity: ["identifiers"], encrypted: "yes", keyAcquired: "no", harmAssessment: "determined_unlikely" });
+  a.eq(r.suppressed.length, 2, "CT residents + AG, one entry each");
+  for (const au of ["Connecticut Residents", "Attorney General"]) {
+    const entries = r.suppressed.filter((x) => x.jurisdiction === "Connecticut" && x.authority.includes(au));
+    a.eq(entries.length, 1, `${au}: exactly one suppressed entry`);
+    const types = (entries[0]?.suppression_reasons || []).map((m) => m.type);
+    a.eq(J(types), J(["breach_definition", "harm"]), `${au} reasons`);
+    a.eq(entries[0]?.suppression_type, "breach_definition", `${au} flat type mirrors the first reason`);
+  }
+});
+
+T("J. Harm", "Harm-excused CT/DE services land in `suppressed` with their mechanism, not silently absent", (a) => {
+  // Unlike a satisfied encryption harbor (service silently does not compute),
+  // a harm-excused service carries its own statutory excuse: CT cascades via
+  // the resident (b)(1) gate; DE's § 12B-102(e) states the carve-out
+  // expressly for the service.
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { ct: true, de: true }, residentCounts: { ct: 800, de: 501 }, sensitivity: ["ssn"], harmAssessment: "determined_unlikely" });
+  a.eq(r.services.length, 0, "no service computes");
+  a.eq(r.deadlines.length, 0, "no deadlines");
+  a.eq(r.suppressed.length, 6, "CT 3 + DE 3");
+  const ctSvc = S(r, "Connecticut", "Identity Theft Prevention");
+  const deSvc = S(r, "Delaware", "Credit Monitoring");
+  a.ok(ctSvc, "CT service suppressed entry present");
+  a.ok(deSvc, "DE service suppressed entry present");
+  a.eq(HARM(ctSvc)?.citation, "Conn. Gen. Stat. § 36a-701b(b)(1)", "CT service cascades via the (b)(1) gate");
+  a.eq(HARM(deSvc)?.citation, "6 Del. C. § 12B-102(e)", "DE service carries its own § 12B-102(e) gate");
+});
+
+T("J. Harm", "Only the exact sentinel suppresses: junk values byte-identical to unset", (a) => {
+  const facts = { awarenessDate: AW, jurisdictions: { ct: true, co: true, va: true, de: true }, residentCounts: { ct: 800, co: 5000, va: 5000, de: 501 }, sensitivity: ["ssn"] };
+  const base = computeDeadlines(facts);
+  for (const v of [undefined, null, "", "harm_likely", "DETERMINED_UNLIKELY", " determined_unlikely ", "determined unlikely", true, 1]) {
+    a.eq(J(computeDeadlines({ ...facts, harmAssessment: v })), J(base), `harmAssessment=${String(J(v))} inert`);
+  }
+  const det = computeDeadlines({ ...facts, harmAssessment: "determined_unlikely" });
+  a.ok(det.suppressed.length > 0 && det.deadlines.length === 0, "the exact sentinel still suppresses");
+});
+
+T("J. Harm", "Harm-only suppression: flat fields mirror the harm mechanism (type, citation, verbatim standard as description)", (a) => {
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { de: true }, residentCounts: { de: 501 }, harmAssessment: "determined_unlikely" });
+  const res = S(r, "Delaware", "Delaware Residents");
+  a.eq(res?.suppression_type, "harm", "flat type");
+  a.eq(res?.suppression_citation, "6 Del. C. § 12B-102(a)", "flat citation");
+  a.eq(res?.suppression_description, "unlikely to result in harm to the individuals whose personal information has been breached", "flat description carries the verbatim standard");
+  a.eq(J((res?.suppression_reasons || []).map((m) => m.type)), J(["harm"]), "single harm reason");
+});
+
+T("J. Harm", "Harm suppression respects thresholds: below-threshold obligations stay silently absent, not suppressed", (a) => {
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { de: true, co: true }, residentCounts: { de: 100, co: 100 }, harmAssessment: "determined_unlikely" });
+  a.ok(!S(r, "Delaware", "Attorney General"), "DE AG (gt 500) absent, not suppressed");
+  a.ok(!S(r, "Colorado", "Attorney General"), "CO AG (gte 500) absent, not suppressed");
+  a.ok(!S(r, "Colorado", "Consumer Reporting"), "CO CRA (gt 1000) absent, not suppressed");
+  a.ok(S(r, "Delaware", "Delaware Residents"), "DE residents suppressed");
+  a.ok(S(r, "Colorado", "Colorado Residents"), "CO residents suppressed");
+  a.eq(r.suppressed.length, 2, "only the two resident obligations");
+});
+
+// =============================================================================
 // REPORT
 // =============================================================================
 

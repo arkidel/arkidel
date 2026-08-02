@@ -38,7 +38,10 @@ export function computableGate({ awareness, jurisdictions, sensitivity }, now) {
 // Engine facts from a saved payload. Extra payload keys (record, quickMode,
 // the raw awareness string) pass through harmlessly — computeDeadlines
 // destructures only the keys it knows, and the adversarial parity test pins
-// that record noise never changes engine output.
+// that record noise never changes engine output. The operative scalar
+// inputs ride the same passthrough: riskLevel and, as of the harm-gate pass
+// (2026-08-02), harmAssessment ("" | "determined_unlikely" | "harm_likely")
+// — its sibling. Neither needs mapping here; the spread carries them.
 export function factsFromPayload(payload = {}) {
   return {
     ...payload,

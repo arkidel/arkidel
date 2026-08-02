@@ -135,6 +135,26 @@ function categoryGateMet(ob, sensitivity) {
   return anyOf.some((c) => sensitivity.includes(c));
 }
 
+// Harm-assessment gate (harm-gate pass commit 1, 2026-08-02). Deliberately
+// SEPARATE from the conditional-gate seam: `harmGate` is per-obligation data
+// in data.js ({ standard, citation, character }) and the input is the
+// attestation `facts.harmAssessment` — the user attests that a documented
+// determination under the applicable statutory standards exists; the engine
+// never draws a harm conclusion. ONLY the exact sentinel
+// "determined_unlikely" suppresses; "" and "harm_likely" (and any invalid
+// value — case variants, padding, serialization artifacts) change NOTHING in
+// computation. Note the fail-safe direction is the OPPOSITE of riskLevel's:
+// an unrecognized riskLevel routes to pending because GDPR suppression must
+// rest on a real assessment, while an unrecognized harmAssessment computes
+// everything because computing (notifying) is the conservative outcome here.
+// Obligations without a harmGate are structurally inert to the answer
+// (CA/TX/NY/MA/EU/UK) — enforced by field absence, no special-casing.
+function harmMechanism(ob, harmAssessment) {
+  if (harmAssessment !== "determined_unlikely" || !ob.harmGate) return null;
+  const { standard, citation, character } = ob.harmGate;
+  return { type: "harm", standard, citation, character };
+}
+
 // Build the full gate list for an obligation: the risk fireCondition derived from
 // the legacy gating.* fields (the behavior-preserved adapter from Stage 1) MERGED
 // with any declared `conditionalGates` (the encryption / redaction safeHarbors
@@ -173,13 +193,19 @@ function deriveGates(ob) {
  * @param {string[]} [facts.sensitivity]     - Array of sensitivity category ids.
  * @param {string} [facts.encrypted] - US encryption-cluster inputs ("yes"|"no"|unset): encrypted, plus encryptionStrength ("ge_128"|"below_128"|"unknown"), redacted, keyAcquired, reidentificationAcquired.
  * @param {string} [facts.gdprUnintelligibility] - GDPR Art. 34(3)(a) input ("yes"|"no"|unset): measures rendering the data unintelligible.
+ * @param {string} [facts.harmAssessment] - Harm-determination attestation ("" | "determined_unlikely" | "harm_likely"). Only the exact value "determined_unlikely" suppresses harm-gated obligations; every other value is inert.
  * @returns {{deadlines: Array, suppressed: Array, pending: Array, review: Array, services: Array, advisories: Array}}
  *   deadlines  — obligations that fire under the facts.
- *   suppressed — obligations that would have fired but were suppressed because
- *                encryption was reported. Each suppressed entry includes the
- *                citation for the suppression mechanism (either definitional
- *                breach exclusion or unintelligibility-of-data exemption), so the UI
- *                can render an explanatory card.
+ *   suppressed — obligations that would have fired but were affirmatively
+ *                excused (encryption/redaction/unintelligibility harbors, the
+ *                risk assessment, or the harm determination). Each suppressed
+ *                entry includes the citation for the suppression mechanism so
+ *                the UI can render an explanatory card, plus the additive
+ *                `suppression_reasons` array of mechanism objects — an
+ *                obligation suppressed by both encryption and harm stays ONE
+ *                entry carrying both reasons (flat fields mirror the first);
+ *                harm reasons are { type: "harm", standard, citation,
+ *                character }.
  *   pending    — obligations awaiting a required user input (the EU/UK risk
  *                assessment).
  *   review     — obligations whose outcome turns on a substantive legal
@@ -210,6 +236,7 @@ function computeDeadlines(facts) {
     keyAcquired,
     reidentificationAcquired,
     gdprUnintelligibility,
+    harmAssessment,
   } = facts;
   // Conditional-gate inputs — incident-global facts the gates read. Anything
   // unset stays undefined and (per the safeHarbor rule) leaves a harbor
@@ -311,6 +338,9 @@ function computeDeadlines(facts) {
           suppression_type: sup.type,
           suppression_citation: sup.citation,
           suppression_description: sup.description,
+          // Additive (harm-gate pass): every suppressed entry carries its
+          // mechanism list; the flat fields above mirror reasons[0].
+          suppression_reasons: [{ type: sup.type, citation: sup.citation, description: sup.description }],
           source_url: ob.source_url,
           statute: jur.statute,
         });
@@ -355,30 +385,56 @@ function computeDeadlines(facts) {
       // judgment routes to `review` instead (Stage 4: MA second trigger);
       // `review` outranks `suppress`.
       const harborVerdict = evaluateSafeHarbors(gates, gateInputs);
+      // Harm-assessment gate (2026-08-02) — evaluated alongside the
+      // safeHarbors, after the category/threshold gates (harm never
+      // resurrects a below-threshold obligation). Non-null only when the
+      // attestation is exactly "determined_unlikely" AND the obligation
+      // declares a harmGate.
+      const harmMech = harmMechanism(ob, harmAssessment);
 
       // Service obligations (kind:"service") — computed, category-gated,
-      // duration instead of deadline. They land in the additive `services`
-      // array, never in deadlines/suppressed/review: when the encryption
-      // harbor is satisfied (suppress OR review), the service simply does not
-      // compute — the jurisdiction's notification obligations land in
+      // duration instead of deadline. When the encryption harbor is
+      // satisfied (suppress OR review), the service simply does not compute
+      // — the jurisdiction's notification obligations land in
       // suppressed/review with the full explanation, and the service is
-      // contingent on notice being required.
+      // contingent on notice being required. A HARM-excused service, by
+      // contrast, lands in `suppressed` with its own mechanism (CT cascades
+      // via the resident (b)(1) gate; DE's § 12B-102(e) states the
+      // carve-out expressly for the service) — the statutory excuse is
+      // itself worth showing.
       if (ob.kind === "service") {
-        if (!harborVerdict) {
-          services.push({
+        if (harborVerdict) return;
+        if (harmMech) {
+          suppressed.push({
             jurisdiction: jur.short,
             authority: ob.authority,
-            service_duration_display: ob.service_duration_display,
-            trigger_note: ob.trigger_note,
-            condition: ob.condition,
-            citation: ob.citation,
+            original_citation: ob.citation,
+            suppression_type: "harm",
+            suppression_citation: harmMech.citation,
+            suppression_description: harmMech.standard,
+            suppression_reasons: [harmMech],
             source_url: ob.source_url,
             statute: jur.statute,
           });
+          return;
         }
+        services.push({
+          jurisdiction: jur.short,
+          authority: ob.authority,
+          service_duration_display: ob.service_duration_display,
+          trigger_note: ob.trigger_note,
+          condition: ob.condition,
+          citation: ob.citation,
+          source_url: ob.source_url,
+          statute: jur.statute,
+        });
         return;
       }
 
+      // Review outranks harm as it outranks suppress-harbors: never silently
+      // suppress when a path demands a substantive judgment. (No current
+      // obligation carries both a review harbor and a harmGate — MA has no
+      // harmGate — but the ordering is the safety property.)
       if (harborVerdict?.outcome === "review") {
         review.push({
           jurisdiction: jur.short,
@@ -393,6 +449,11 @@ function computeDeadlines(facts) {
       }
       if (harborVerdict?.outcome === "suppressed") {
         const sup = gateSuppression(harborVerdict.gate);
+        const reasons = [{ type: sup.type, citation: sup.citation, description: sup.description }];
+        // Encryption-and-harm double suppression stays ONE entry carrying
+        // both reasons — never duplicate an obligation in output. The flat
+        // fields mirror the first (encryption) reason.
+        if (harmMech) reasons.push(harmMech);
         suppressed.push({
           jurisdiction: jur.short,
           authority: ob.authority,
@@ -400,6 +461,21 @@ function computeDeadlines(facts) {
           suppression_type: sup.type,
           suppression_citation: sup.citation,
           suppression_description: sup.description,
+          suppression_reasons: reasons,
+          source_url: ob.source_url,
+          statute: jur.statute,
+        });
+        return;
+      }
+      if (harmMech) {
+        suppressed.push({
+          jurisdiction: jur.short,
+          authority: ob.authority,
+          original_citation: ob.citation,
+          suppression_type: "harm",
+          suppression_citation: harmMech.citation,
+          suppression_description: harmMech.standard,
+          suppression_reasons: [harmMech],
           source_url: ob.source_url,
           statute: jur.statute,
         });
@@ -642,6 +718,29 @@ const expectAdvisoryCount = (n) => (deadlines, suppressed = [], pending = [], re
   advisories.length === n
     ? { pass: true }
     : { pass: false, message: `Expected ${n} advisories; got ${advisories.length}: ${advisories.map((a) => `${a.jurisdiction}/${a.authority}`).join(" | ")}` };
+
+// Harm-gate expectations (harm-gate pass, 2026-08-02). The harm mechanism
+// rides in the additive `suppression_reasons` array as
+// { type: "harm", standard, citation, character }; `expected` may pin any of
+// those three fields.
+const expectHarmSuppressed = (jurisdiction, authoritySubstring, expected = {}) => (deadlines, suppressed = []) => {
+  const found = suppressed.find(
+    (s) => s.jurisdiction === jurisdiction && s.authority.toLowerCase().includes(authoritySubstring.toLowerCase())
+  );
+  if (!found) {
+    return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" to be harm-suppressed; got ${suppressed.length} suppressions: ${suppressed.map((s) => `${s.jurisdiction}/${s.authority}`).join(" | ")}` };
+  }
+  const harm = (found.suppression_reasons || []).find((r) => r.type === "harm");
+  if (!harm) {
+    return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" to carry a harm suppression reason; got [${(found.suppression_reasons || []).map((r) => r.type).join(", ")}]` };
+  }
+  for (const key of ["standard", "citation", "character"]) {
+    if (expected[key] !== undefined && harm[key] !== expected[key]) {
+      return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" harm ${key} "${expected[key]}"; got "${harm[key]}"` };
+    }
+  }
+  return { pass: true };
+};
 
 
 
@@ -1723,6 +1822,179 @@ const TEST_CASES = [
     category: "Statutory phrases",
     facts: { jurisdictions: { de: true }, residentCounts: { de: 501 }, sensitivity: ["identifiers"] },
     expect: expectBasis("Delaware", "Attorney General", "6 Del. C. § 12B-102(d) — no later than notice to residents"),
+  },
+
+  // === Harm-assessment gate (harm-gate pass commit 1, 2026-08-02) ===
+  // "determined_unlikely" is the ONLY suppressing value; every other value —
+  // including "" and "harm_likely" — changes nothing in computation. Standards
+  // are pinned as literals so a data.js edit fails here.
+  {
+    name: "CT: harm determined unlikely → residents + AG + (b)(2)(B) service all harm-suppressed; nothing computes",
+    category: "Harm gate",
+    facts: { jurisdictions: { ct: true }, residentCounts: { ct: 800 }, sensitivity: ["ssn"], harmAssessment: "determined_unlikely" },
+    expect: expectAll(
+      expectCount(0),
+      expectServiceCount(0),
+      expectSuppressedCount(3),
+      expectHarmSuppressed("Connecticut", "Connecticut Residents", { citation: "Conn. Gen. Stat. § 36a-701b(b)(1)", character: "exemption", standard: "Such notification shall not be required if, after an appropriate investigation the person reasonably determines that the breach will not likely result in harm to the individuals whose personal information has been acquired or accessed." }),
+      expectHarmSuppressed("Connecticut", "Attorney General", { citation: "Conn. Gen. Stat. § 36a-701b(b)(1)" }),
+      expectHarmSuppressed("Connecticut", "Identity Theft Prevention", { citation: "Conn. Gen. Stat. § 36a-701b(b)(1)" })
+    ),
+  },
+  {
+    name: "CT: harm not assessed ('') → everything computes exactly as without the question",
+    category: "Harm gate",
+    facts: { jurisdictions: { ct: true }, residentCounts: { ct: 800 }, sensitivity: ["ssn"], harmAssessment: "" },
+    expect: expectAll(
+      expectCount(2),
+      expectService("Connecticut", "Identity Theft Prevention", "2 years"),
+      expectSuppressedCount(0)
+    ),
+  },
+  {
+    name: "CT: harm_likely → identical computation (differs only in memo recording, commit 2)",
+    category: "Harm gate",
+    facts: { jurisdictions: { ct: true }, residentCounts: { ct: 800 }, sensitivity: ["ssn"], harmAssessment: "harm_likely" },
+    expect: expectAll(
+      expectCount(2),
+      expectService("Connecticut", "Identity Theft Prevention", "2 years"),
+      expectSuppressedCount(0)
+    ),
+  },
+  {
+    name: "CT: invalid harmAssessment ('Determined_Unlikely') is inert — only the exact sentinel suppresses",
+    category: "Harm gate",
+    facts: { jurisdictions: { ct: true }, residentCounts: { ct: 800 }, sensitivity: ["ssn"], harmAssessment: "Determined_Unlikely" },
+    expect: expectAll(
+      expectCount(2),
+      expectService("Connecticut", "Identity Theft Prevention", "2 years"),
+      expectSuppressedCount(0)
+    ),
+  },
+  {
+    name: "DE: harm determined unlikely → residents + AG + credit-monitoring service harm-suppressed; the service carries its OWN § 12B-102(e) gate",
+    category: "Harm gate",
+    facts: { jurisdictions: { de: true }, residentCounts: { de: 501 }, sensitivity: ["ssn"], harmAssessment: "determined_unlikely" },
+    expect: expectAll(
+      expectCount(0),
+      expectServiceCount(0),
+      expectSuppressedCount(3),
+      expectHarmSuppressed("Delaware", "Delaware Residents", { citation: "6 Del. C. § 12B-102(a)", standard: "unlikely to result in harm to the individuals whose personal information has been breached" }),
+      expectHarmSuppressed("Delaware", "Attorney General", { citation: "6 Del. C. § 12B-102(a)" }),
+      expectHarmSuppressed("Delaware", "Credit Monitoring", { citation: "6 Del. C. § 12B-102(e)", standard: "unlikely to result in harm to the individuals whose personal information has been breached" })
+    ),
+  },
+  {
+    name: "CO: harm determined unlikely → residents + AG + CRA harm-suppressed; residents/CRA carry the (2)(a) standard, the AG the deliberately different (2)(f)(I) standard",
+    category: "Harm gate",
+    facts: { jurisdictions: { co: true }, residentCounts: { co: 5000 }, sensitivity: ["identifiers"], harmAssessment: "determined_unlikely" },
+    expect: expectAll(
+      expectCount(0),
+      expectSuppressedCount(3),
+      expectHarmSuppressed("Colorado", "Colorado Residents", { citation: "Colo. Rev. Stat. § 6-1-716(2)(a)", standard: "misuse of the information has not occurred and is not reasonably likely to occur" }),
+      expectHarmSuppressed("Colorado", "Attorney General", { citation: "Colo. Rev. Stat. § 6-1-716(2)(f)(I)", standard: "misuse of the information has not occurred and is not likely to occur" }),
+      expectHarmSuppressed("Colorado", "Consumer Reporting", { citation: "Colo. Rev. Stat. § 6-1-716(2)(a)" }),
+      (deadlines, suppressed = []) => {
+        const harmOf = (auth) => suppressed
+          .find((s) => s.jurisdiction === "Colorado" && s.authority.includes(auth))
+          ?.suppression_reasons?.find((r) => r.type === "harm")?.standard;
+        const res = harmOf("Colorado Residents");
+        const ag = harmOf("Attorney General");
+        return res && ag && res !== ag
+          ? { pass: true }
+          : { pass: false, message: `Expected the CO resident and AG harm standards to be different strings; got "${res}" vs "${ag}"` };
+      }
+    ),
+  },
+  {
+    name: "VA: harm determined unlikely → all three suppressed as a NEGATED DUTY ELEMENT (character 'duty_element'), never an exemption",
+    category: "Harm gate",
+    facts: { jurisdictions: { va: true }, residentCounts: { va: 5000 }, sensitivity: ["identifiers"], harmAssessment: "determined_unlikely" },
+    expect: expectAll(
+      expectCount(0),
+      expectSuppressedCount(3),
+      expectHarmSuppressed("Virginia", "Virginia Residents", { citation: "Va. Code § 18.2-186.6(B)", character: "duty_element", standard: "causes, or the individual or entity reasonably believes has caused or will cause, identity theft or another fraud to any resident of the Commonwealth" }),
+      expectHarmSuppressed("Virginia", "Attorney General", { character: "duty_element" }),
+      expectHarmSuppressed("Virginia", "Consumer Reporting", { character: "duty_element" })
+    ),
+  },
+  {
+    name: "NY: harm determined unlikely → all five obligations still compute (no harmGate — § 899-aa(2)(a) needs inadvertent disclosure by an authorized person)",
+    category: "Harm gate",
+    facts: { jurisdictions: { ny: true }, residentCounts: { ny: 10000 }, sensitivity: ["identifiers"], harmAssessment: "determined_unlikely" },
+    expect: expectAll(expectCount(5), expectSuppressedCount(0)),
+  },
+  {
+    name: "MA: harm determined unlikely → all three obligations + the § 3A service still compute (second trigger has no harm qualifier)",
+    category: "Harm gate",
+    facts: { jurisdictions: { ma: true }, sensitivity: ["ssn"], harmAssessment: "determined_unlikely" },
+    expect: expectAll(
+      expectCount(3),
+      expectService("Massachusetts", "Credit Monitoring", "18 months"),
+      expectServiceCount(1),
+      expectSuppressedCount(0),
+      expectReviewCount(0)
+    ),
+  },
+  {
+    name: "CA + TX: harm determined unlikely is inert (harmGate absent) — everything computes",
+    category: "Harm gate",
+    facts: { jurisdictions: { ca: true, tx: true }, residentCounts: { ca: 1000, tx: 300 }, sensitivity: ["identifiers"], harmAssessment: "determined_unlikely" },
+    expect: expectAll(
+      expectFires("California", "California Residents"),
+      expectFires("California", "Attorney General"),
+      expectFires("Texas", "Texas Residents"),
+      expectFires("Texas", "Attorney General"),
+      expectCount(4),
+      expectSuppressedCount(0)
+    ),
+  },
+  {
+    name: "CO + encryption + harm determined unlikely → ONE suppressed entry per obligation carrying BOTH reasons (encryption first)",
+    category: "Harm gate",
+    facts: { jurisdictions: { co: true }, residentCounts: { co: 5000 }, sensitivity: ["financial"], encrypted: "yes", keyAcquired: "no", harmAssessment: "determined_unlikely" },
+    expect: expectAll(
+      expectCount(0),
+      expectSuppressedCount(3),
+      (deadlines, suppressed = []) => {
+        const failures = [];
+        for (const s of suppressed) {
+          const types = (s.suppression_reasons || []).map((r) => r.type);
+          if (types.length !== 2 || types[0] !== "breach_definition" || types[1] !== "harm") {
+            failures.push(`${s.authority}: reasons [${types.join(", ")}]`);
+          }
+          if (s.suppression_type !== "breach_definition") {
+            failures.push(`${s.authority}: flat type "${s.suppression_type}"`);
+          }
+        }
+        return failures.length === 0
+          ? { pass: true }
+          : { pass: false, message: `Expected [breach_definition, harm] with breach_definition flat fields on each entry; ${failures.join("; ")}` };
+      }
+    ),
+  },
+  {
+    name: "EU: harm determined unlikely does not touch risk gating — both GDPR obligations stay pending with riskLevel unset",
+    category: "Harm gate",
+    facts: { jurisdictions: { eu: true }, harmAssessment: "determined_unlikely" },
+    expect: expectAll(
+      expectCount(0),
+      expectSuppressedCount(0),
+      expectPending("EU GDPR", "Supervisory Authority"),
+      expectPending("EU GDPR", "Data Subjects")
+    ),
+  },
+  {
+    name: "CO: harm suppression respects thresholds — a below-threshold AG/CRA stays silently absent, not suppressed",
+    category: "Harm gate",
+    facts: { jurisdictions: { co: true }, residentCounts: { co: 100 }, sensitivity: ["identifiers"], harmAssessment: "determined_unlikely" },
+    expect: expectAll(
+      expectCount(0),
+      expectSuppressedCount(1),
+      expectHarmSuppressed("Colorado", "Colorado Residents"),
+      expectNotSuppressed("Colorado", "Attorney General"),
+      expectNotSuppressed("Colorado", "Consumer Reporting")
+    ),
   },
 ];
 

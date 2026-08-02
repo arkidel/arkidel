@@ -59,11 +59,12 @@ post-SB-446 verification") rather than generic messages.
 ### `src/breach-clock/engine.js` — rules engine
 
 Pure JavaScript, no React. Contains `computeDeadlines(facts)`, `isHighRisk`,
-`runTests`, and 96 test cases as of the category-conditioned pass (60 as of
-the risk-assessment addition; every EU/UK case carries an explicit
-`riskLevel`). After any engine change, the test harness must pass — check the
-in-app Tests view (footer link in the rendered component) or run
-programmatically, plus `node scripts/adversarial-engine-tests.mjs` (63 cases).
+`runTests`, and 111 test cases as of the harm-gate pass (96 as of the
+category-conditioned pass, 60 as of the risk-assessment addition; every EU/UK
+case carries an explicit `riskLevel`). After any engine change, the test
+harness must pass — check the in-app Tests view (footer link in the rendered
+component) or run programmatically, plus
+`node scripts/adversarial-engine-tests.mjs` (73 cases).
 
 The engine is the correctness instrument for the substantive layer. If a
 test fails after a `data.js` edit, the substantive change is wrong, not the
@@ -154,6 +155,34 @@ engine does not assume that. Do not "tidy" the gate back to an unset-only check
 (`riskLevel === ""`) — the `VALID_RISK_LEVELS.includes(...)` form is the
 safety property. Covered by the `E. riskLevel` group in
 `scripts/adversarial-engine-tests.mjs`.
+
+**Harm-assessment gate (live as of harm-gate commit 1, 2026-08-02) — durable
+decisions, do not "fix".** `harmAssessment` is an explicit user input —
+`"" | "determined_unlikely" | "harm_likely"`, default unset — with
+**attestation semantics**: the answer attests that a documented determination
+under the applicable statutory standards exists; the tool never draws a harm
+conclusion, and **harm and risk never prefill each other**. `harmGate` is
+**per-obligation** data in `data.js` (`{ standard, citation, character }`),
+standards **verbatim per statute** — Colorado deliberately encodes TWO
+different standards (residents/CRA § 6-1-716(2)(a) vs AG § 6-1-716(2)(f)(I));
+never share one string. An **absent `harmGate` means the answer is inert** for
+that obligation (CA/TX/NY/MA/EU/UK) — enforced by field absence, no engine
+special-casing; NY and MA instead carry a jurisdiction-level
+`harmNonGateExplainer` (rendered in commit 2 when a harm determination is
+recorded). `"determined_unlikely"` is the **only** suppressing value — `""`,
+`"harm_likely"`, and any invalid value change nothing in computation (the
+fail-safe direction is the opposite of `riskLevel`'s pending: computing is the
+conservative outcome here). Harm suppression joins the existing `suppressed`
+bucket with mechanism `{ type: "harm", standard, citation, character }` in the
+additive `suppression_reasons` array; an obligation suppressed by both
+encryption and harm stays **one** entry with both reasons (flat fields mirror
+the first, encryption). VA's `character` is `"duty_element"` — rendering must
+present a **negated duty element, not an exemption**. Harm-excused CT/DE
+service obligations land in `suppressed` with their own gate's mechanism (CT
+cascades via the resident (b)(1) standard; DE carries the express
+§ 12B-102(e) carve-out) — deliberately unlike the silent encryption-harbor
+treatment of services. Covered by the "Harm gate" in-file group and the
+`J. Harm` adversarial group.
 
 **Three deliberate engine assumptions — durable decisions, do not "fix".**
 

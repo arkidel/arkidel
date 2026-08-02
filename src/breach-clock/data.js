@@ -38,6 +38,28 @@ const SENSITIVITY_OPTIONS = [
   { id: "communications", label: "Private communications content" },
 ];
 
+// Harm-assessment gate (harm-gate pass, commit 1 of 2; JDC sign-off
+// 2026-08-02). Obligations may carry
+// `harmGate: { standard, citation, character }` — the per-obligation
+// statutory harm standard, captured VERBATIM from the 2026-08-01
+// primary-source review. `character` is "exemption" (the duty arises and is
+// excused — CT, DE, CO) or "duty_element" (the duty never arises absent the
+// harm element — VA; commit-2 rendering must present it as a negated duty
+// element, never as an exemption). When `facts.harmAssessment` is exactly
+// "determined_unlikely" — an attestation that a documented determination
+// under the applicable standard exists, NOT a harm conclusion the tool draws
+// — every obligation carrying a harmGate joins the `suppressed` output with
+// the gate's mechanism; every other value computes everything. An ABSENT
+// harmGate means the harm answer is inert for that obligation (CA, TX, NY,
+// MA, EU, UK) — enforced by field absence, no engine special-casing. NY and
+// MA instead carry a jurisdiction-level `harmNonGateExplainer` (rendered in
+// commit 2 when a harm determination is recorded) explaining why the
+// determination does not reach them. Colorado deliberately encodes TWO
+// different standards — residents/CRA § 6-1-716(2)(a) vs AG
+// § 6-1-716(2)(f)(I) — never share one string. Service obligations cascade
+// through their own harmGate (CT via the resident (b)(1) standard; DE via
+// the express § 12B-102(e) carve-out). Harm and risk (EU/UK riskLevel)
+// never prefill each other.
 const JURISDICTIONS = [
   {
     id: "eu",
@@ -315,6 +337,15 @@ const JURISDICTIONS = [
         citation: "Colo. Rev. Stat. § 6-1-716(2)(a)",
         source_url: "https://content.leg.colorado.gov/sites/default/files/2018a_1128_signed.pdf",
         condition: "In the most expedient time possible and without unreasonable delay, but not later than 30 days after determination that a security breach occurred. Notification not required if a prompt good-faith investigation determines misuse has not occurred and is not reasonably likely to occur.",
+        // Harm-gate pass (2026-08-02): the § 6-1-716(2)(a) resident standard.
+        // Deliberately DIFFERENT from the AG's (2)(f)(I) standard below
+        // ("reasonably likely" here; "likely" there) — encode both verbatim,
+        // never share one string.
+        harmGate: {
+          standard: "misuse of the information has not occurred and is not reasonably likely to occur",
+          citation: "Colo. Rev. Stat. § 6-1-716(2)(a)",
+          character: "exemption",
+        },
         conditionalGates: [
           {
             role: "safeHarbor",
@@ -340,6 +371,14 @@ const JURISDICTIONS = [
         citation: "Colo. Rev. Stat. § 6-1-716(2)(f)",
         source_url: "https://coag.gov/resources/data-protection-laws/",
         condition: "Required where 500 or more Colorado residents are reasonably believed to have been affected. Same 30-day ceiling applies. Online Data Breach Reporting Form available via the Colorado AG.",
+        // Harm-gate pass (2026-08-02): the AG's OWN § 6-1-716(2)(f)(I)
+        // standard — "not likely", without the resident standard's
+        // "reasonably". The dual encoding is deliberate.
+        harmGate: {
+          standard: "misuse of the information has not occurred and is not likely to occur",
+          citation: "Colo. Rev. Stat. § 6-1-716(2)(f)(I)",
+          character: "exemption",
+        },
         conditionalGates: [
           {
             role: "safeHarbor",
@@ -365,6 +404,13 @@ const JURISDICTIONS = [
         citation: "Colo. Rev. Stat. § 6-1-716(2)(d)",
         source_url: "https://content.leg.colorado.gov/sites/default/files/2018a_1128_signed.pdf",
         condition: "Where more than 1,000 Colorado residents must be notified, the covered entity must also notify all nationwide consumer reporting agencies of the anticipated date of notification and approximate number of residents to be notified, without unreasonable delay. Does not apply to entities subject to GLBA Title V.",
+        // Harm-gate pass (2026-08-02): the CRA duty cascades on the RESIDENT
+        // (2)(a) standard — it arises only from required resident notice.
+        harmGate: {
+          standard: "misuse of the information has not occurred and is not reasonably likely to occur",
+          citation: "Colo. Rev. Stat. § 6-1-716(2)(a)",
+          character: "exemption",
+        },
         conditionalGates: [
           {
             role: "safeHarbor",
@@ -401,6 +447,12 @@ const JURISDICTIONS = [
     short: "Massachusetts",
     statute: "M.G.L. c. 93H",
     // No residentField — MA notification is required regardless of count.
+    // Harm-gate pass (2026-08-02): Massachusetts carries NO harmGate — the
+    // second notification trigger has no harm qualifier, so a harm
+    // determination can inform the § 1 analysis but can never suppress the
+    // duty. Commit 2 renders this explainer when a harm determination is
+    // recorded.
+    harmNonGateExplainer: "Massachusetts' § 3(a)(2) trigger operates on unauthorized acquisition or use regardless of the § 1 risk element. M.G.L. c. 93H §§ 1, 3.",
     obligations: [
       {
         kind: "individual",
@@ -520,6 +572,13 @@ const JURISDICTIONS = [
     short: "New York",
     statute: "N.Y. Gen. Bus. Law § 899-aa",
     residentField: { stateLabel: "New York residents affected", placeholder: "e.g. 800" },
+    // Harm-gate pass (2026-08-02): New York carries NO harmGate — the
+    // § 899-aa(2)(a) exception is a narrow compound requiring an inadvertent
+    // disclosure by an authorized person AND the no-likely-harm
+    // determination; the generic harm question attests only the latter, so
+    // it cannot honestly gate NY. Commit 2 renders this explainer when a
+    // harm determination is recorded.
+    harmNonGateExplainer: "New York's exception requires an inadvertent disclosure by an authorized person — an element this determination does not establish. N.Y. Gen. Bus. Law § 899-aa(2)(a).",
     obligations: [
       {
         kind: "individual",
@@ -683,6 +742,15 @@ const JURISDICTIONS = [
         citation: "Va. Code § 18.2-186.6(B)",
         source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
         condition: "Notice required without unreasonable delay following discovery or notification of the breach. Notice may be reasonably delayed to allow the entity to determine the scope of the breach and restore the reasonable integrity of the system, or if a law-enforcement agency advises that notice will impede a criminal or civil investigation or homeland or national security. The breach must have caused, or the entity must reasonably believe has caused or will cause, identity theft or other fraud to a Virginia resident — see counsel note on the harm threshold.",
+        // Harm-gate pass (2026-08-02): Virginia's harm language is a DUTY
+        // ELEMENT, not an exemption — the § 18.2-186.6(B) duty never arises
+        // absent the element. Commit-2 rendering must present suppression as
+        // a negated duty element.
+        harmGate: {
+          standard: "causes, or the individual or entity reasonably believes has caused or will cause, identity theft or another fraud to any resident of the Commonwealth",
+          citation: "Va. Code § 18.2-186.6(B)",
+          character: "duty_element",
+        },
         conditionalGates: [
           {
             role: "safeHarbor",
@@ -717,6 +785,11 @@ const JURISDICTIONS = [
         citation: "Va. Code § 18.2-186.6(B)",
         source_url: "https://www.oag.state.va.us/programs-initiatives/computer-crime",
         condition: "Required whenever any Virginia resident is notified. No threshold. Notice without unreasonable delay; the same law-enforcement-delay provisions that apply to resident notification also apply to AG notification. Notification is sent to the Computer Crime Section of the Office of the Attorney General by mail (or follow current AG guidance on submission method).",
+        harmGate: {
+          standard: "causes, or the individual or entity reasonably believes has caused or will cause, identity theft or another fraud to any resident of the Commonwealth",
+          citation: "Va. Code § 18.2-186.6(B)",
+          character: "duty_element",
+        },
         conditionalGates: [
           {
             role: "safeHarbor",
@@ -753,6 +826,13 @@ const JURISDICTIONS = [
         citation: "Va. Code § 18.2-186.6(E)",
         source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
         condition: "Where notification is provided to more than 1,000 persons at one time, the entity must also notify all nationwide consumer reporting agencies of the timing, distribution, and content of the notice, without unreasonable delay.",
+        // The CRA duty (§ 18.2-186.6(E)) is reached via its dependency on
+        // individual notice, so it carries the (B) duty element.
+        harmGate: {
+          standard: "causes, or the individual or entity reasonably believes has caused or will cause, identity theft or another fraud to any resident of the Commonwealth",
+          citation: "Va. Code § 18.2-186.6(B)",
+          character: "duty_element",
+        },
         conditionalGates: [
           {
             role: "safeHarbor",
@@ -831,6 +911,13 @@ const JURISDICTIONS = [
         citation: "6 Del. C. § 12B-102(c)",
         source_url: "https://delcode.delaware.gov/title6/c012b/index.html",
         condition: "Without unreasonable delay but not later than 60 days after determination of the breach of security. If a shorter notification timeframe applies under federal law, the shorter federal timeframe controls. Delay permitted at the request of a law-enforcement agency if notice would impede a criminal investigation — notice is then due after the agency determines that it will no longer impede the investigation. If the affected residents cannot be identified within the 60-day period despite reasonable diligence, notice is due as soon as practicable after identification, unless substitute notice was provided under § 12B-101(5)d.",
+        // Harm-gate pass (2026-08-02): § 12B-102(a) risk-of-harm exception
+        // (determination after an appropriate investigation).
+        harmGate: {
+          standard: "unlikely to result in harm to the individuals whose personal information has been breached",
+          citation: "6 Del. C. § 12B-102(a)",
+          character: "exemption",
+        },
         conditionalGates: [
           {
             role: "safeHarbor",
@@ -857,6 +944,11 @@ const JURISDICTIONS = [
         citation: "6 Del. C. § 12B-102(d)",
         source_url: "https://delcode.delaware.gov/title6/c012b/index.html",
         condition: "Required where the number of affected Delaware residents to be notified exceeds 500. Notice to the Delaware Attorney General not later than the time when notice is provided to the resident.",
+        harmGate: {
+          standard: "unlikely to result in harm to the individuals whose personal information has been breached",
+          citation: "6 Del. C. § 12B-102(a)",
+          character: "exemption",
+        },
         conditionalGates: [
           {
             role: "safeHarbor",
@@ -884,6 +976,14 @@ const JURISDICTIONS = [
         citation: "6 Del. C. § 12B-102(e)",
         source_url: "https://delcode.delaware.gov/title6/c012b/index.html",
         condition: "Credit monitoring services at no cost for a period of 1 year to each resident whose personal information, including Social Security number, was breached or is reasonably believed to have been breached. Provide all information necessary to enroll in the services and information on how the resident can place a credit freeze on the resident's credit file. Services are not required if, after an appropriate investigation, the person reasonably determines the breach of security is unlikely to result in harm to the affected individuals — the same risk-of-harm determination that excuses notice (see the § 12B-102(a) counsel note).",
+        // Harm-gate pass (2026-08-02): the service carries its OWN harmGate
+        // — the statute states the carve-out expressly for the service at
+        // § 12B-102(e) — same standard, service-specific citation.
+        harmGate: {
+          standard: "unlikely to result in harm to the individuals whose personal information has been breached",
+          citation: "6 Del. C. § 12B-102(e)",
+          character: "exemption",
+        },
         conditionalGates: [
           {
             role: "safeHarbor",
@@ -965,6 +1065,14 @@ const JURISDICTIONS = [
         citation: "Conn. Gen. Stat. § 36a-701b(b)(1)",
         source_url: "https://www.cga.ct.gov/current/pub/chap_669.htm",
         condition: "Without unreasonable delay but no later than 60 days after discovery of the breach, unless a shorter timeframe is required under federal law or delay is requested by law enforcement under § 36a-701b(d). Residents identified only after the 60-day window must be notified as expediently as possible, unless the risk exemption applies.",
+        // Harm-gate pass (2026-08-02): the § 36a-701b(b)(1) harm exemption,
+        // full verbatim statutory sentence (self-determination standard, no
+        // law-enforcement-consultation element).
+        harmGate: {
+          standard: "Such notification shall not be required if, after an appropriate investigation the person reasonably determines that the breach will not likely result in harm to the individuals whose personal information has been acquired or accessed.",
+          citation: "Conn. Gen. Stat. § 36a-701b(b)(1)",
+          character: "exemption",
+        },
         conditionalGates: [
           {
             role: "safeHarbor",
@@ -988,6 +1096,11 @@ const JURISDICTIONS = [
         citation: "Conn. Gen. Stat. § 36a-701b(b)(2)(A)",
         source_url: "https://portal.ct.gov/ag/sections/privacy/reporting-a-data-breach",
         condition: "Required regardless of the number of residents affected, not later than the time when notice is provided to residents. The Attorney General's online submission form is the office's preferred method; supplements to a previously reported breach go to ag.breach@ct.gov with the PR case number.",
+        harmGate: {
+          standard: "Such notification shall not be required if, after an appropriate investigation the person reasonably determines that the breach will not likely result in harm to the individuals whose personal information has been acquired or accessed.",
+          citation: "Conn. Gen. Stat. § 36a-701b(b)(1)",
+          character: "exemption",
+        },
         conditionalGates: [
           {
             role: "safeHarbor",
@@ -1011,6 +1124,15 @@ const JURISDICTIONS = [
         citation: "Conn. Gen. Stat. § 36a-701b(b)(2)(B)",
         source_url: "https://portal.ct.gov/ag/sections/privacy/reporting-a-data-breach",
         condition: "Appropriate identity theft prevention services and, if applicable, identity theft mitigation services. Such service or services shall be provided at no cost to such resident for a period of not less than two years. Such person shall provide all information necessary for such resident to enroll in such service or services and shall include information on how such resident can place a credit freeze on such resident's credit file.",
+        // Harm-gate pass (2026-08-02): the (b)(2)(B) service is offered with
+        // notice and falls when notice is excused — the cascade rides the
+        // gate mechanism itself (the resident (b)(1) standard), not a
+        // separate standard.
+        harmGate: {
+          standard: "Such notification shall not be required if, after an appropriate investigation the person reasonably determines that the breach will not likely result in harm to the individuals whose personal information has been acquired or accessed.",
+          citation: "Conn. Gen. Stat. § 36a-701b(b)(1)",
+          character: "exemption",
+        },
         conditionalGates: [
           {
             role: "safeHarbor",

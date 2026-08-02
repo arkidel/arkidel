@@ -93,6 +93,16 @@ engine-composed and hardcoded deadline wording. The Delaware § 12B-102(e)/(f)
 and Massachusetts c. 93H § 3A standing counsel notes were upgraded to
 computed service/advisory obligations (see the § 9 and § 6 sign-offs).
 
+**Harm-assessment gate added** (August 2, 2026 update; reviewer: JDC,
+2026-08-02). The harm-assessment question — deferred at the 2026-07-25 review
+pending the primary-source harm-language verification completed 2026-08-01 —
+is now encoded (commit 1 of 2: data/engine/facts/tests/intake; the form
+question and all rendering are commit 2). See § 0A for the cross-jurisdiction
+model (attestation semantics, the three answers, risk-vs-harm, the NY/MA
+non-gate rationale, CA/TX structural inertness) and the § 5/6/7/8/9/10
+sign-offs for the per-jurisdiction `harmGate` records. All standards are
+carried verbatim from the 2026-08-01 primary-source review.
+
 ---
 
 # 0. Data-category model (cross-jurisdiction)
@@ -170,6 +180,106 @@ computed service/advisory obligations (see the § 9 and § 6 sign-offs).
 
 - User-facing strings and documentation say **"computed"**, never "fired";
   "fires" may remain in engine internals and test code only.
+
+---
+
+# 0A. Harm-assessment question (cross-jurisdiction)
+
+*Added August 2, 2026 (harm-gate pass, commit 1 of 2 — data/engine/facts/
+tests/intake; the form question and all rendering are commit 2). Reviewer:
+JDC, 2026-08-02. All statutory standards are verbatim from the 2026-08-01
+primary-source review cycle (official sources, cited in each jurisdiction's
+sign-off).*
+
+## 0A.1 Attestation semantics
+
+- The harm-assessment question records an **attestation**, not a harm
+  conclusion: the answer attests that the entity has made and documented a
+  determination under the applicable statutory standards, following the
+  investigation posture each statute requires (e.g. "appropriate
+  investigation" in CT/DE; "prompt good-faith investigation" in CO). The
+  tool never draws a harm conclusion, never prefills the answer from any
+  other input, and never infers it from data categories or the EU/UK risk
+  assessment.
+- New fact **`harmAssessment`**: `""` (not assessed, default) |
+  `"determined_unlikely"` | `"harm_likely"`. `factsFromPayload` passes it
+  through as a sibling of `riskLevel`; no other `facts.js` change.
+
+## 0A.2 The three answers and their effects
+
+- **`""` (not assessed)** — changes nothing; every obligation computes as if
+  the question did not exist. Unlike the EU/UK risk assessment, an unset
+  harm answer never pends or blocks anything: computing (notifying) is the
+  conservative outcome here, so the fail-safe direction is the opposite of
+  `riskLevel`'s fail-safe-to-pending.
+- **`"determined_unlikely"`** — the ONLY suppressing value. Every obligation
+  carrying a `harmGate` joins the `suppressed` output with mechanism
+  `{ type: "harm", standard, citation, character }` (carried in the additive
+  `suppression_reasons` array; the flat suppression fields mirror the first
+  reason). Service obligations cascade per their own gate — CT via the
+  resident (b)(1) standard, DE via the express § 12B-102(e) carve-out — and
+  land in `suppressed` with their mechanism rather than vanishing silently
+  (deliberately unlike the encryption-harbor treatment of services). An
+  obligation already suppressed by encryption stays ONE suppressed entry
+  carrying both reasons. Any invalid value (case variants, padding,
+  serialization artifacts) is inert — an unrecognized value must never
+  excuse notification.
+- **`"harm_likely"`** — identical to `""` in computation; the two differ
+  only in memo recording (commit 2).
+
+## 0A.3 Risk vs. harm — two different gates
+
+- The EU/UK **risk** assessment (Arts. 33/34) is a graduated
+  rights-and-freedoms standard that gates whether the GDPR obligations fire
+  at all (unset → pending). The U.S. **harm** gates are per-state statutory
+  standards — different wording, different characters — that excuse or
+  negate duties which otherwise compute. The two inputs are structurally
+  independent in the engine and never prefill each other; the adversarial
+  harness pins EU/UK output byte-identical under every `harmAssessment`
+  value at every `riskLevel`.
+
+## 0A.4 NY and MA — deliberately not harm-gated
+
+- **New York** carries no `harmGate`: § 899-aa(2)(a) is a narrow compound
+  exception requiring an inadvertent disclosure by an authorized person AND
+  the no-likely-harm determination. The generic question attests only the
+  latter element, so it cannot honestly gate NY (this resolves the design
+  ruling deferred in the 2026-08-01 review). Jurisdiction-level
+  `harmNonGateExplainer` (rendered by commit 2 when a harm determination is
+  recorded): "New York's exception requires an inadvertent disclosure by an
+  authorized person — an element this determination does not establish.
+  N.Y. Gen. Bus. Law § 899-aa(2)(a)."
+- **Massachusetts** carries no `harmGate`: the second notification trigger
+  (unauthorized acquisition or use) has no harm qualifier, so a harm
+  determination can inform the § 1 analysis but can never suppress the
+  duty. `harmNonGateExplainer`: "Massachusetts' § 3(a)(2) trigger operates
+  on unauthorized acquisition or use regardless of the § 1 risk element.
+  M.G.L. c. 93H §§ 1, 3."
+- Both explainers are pinned by engine tests asserting NY and MA are never
+  suppressed under any `harmAssessment` value.
+
+## 0A.5 CA and TX — structural inertness
+
+- California and Texas have no statutory harm threshold; their obligations
+  carry no `harmGate`, and the harm answer is inert for them. Inertness is
+  enforced by **field absence** — the engine has no per-jurisdiction
+  special-casing — and pinned byte-identical by the adversarial harness
+  under all three answer values.
+
+## 0A.6 Mechanism shape (`harmGate`)
+
+- Per-obligation field: `harmGate: { standard, citation, character }`.
+  `standard` is the statute's verbatim harm language; `character` is
+  `"exemption"` (the duty arises and is excused — CT, DE, CO) or
+  `"duty_element"` (the duty never arises absent the element — VA; commit-2
+  rendering must present the negated duty element, never an exemption).
+- Colorado deliberately encodes TWO different standards — residents/CRA
+  § 6-1-716(2)(a) ("reasonably likely") vs AG § 6-1-716(2)(f)(I) ("likely")
+  — as two distinct strings, pinned different by engine test; never share
+  one string.
+- The Colorado § 6-1-716(2)(a.3) credentials advisory and the CT/DE
+  credential advisories are NOT harm-gated (each carries its own condition
+  in its language).
 
 ---
 
@@ -1105,6 +1215,18 @@ UK in parallel).
   arrangement — cited but not linked. Justia retired. (Noted: the signed
   session-law PDF is frozen at 2018; the review-cycle cadence is what keeps
   Colorado current.)
+- **Harm-assessment gate encoded (2026-08-02, commit 1; reviewer: JDC,
+  2026-08-02):** `harmGate` added per obligation, character `"exemption"`,
+  standards verbatim per the 2026-08-01 capture — the residents obligation
+  and the CRA carry the § 6-1-716(2)(a) standard ("misuse of the information
+  has not occurred and is not reasonably likely to occur"); the AG carries
+  the deliberately different § 6-1-716(2)(f)(I) standard ("misuse of the
+  information has not occurred and is not likely to occur"). The two
+  standards are encoded as two distinct strings and pinned different by
+  engine test. The CRA cascades on the resident standard because its duty
+  arises from required resident notice. The § 6-1-716(2)(a.3) credentials
+  advisory is NOT harm-gated — its own misuse condition is already in its
+  language. See § 0A for the cross-jurisdiction model.
 - **Reviewer:** *(pending)*
 
 ---
@@ -1386,6 +1508,19 @@ the model to support an `authorities[]` array on a single obligation.
   the `harmGate` can inform the § 1 analysis but can never suppress the
   second-trigger duty (unauthorized acquisition or use), which has no harm
   qualifier.
+- **Harm-gate ruling (2026-08-02, commit 1; reviewer: JDC, 2026-08-02):**
+  Massachusetts carries **no `harmGate`** — no `harmAssessment` value can
+  suppress any MA obligation or the § 3A service (pinned by engine test
+  under all three answer values). The jurisdiction instead carries a
+  `harmNonGateExplainer` (rendered by commit 2 when a harm determination is
+  recorded): "Massachusetts' § 3(a)(2) trigger operates on unauthorized
+  acquisition or use regardless of the § 1 risk element. M.G.L. c. 93H
+  §§ 1, 3." This applies the trigger-two-bypass record above: the
+  determination can inform the § 1 analysis but never suppresses the
+  second-trigger duty. (Note the explainer's § 3(a)(2) reference sits within
+  the (a)/(b) citation-reference flag recorded above, still awaiting JDC
+  confirmation at gate; the explainer string is carried verbatim as
+  ratified.) See § 0A.4.
 - **Reviewer:** *(pending)*
 
 ---
@@ -1675,6 +1810,19 @@ multi-authority array.
   breach-reporting page requires live research, deferred to implementation
   (queued in `docs/todo.md`; if no reporting page exists, the homepage is
   retained with a note).
+- **Harm-gate ruling (2026-08-02, commit 1; reviewer: JDC, 2026-08-02):**
+  The design ruling deferred above is now made: New York carries **no
+  `harmGate`**. The § 899-aa(2)(a) exception is a narrow compound
+  (inadvertent disclosure by an authorized person AND the no-likely-harm
+  determination); the generic harm question can attest only the latter
+  element, so no `harmAssessment` value suppresses any NY obligation
+  (pinned by engine test under all three answer values). The jurisdiction
+  instead carries a `harmNonGateExplainer` (rendered by commit 2 when a
+  harm determination is recorded): "New York's exception requires an
+  inadvertent disclosure by an authorized person — an element this
+  determination does not establish. N.Y. Gen. Bus. Law § 899-aa(2)(a)."
+  The consolidated counsel note remains the full treatment of the
+  exception's documentation and 10-day AG-report obligations. See § 0A.4.
 - **Reviewer:** *(pending)*
 
 ---
@@ -1906,6 +2054,16 @@ multi-authority array.
   duty. `harmGate`: element-negation form, not an exemption — the duty
   never arises absent the harm element, rather than arising and being
   excused.
+- **Harm-assessment gate encoded (2026-08-02, commit 1; reviewer: JDC,
+  2026-08-02):** `harmGate` added to all three obligations, character
+  `"duty_element"`, standard verbatim per the 2026-08-01 capture: "causes,
+  or the individual or entity reasonably believes has caused or will cause,
+  identity theft or another fraud to any resident of the Commonwealth" —
+  citation § 18.2-186.6(B) on all three (the CRA is reached via its (E)
+  dependency on individual notice). Because the character is duty-element,
+  suppression rendering (commit 2) must present the outcome as a negated
+  element of the duty — the duty never arises — never as an exemption from
+  an arisen duty; the `character` value is pinned by engine test. See § 0A.
 - **Reviewer:** *(pending)*
 
 ---
@@ -2208,6 +2366,18 @@ categories in `engine.js` TEST_CASES.)*
   security is unlikely to result in harm to the individuals whose personal
   information has been breached." Wording differs from Connecticut's; the
   `harmGate` design carries each statute's standard verbatim.
+- **Harm-assessment gate encoded (2026-08-02, commit 1; reviewer: JDC,
+  2026-08-02):** `harmGate` added, character `"exemption"`, standard
+  verbatim per the 2026-08-01 capture: "unlikely to result in harm to the
+  individuals whose personal information has been breached" (determination
+  after an appropriate investigation). The residents and AG obligations
+  carry citation § 12B-102(a); the credit-monitoring service carries its
+  OWN `harmGate` with the same standard and citation § 12B-102(e) — the
+  statute states the carve-out expressly for the service — so a
+  harm-excused service lands in the engine's `suppressed` output with the
+  (e) mechanism rather than vanishing silently (deliberately unlike the
+  encryption-harbor treatment). The § 12B-102(f) credentials advisory is
+  not harm-gated. See § 0A for the cross-jurisdiction model.
 
 ---
 
@@ -2422,6 +2592,17 @@ categories in `engine.js` TEST_CASES.)*
   an appropriate investigation the person reasonably determines that the
   breach will not likely result in harm to the individuals whose personal
   information has been acquired or accessed."
+- **Harm-assessment gate encoded (2026-08-02, commit 1; reviewer: JDC,
+  2026-08-02):** `harmGate` added, character `"exemption"`, standard the
+  full verbatim § 36a-701b(b)(1) sentence recorded above. The residents and
+  AG obligations carry citation § 36a-701b(b)(1). The § 36a-701b(b)(2)(B)
+  identity-theft-prevention service cascades via the same gate — offered
+  with notice, falls when notice is excused — with the cascade riding the
+  gate mechanism itself (the resident (b)(1) standard and citation), not a
+  separate standard; a harm-excused service lands in the engine's
+  `suppressed` output with the (b)(1) mechanism rather than vanishing
+  silently. The § 36a-701b(f) credentials advisory is not harm-gated. See
+  § 0A for the cross-jurisdiction model.
 
 ## 10.10 Recommended test cases
 
