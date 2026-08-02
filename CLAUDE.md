@@ -168,8 +168,10 @@ different standards (residents/CRA § 6-1-716(2)(a) vs AG § 6-1-716(2)(f)(I));
 never share one string. An **absent `harmGate` means the answer is inert** for
 that obligation (CA/TX/NY/MA/EU/UK) — enforced by field absence, no engine
 special-casing; NY and MA instead carry a jurisdiction-level
-`harmNonGateExplainer` (rendered in commit 2 when a harm determination is
-recorded). `"determined_unlikely"` is the **only** suppressing value — `""`,
+`harmNonGateExplainer` (rendered when a harm determination is recorded; the
+MA explainer cites **M.G.L. c. 93H §§ 1, 3(b)** per JDC ruling 2026-08-02 —
+the trigger-two bypass lives in the owner/licensor duty at § 3(b), not
+§ 3(a)). `"determined_unlikely"` is the **only** suppressing value — `""`,
 `"harm_likely"`, and any invalid value change nothing in computation (the
 fail-safe direction is the opposite of `riskLevel`'s pending: computing is the
 conservative outcome here). Harm suppression joins the existing `suppressed`
@@ -413,6 +415,37 @@ information, (2) how & when discovered, (3) when the incident occurred,
   obligations gate on the explicit `riskLevel` input, not on the categories (see
   the engine section); `sensitivity` drives only the UI hint and the
   element→Q1 cross-check.
+- **Harm-assessment question + rendering (harm-gate commit 2, 2026-08-02) —
+  durable decisions.** The harm question renders **conditionally on harm-gated
+  jurisdiction selection** (any selected jurisdiction with an obligation
+  carrying `harmGate` — via `harmGatedJurisdictions` in
+  `results-grouping.js`), as its own conditional section after the EU/UK risk
+  section (number slides 07/08 depending on whether Risk renders; anchor
+  `#form-harm`). Three single-select check-rows persist `harmAssessment`
+  ("Not assessed" is the `""` default); **risk and harm never prefill each
+  other**. The rail "Applicable standards" card is **data-driven from
+  `harmGate`** (never hardcoded): one entry per distinct standard per selected
+  jurisdiction, verbatim in quotes with its citation — Colorado renders two
+  entries tagged Residents / AG. Results: harm-suppressed obligations render
+  in the suppression idiom under the group label **"Suppressed — harm
+  determination"** with per-row verbatim standards (3-line clamp) and the harm
+  citation in the right slot; rows whose mechanism `character` is
+  `"duty_element"` (VA) take the **"Duty element not established:"** framing
+  instead of the exemption framing; the group closes with the admonition
+  footer ("Document the determination contemporaneously…"). Mechanisms are
+  read from `suppression_reasons` (never by index — encryption owns the flat
+  fields on double-suppressed rows, whose encryption line stays above the
+  standard). The **NY/MA still-computing explainer card renders once**
+  (dashed advisory idiom), only under `determined_unlikely` with NY/MA
+  selected, directly above the first NY/MA block; composition is shared with
+  the memo via `harmNonGateDisplay` (lead order NY before MA per the ratified
+  mock). The **memo mirrors the screen** including the standards: Analysis
+  Inputs gains conditional Risk/Harm rows (labels from the shared
+  `RISK_LEVEL_LABELS` / `HARM_ASSESSMENT_LABELS` maps), the harm-suppressed
+  cards print standard + citation + framing + footer, and the explainer prints
+  in the counsel-note idiom — **no new Ember anywhere; suppression stays
+  quiet**. `""` and `"harm_likely"` change no card rendering (pinned by the
+  memo gate's text-parity fixture).
 - **EU/UK risk-assessment section (conditional, `renderRiskAssessment`).** A "07
   Risk Assessment" section renders **only when an EU/UK jurisdiction is
   selected** — appended at the end in full mode (after Measures, so the six fixed
@@ -550,7 +583,11 @@ from the sanitized incident reference/title + date.
 **Top recap section is "Analysis Inputs"** (`drawIncidentSummary`, name
 unchanged) — the awareness/jurisdictions/categories/encryption recap. It was
 renamed from "Incident Summary" to avoid colliding with the incident-report
-"Incident summary" narrative group, which is distinct and unchanged.
+"Incident summary" narrative group, which is distinct and unchanged. As of
+harm-gate commit 2 it also carries conditional "Risk assessment" (EU/UK
+selected) and "Harm assessment" (harm-gated jurisdiction selected) rows,
+mirroring the screen recap via the shared label maps in
+`results-grouping.js`.
 
 **Keep-with-next headers — one uniform guard.** Every header that introduces
 following content reserves the header *plus the true rendered height of its

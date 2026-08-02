@@ -140,6 +140,88 @@ function advisoryDisplay(a) {
   };
 }
 
+// ── Harm-assessment display helpers (harm-gate UI commit, 2026-08-02) ──────
+// Shared by the form recap, the results view, and the memo so the three
+// surfaces cannot drift. All content is sourced from data.js (`harmGate`,
+// `harmNonGateExplainer`) — never hardcoded here beyond the answer labels.
+
+// The three harm-assessment answers, as displayed. `""` is the unset default.
+export const HARM_ASSESSMENT_LABELS = {
+  "": "Not assessed",
+  determined_unlikely: "Determination made and documented",
+  harm_likely: "Harm likely, or not determined",
+};
+
+// EU/UK risk-level display labels — the same strings the form's RISK_OPTIONS
+// rows carry (BreachClock builds its options from this map), shared here so
+// the memo's Analysis Inputs "Risk assessment" row can mirror the screen
+// recap without importing React code.
+export const RISK_LEVEL_LABELS = {
+  unlikely: "Unlikely to result in a risk",
+  risk: "Likely to result in a risk",
+  high: "Likely to result in a high risk",
+};
+
+// Natural-language list join ("A", "A and B", "A, B, and C").
+const joinNatural = (arr) =>
+  arr.length <= 1
+    ? arr[0] || ""
+    : arr.length === 2
+    ? `${arr[0]} and ${arr[1]}`
+    : `${arr.slice(0, -1).join(", ")}, and ${arr[arr.length - 1]}`;
+
+// Selected jurisdictions with any harm-gated obligation — drives the form
+// question's conditional rendering, the standards card, and the recap rows.
+export function harmGatedJurisdictions(selected = {}) {
+  return JURISDICTIONS.filter(
+    (j) => selected[j.id] && (j.obligations || []).some((o) => o.harmGate)
+  );
+}
+
+// Analysis-inputs recap value for the harm assessment. "determined_unlikely"
+// names the selected harm-gated jurisdictions whose standards the
+// determination was applied under; the other answers are their plain labels.
+export function harmAssessmentSummary(harmAssessment, selected = {}) {
+  if (harmAssessment === "determined_unlikely") {
+    const names = harmGatedJurisdictions(selected).map((j) => j.name);
+    return names.length
+      ? `${HARM_ASSESSMENT_LABELS.determined_unlikely} (${joinNatural(names)} standards)`
+      : HARM_ASSESSMENT_LABELS.determined_unlikely;
+  }
+  return HARM_ASSESSMENT_LABELS[harmAssessment] ?? HARM_ASSESSMENT_LABELS[""];
+}
+
+// The NY/MA still-computing explainer — composed ONCE here for both surfaces
+// (dashed advisory card on screen; counsel-note idiom in the memo). Non-null
+// only when a harm determination is recorded AND at least one selected
+// jurisdiction carries a `harmNonGateExplainer`. Renders once, directly above
+// the first such jurisdiction's block. Lead order is the ratified mock's
+// (New York before Massachusetts); any future explainer-carrying jurisdiction
+// falls back after them.
+const NON_GATE_LEAD_ORDER = ["ny", "ma"];
+export function harmNonGateDisplay(harmAssessment, selected = {}) {
+  if (harmAssessment !== "determined_unlikely") return null;
+  const jurs = JURISDICTIONS.filter((j) => selected[j.id] && j.harmNonGateExplainer).sort((a, b) => {
+    const ai = NON_GATE_LEAD_ORDER.indexOf(a.id);
+    const bi = NON_GATE_LEAD_ORDER.indexOf(b.id);
+    return (ai === -1 ? NON_GATE_LEAD_ORDER.length : ai) - (bi === -1 ? NON_GATE_LEAD_ORDER.length : bi);
+  });
+  if (!jurs.length) return null;
+  return {
+    jurisdictionIds: jurs.map((j) => j.id),
+    lead: `${joinNatural(jurs.map((j) => j.name))} obligations remain computed.`,
+    body: jurs.map((j) => j.harmNonGateExplainer).join(" "),
+  };
+}
+
+// A suppressed entry's harm mechanism, read from the additive
+// `suppression_reasons` array — never from the flat fields, and never by
+// index: on a double-suppressed row (encryption + harm) the harm entry is not
+// first and encryption owns the flat fields (commit-1 shape).
+export function harmMechanismOf(s) {
+  return (s?.suppression_reasons || []).find((r) => r.type === "harm") || null;
+}
+
 // Split a block's note entries ({ jurShort, note }) by placement. "sectoral" is
 // also the safe default for any unknown/missing placement — a neutral block-foot
 // position that never implies a pre-notification gate.

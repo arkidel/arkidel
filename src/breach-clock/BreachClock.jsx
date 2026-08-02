@@ -32,7 +32,15 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, Save, X, ChevronDown } from "lucide-react";
 import { JURISDICTIONS, SENSITIVITY_OPTIONS } from "./data.js";
 import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine.js";
-import { groupResultsByJurisdiction } from "./results-grouping.js";
+import {
+  groupResultsByJurisdiction,
+  HARM_ASSESSMENT_LABELS,
+  RISK_LEVEL_LABELS,
+  harmGatedJurisdictions,
+  harmAssessmentSummary,
+  harmNonGateDisplay,
+  harmMechanismOf,
+} from "./results-grouping.js";
 import { computableGate, factsFromPayload } from "./facts.js";
 import { generateMemoPdf } from "./memo-pdf.js";
 import { createIncident, updateIncident, updateIncidentStatus, updateIncidentNotifications, updateIncidentLog, getIncident } from "../data/incidents.js";
@@ -69,9 +77,11 @@ const FORM_SECTIONS = [
 ];
 
 // Every collapsible section id, including the conditional Risk section (which
-// only renders for an EU/UK jurisdiction). Drives Expand all / Collapse all;
-// setting form-risk open while it isn't rendered is harmless.
-const ALL_SECTION_IDS = [...FORM_SECTIONS.map((s) => s.id), "form-risk"];
+// only renders for an EU/UK jurisdiction) and the conditional Harm section
+// (which only renders when a selected jurisdiction carries a harmGate).
+// Drives Expand all / Collapse all; setting form-risk / form-harm open while
+// they aren't rendered is harmless.
+const ALL_SECTION_IDS = [...FORM_SECTIONS.map((s) => s.id), "form-risk", "form-harm"];
 
 // The global top nav (src/components/Layout.jsx) is position:static — it scrolls
 // away with the page rather than staying fixed — so the sticky index only needs
@@ -91,10 +101,42 @@ const NAV_CLEARANCE = 32;
 // highRiskRequired → "high"; "" = unset → pending). Shared by the on-screen
 // control (renderRiskAssessment) and the review recap.
 const RISK_OPTIONS = [
-  { value: "unlikely", label: "Unlikely to result in a risk", desc: "No notification required. Document the assessment under Art. 33(5)." },
-  { value: "risk", label: "Likely to result in a risk", desc: "Notify the supervisory authority within 72 hours. No individual notification." },
-  { value: "high", label: "Likely to result in a high risk", desc: "Notify the authority within 72 hours and affected data subjects without undue delay." },
+  { value: "unlikely", label: RISK_LEVEL_LABELS.unlikely, desc: "No notification required. Document the assessment under Art. 33(5)." },
+  { value: "risk", label: RISK_LEVEL_LABELS.risk, desc: "Notify the supervisory authority within 72 hours. No individual notification." },
+  { value: "high", label: RISK_LEVEL_LABELS.high, desc: "Notify the authority within 72 hours and affected data subjects without undue delay." },
 ];
+
+// Harm-assessment answers — the operative `harmAssessment` input (harm-gate
+// UI commit, 2026-08-02). Value strings match what engine.js suppresses on
+// ("determined_unlikely" is the only suppressing value; "" and "harm_likely"
+// compute everything and differ only in memo recording). Labels come from the
+// shared display map so the recap rows and the memo cannot drift. Single-
+// select rows like the risk question; "Not assessed" ("") is the default. No
+// prefill or shared state in either direction with the risk question.
+const HARM_OPTIONS = [
+  { value: "", label: HARM_ASSESSMENT_LABELS[""], desc: "All obligations compute. The memo records that no determination was made." },
+  { value: "determined_unlikely", label: HARM_ASSESSMENT_LABELS.determined_unlikely, desc: "Suppresses only the obligations whose statute provides for it, each under its own standard." },
+  { value: "harm_likely", label: HARM_ASSESSMENT_LABELS.harm_likely, desc: "All obligations compute. The memo records the assessment outcome." },
+];
+
+// Short per-obligation tags for the "Applicable standards" card, used only
+// when a jurisdiction carries more than one distinct standard (Colorado:
+// residents vs AG). Keyed by obligation kind.
+const HARM_KIND_TAGS = { individual: "Residents", ag: "AG", cra: "CRA", agency: "Agency", authority: "Authority", service: "Service" };
+
+// Unique harm standards for one jurisdiction, in obligation order — sourced
+// from harmGate data, never hardcoded. Deduped by standard string, so
+// same-standard obligations (DE residents/AG/service; CT's cascade) collapse
+// to one entry carrying the first obligation's citation and tag.
+const harmStandardsFor = (jur) => {
+  const entries = [];
+  (jur.obligations || []).forEach((o) => {
+    if (!o.harmGate) return;
+    if (entries.some((e) => e.standard === o.harmGate.standard)) return;
+    entries.push({ standard: o.harmGate.standard, citation: o.harmGate.citation, tag: HARM_KIND_TAGS[o.kind] || o.kind });
+  });
+  return entries;
+};
 
 // Encryption-cluster option sets (S3b). The values match what engine.js gates on:
 // encrypted/redacted/keyAcquired/reidentificationAcquired are "yes"|"no"; strength
@@ -359,6 +401,9 @@ export default function BreachClock() {
   const [record, setRecord] = useState(() => ({ ...EMPTY_RECORD, dataSubjectBlocks: [makeBlock()] }));
 
   const [riskLevel, setRiskLevel] = useState("");
+  // Harm-assessment attestation ("" | "determined_unlikely" | "harm_likely").
+  // Independent of riskLevel — the two never prefill each other.
+  const [harmAssessment, setHarmAssessment] = useState("");
   const [now, setNow] = useState(new Date());
   const [downloadError, setDownloadError] = useState("");
 
@@ -435,6 +480,9 @@ export default function BreachClock() {
     // riskLevel passes through as-is — the engine fails safe on anything
     // outside VALID_RISK_LEVELS (routes to pending, never suppression).
     setRiskLevel(typeof p.riskLevel === "string" ? p.riskLevel : "");
+    // harmAssessment likewise — the engine treats anything other than the
+    // exact "determined_unlikely" sentinel as inert (computes everything).
+    setHarmAssessment(typeof p.harmAssessment === "string" ? p.harmAssessment : "");
     const savedBlocks = Array.isArray(p.record?.dataSubjectBlocks) ? p.record.dataSubjectBlocks : [];
     setRecord({
       ...EMPTY_RECORD,
@@ -516,6 +564,7 @@ export default function BreachClock() {
     reidentificationAcquired,
     gdprUnintelligibility,
     riskLevel,
+    harmAssessment,
     record,
   });
 
@@ -692,9 +741,16 @@ export default function BreachClock() {
   // and the IntersectionObserver stay in sync as that section comes and goes.
   // The positional FORM_SECTIONS[n].id references on the six fixed <section>s
   // are left untouched.
+  // Selected jurisdictions carrying any harm-gated obligation — drives the
+  // conditional Harm Assessment question, the standards card, and the recap
+  // row. Sourced from data.js harmGate declarations via the shared helper.
+  const harmGatedSelected = harmGatedJurisdictions(jurisdictions);
+  const anyHarmGated = harmGatedSelected.length > 0;
+
   const indexSections = [
     ...FORM_SECTIONS,
     ...((jurisdictions.eu || jurisdictions.uk) ? [{ id: "form-risk", label: "Risk" }] : []),
+    ...(anyHarmGated ? [{ id: "form-harm", label: "Harm" }] : []),
   ];
 
   const showSectionIndex = isWide && !isNarrow && !submitted && !quickMode;
@@ -712,7 +768,7 @@ export default function BreachClock() {
     );
     els.forEach((el) => obs.observe(el));
     return () => obs.disconnect();
-  }, [showSectionIndex, jurisdictions.eu, jurisdictions.uk]);
+  }, [showSectionIndex, jurisdictions.eu, jurisdictions.uk, anyHarmGated]);
 
   // ── Record updaters ──
   const updateRecord = (key, value) => setRecord((r) => ({ ...r, [key]: value }));
@@ -953,6 +1009,7 @@ export default function BreachClock() {
         sensitivityLabels: sensitivityLabelsForMemo,
         encryptionSummary: encryptionRecap,
         riskLevel,
+        harmAssessment,
         // Lifecycle status for the memo's Analysis Inputs "Status" line —
         // the record states what the matter was when the memo was cut.
         status,
@@ -1380,6 +1437,8 @@ export default function BreachClock() {
           record.measuresTakenNotAvailable || record.measuresProposedNotAvailable);
       case "form-risk":
         return !!riskLevel;
+      case "form-harm":
+        return !!harmAssessment;
       default:
         return false;
     }
@@ -1742,6 +1801,69 @@ export default function BreachClock() {
     </div>
   );
 
+  // ── Harm assessment (operative; shown only when a selected jurisdiction
+  //    carries a harmGate — CT/DE/CO/VA as encoded). Three mutually-exclusive
+  //    rows like the risk question; "Not assessed" ("") is the default. The
+  //    answer attests a documented determination under the applicable
+  //    statutory standards (shown in the "Applicable standards" card); the
+  //    tool never draws the conclusion. No prefill or shared state in either
+  //    direction with the risk question. ──
+  const renderHarmAssessment = () => {
+    const euUk = jurisdictions.eu || jurisdictions.uk;
+    return (
+      <div style={{ marginBottom: "24px" }}>
+        {labelRow("Has an appropriate investigation determined that the applicable statutory harm or misuse standard is satisfied?")}
+        <p style={{ fontSize: "12.5px", lineHeight: 1.6, margin: "0 0 16px", color: "#2C2418", opacity: 0.7, maxWidth: "640px" }}>
+          Distinct from the EU/UK risk assessment{euUk ? " above" : ""}, which addresses risk to data subjects' rights and freedoms under the GDPR. This question addresses the harm and misuse standards of{" "}
+          <span style={{ color: "#1B2A3F", fontWeight: 500, opacity: 1 }}>{joinList(harmGatedSelected.map((j) => j.name))}</span>
+          {" "}— each standard is shown at right.
+        </p>
+        <div style={{ display: "grid", gap: "4px" }}>
+          {HARM_OPTIONS.map((o) => (
+            <div key={o.value || "unset"}>
+              {checkRow(harmAssessment === o.value, o.label, () => setHarmAssessment(o.value), { desc: o.desc })}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // "Applicable standards" explainer card (parchment counsel-note family,
+  // beside the harm question): one entry per selected harm-gated
+  // jurisdiction, standard verbatim in quotes with its citation — sourced
+  // from harmGate data via harmStandardsFor, never hardcoded. Colorado
+  // renders one entry per DISTINCT standard, tagged (Residents / AG).
+  const renderHarmStandardsNote = () => (
+    <aside className="counsel-note">
+      <div style={{ display: "flex", alignItems: "center", gap: "9px", marginBottom: "10px", color: "#1B2A3F" }}>
+        <Info size={14} />
+        <span className="serif" style={{ fontSize: "16px", lineHeight: 1.3, color: "#1B2A3F" }}>
+          Applicable standards
+        </span>
+      </div>
+      {harmGatedSelected.map((jur, idx) => {
+        const entries = harmStandardsFor(jur);
+        return (
+          <div key={jur.id} style={{ marginBottom: idx === harmGatedSelected.length - 1 ? 0 : "14px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 500, color: "#1B2A3F", marginBottom: "4px" }}>{jur.name}</div>
+            {entries.map((e, i) => (
+              <div key={i} style={{ marginBottom: i === entries.length - 1 ? 0 : "8px" }}>
+                {entries.length > 1 && (
+                  <div className="mono" style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.08em", color: "#2C2418", opacity: 0.6, marginBottom: "2px" }}>
+                    {e.tag}
+                  </div>
+                )}
+                <p style={{ fontSize: "13px", lineHeight: 1.6, margin: "0 0 2px" }}>“{e.standard}”</p>
+                <div className="mono" style={{ fontSize: "11px", opacity: 0.7, color: "#2C2418" }}>{e.citation}</div>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </aside>
+  );
+
   // ── Deadline obligations (the analysis; shown only on the review) ──
   const renderObligations = () => {
     // pending = EU/UK obligations awaiting a risk assessment. While present, the
@@ -1754,20 +1876,28 @@ export default function BreachClock() {
     const encryptionSuppressed = suppressed.some(
       (s) => s.suppression_type === "breach_definition" || s.suppression_type === "unintelligibility_exemption"
     );
+    // Harm suppression is read from the mechanism array, not the flat type —
+    // on a double-suppressed row encryption owns the flat fields.
+    const harmSuppressed = suppressed.some((s) => !!harmMechanismOf(s));
     const greenBanner =
-      riskSuppressed && !encryptionSuppressed
+      riskSuppressed && !encryptionSuppressed && !harmSuppressed
         ? {
             headline: "No notification obligations fire under the risk assessment provided.",
             body: "The breach was assessed as not meeting the notification threshold; document the assessment and the reasoning.",
           }
-        : encryptionSuppressed && !riskSuppressed
+        : encryptionSuppressed && !riskSuppressed && !harmSuppressed
         ? {
             headline: "No notification obligations fire under the facts provided.",
             body: "Based on the encryption fact reported, every obligation that would otherwise apply has been suppressed — either because the breach falls outside the statutory definition (U.S. states) or because individual notification is exempted by an unintelligibility-of-data provision (EU/UK GDPR Art. 34(3)(a)). Confirm encryption met each jurisdiction's standard before relying on this analysis.",
           }
+        : harmSuppressed && !riskSuppressed && !encryptionSuppressed
+        ? {
+            headline: "No notification obligations fire under the harm determination recorded.",
+            body: "Each suppressed obligation rests on counsel's documented determination, applied under that statute's own standard. Document the determination contemporaneously.",
+          }
         : {
             headline: "No notification obligations fire under the facts provided.",
-            body: "Every obligation that would otherwise apply has been suppressed — by the encryption fact reported and/or the risk assessment. See the bases below.",
+            body: "Every obligation that would otherwise apply has been suppressed — by the encryption fact reported, the risk assessment, and/or the harm determination recorded. See the bases below.",
           };
 
     // ── Jurisdiction-first grouping (presentation only; engine output unmoved) ──
@@ -1777,6 +1907,14 @@ export default function BreachClock() {
     // blockSections() returns each block's non-empty card-type groups in the
     // shared within-block order (the order knob lives in results-grouping.js).
     const groups = groupResultsByJurisdiction({ deadlines, suppressed, review, services, advisories, jurisdictions });
+
+    // NY/MA still-computing explainer — non-null only when a harm
+    // determination is recorded and NY/MA is selected; renders once, above
+    // the first explainer-carrying block in the rendered order.
+    const harmExplainer = harmNonGateDisplay(harmAssessment, jurisdictions);
+    const harmExplainerBlockId = harmExplainer
+      ? groups.find((b) => harmExplainer.jurisdictionIds.includes(b.jurisdictionId))?.jurisdictionId
+      : null;
 
     // Card renderers — markup IDENTICAL to the former outcome-first sections,
     // only relocated into the per-jurisdiction blocks. No copy or style change.
@@ -2130,6 +2268,65 @@ export default function BreachClock() {
       </div>
     );
 
+    // Harm-suppressed card (harm-gate UI commit, 2026-08-02): the existing
+    // suppressed-card idiom (white, Moss stripe) with the verbatim statutory
+    // standard as the body — clamped to three lines — and the harm citation
+    // in a right slot. VA rows (mechanism character "duty_element") are
+    // introduced with the negated-duty-element framing instead of the
+    // exemption framing. The harm mechanism is read from suppression_reasons
+    // (never by index — encryption owns the flat fields on double-suppressed
+    // rows, whose encryption line renders above the standard).
+    const renderHarmSuppressedCard = (s, i) => {
+      const harm = harmMechanismOf(s);
+      if (!harm) return renderSuppressedCard(s, i);
+      const isDuty = harm.character === "duty_element";
+      return (
+        <div key={i} style={{ background: "#fff", borderLeft: "4px solid #5A6E4A", padding: "20px 24px", borderRadius: "0 12px 12px 0" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
+            <div>
+              <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
+                {s.authority}
+              </div>
+              <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>
+                {s.suppression_type === "harm" ? (
+                  s.original_citation
+                ) : (
+                  /* Double-suppressed: the flat fields carry the encryption
+                     mechanism — keep its existing line above the standard. */
+                  <>{s.original_citation} → {s.suppression_citation} ({s.suppression_type === "breach_definition" ? "no breach as defined" : "notification exempted by unintelligibility"})</>
+                )}
+              </div>
+              <div
+                className="rule-text"
+                style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis" }}
+              >
+                {isDuty ? "Duty element not established: " : "Statutory exemption applied: "}
+                “{harm.standard}”
+              </div>
+              {s.source_url && (
+                <a
+                  href={s.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "6px",
+                    fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500,
+                    marginTop: "14px", color: "inherit", textDecoration: "none",
+                    borderBottom: "1px solid currentColor", paddingBottom: "2px", opacity: 0.8,
+                  }}
+                >
+                  View primary source ↗
+                </a>
+              )}
+            </div>
+            <div style={{ textAlign: "right", minWidth: "160px" }}>
+              <div className="mono" style={{ fontSize: "12px", opacity: 0.7 }}>{harm.citation}</div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     const renderReviewCard = (r, i, extraStyle) => (
       <div key={i} style={{ background: "#fff", borderLeft: "4px solid #9FAEC2", padding: "20px 24px", borderRadius: "0 12px 12px 0", boxShadow: "0 2px 8px rgba(27,42,63,0.10)", ...extraStyle }}>
         <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
@@ -2287,10 +2484,28 @@ export default function BreachClock() {
       // cards after any service cards (ratified placement).
       block.serviceCards.forEach((s, i) => out.push(renderServiceCard(s, `svc-${i}`)));
       block.advisoryCards.forEach((a, i) => out.push(renderAdvisoryCard(a, `adv-${i}`)));
-      if (block.suppressedCards.length > 0) {
+      // Suppressed cards split by mechanism: harm-suppressed rows (any harm
+      // reason in suppression_reasons — including double-suppressed rows,
+      // where encryption owns the flat fields) get their own group with the
+      // ratified label and admonition footer; everything else keeps the
+      // existing treatment.
+      const harmCards = block.suppressedCards.filter((s) => !!harmMechanismOf(s));
+      const plainCards = block.suppressedCards.filter((s) => !harmMechanismOf(s));
+      if (plainCards.length > 0) {
         out.push(<div key="sup-label" className="section-mark" style={{ margin: "24px 0 12px" }}>Notification likely not required</div>);
-        block.suppressedCards.forEach((s, i) =>
+        plainCards.forEach((s, i) =>
           out.push(<div key={`sup-${i}`} style={{ marginTop: i === 0 ? 0 : "12px" }}>{renderSuppressedCard(s, i)}</div>)
+        );
+      }
+      if (harmCards.length > 0) {
+        out.push(<div key="hsup-label" className="section-mark" style={{ margin: "24px 0 12px" }}>Suppressed — harm determination</div>);
+        harmCards.forEach((s, i) =>
+          out.push(<div key={`hsup-${i}`} style={{ marginTop: i === 0 ? 0 : "12px" }}>{renderHarmSuppressedCard(s, i)}</div>)
+        );
+        out.push(
+          <div key="hsup-foot" className="rule-text" style={{ margin: "12px 4px 0" }}>
+            Document the determination contemporaneously. Suppression rests on counsel's attestation, applied under each statute's own standard.
+          </div>
         );
       }
       if (block.sectoralNotes.length > 0) {
@@ -2349,6 +2564,35 @@ export default function BreachClock() {
       <div style={{ display: "grid", gap: "44px", marginTop: "16px" }}>
         {groups.map((block) => (
           <div key={block.jurisdictionId}>
+            {/* NY/MA still-computing explainer (dashed advisory idiom):
+                renders ONCE, directly above the first explainer-carrying
+                jurisdiction block, only when a harm determination is
+                recorded. Composition is shared with the memo via
+                harmNonGateDisplay. */}
+            {harmExplainer && block.jurisdictionId === harmExplainerBlockId && (
+              <div
+                style={{
+                  background: "#fff",
+                  border: "1px dashed rgba(27,42,63,0.45)",
+                  borderLeft: "4px solid #E8DDC4",
+                  borderRadius: "0 12px 12px 0",
+                  padding: "20px 24px",
+                  marginBottom: "20px",
+                  position: "relative",
+                  zIndex: 1,
+                }}
+              >
+                <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+                  <AlertTriangle size={16} style={{ color: "#1B2A3F", opacity: 0.75, flexShrink: 0, marginTop: "3px" }} />
+                  <div>
+                    <div className="serif" style={{ fontSize: "16px", fontWeight: 400, lineHeight: 1.3, letterSpacing: "-0.005em" }}>
+                      {harmExplainer.lead}
+                    </div>
+                    <div style={{ fontSize: "13px", lineHeight: 1.6, opacity: 0.8, marginTop: "8px" }}>{harmExplainer.body}</div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div style={{ borderBottom: "1px solid rgba(27,42,63,0.12)", paddingBottom: "10px", marginBottom: "4px" }}>
               <div className="serif" style={{ fontSize: "22px", fontWeight: 400, lineHeight: 1.2, letterSpacing: "-0.01em" }}>{block.name}</div>
               <div className="mono" style={{ fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>{block.statuteSubtitle}</div>
@@ -2635,6 +2879,14 @@ export default function BreachClock() {
               {isNarrow && renderNote("risk")}
             </div>
           )}
+          {/* Harm assessment — after the EU/UK risk question, only when a
+              selected jurisdiction carries a harmGate. */}
+          {anyHarmGated && (
+            <div id="form-harm" style={{ scrollMarginTop: `${NAV_CLEARANCE}px` }}>
+              {renderHarmAssessment()}
+              {isNarrow && renderHarmStandardsNote()}
+            </div>
+          )}
         </section>
       ) : (
         <>
@@ -2841,6 +3093,18 @@ export default function BreachClock() {
                 {isNarrow && renderNote("risk")}
               </>
             )}
+
+          {/* Harm Assessment — after the EU/UK risk section, only when a
+              selected jurisdiction carries a harmGate. Appended like Risk so
+              the six fixed sections keep their numbers; its own number slides
+              between 07 and 08 depending on whether Risk renders. */}
+          {anyHarmGated &&
+            collapsibleSection("form-harm", (jurisdictions.eu || jurisdictions.uk) ? "08" : "07", "Harm Assessment", null,
+              <>
+                {renderHarmAssessment()}
+                {isNarrow && renderHarmStandardsNote()}
+              </>
+            )}
         </>
       )}
 
@@ -2941,6 +3205,7 @@ export default function BreachClock() {
                 "Risk assessment",
                 riskLevel ? RISK_OPTIONS.find((o) => o.value === riskLevel)?.label : "Not assessed"
               )}
+            {anyHarmGated && recapRow("Harm assessment", harmAssessmentSummary(harmAssessment, jurisdictions))}
             {(jurisdictions.eu || jurisdictions.uk) &&
               recapRow(
                 "Unintelligibility (Art. 34(3)(a))",
@@ -3284,6 +3549,7 @@ export default function BreachClock() {
                     {renderNote("q1")}
                     {renderNote("encryption")}
                     {(jurisdictions.eu || jurisdictions.uk) && renderNote("risk")}
+                    {anyHarmGated && renderHarmStandardsNote()}
                   </div>
                 </>
               )}

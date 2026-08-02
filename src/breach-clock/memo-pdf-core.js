@@ -29,7 +29,14 @@
 import { PDFDocument, PDFString, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { JURISDICTIONS } from "./data.js";
-import { groupResultsByJurisdiction } from "./results-grouping.js";
+import {
+  groupResultsByJurisdiction,
+  RISK_LEVEL_LABELS,
+  harmGatedJurisdictions,
+  harmAssessmentSummary,
+  harmNonGateDisplay,
+  harmMechanismOf,
+} from "./results-grouping.js";
 
 // ─── Brand colors as pdf-lib RGB ──────────────────────────────────────────
 const MIDNIGHT = rgb(0.106, 0.165, 0.247);
@@ -286,6 +293,17 @@ function drawIncidentSummary(state, facts) {
       ? [["Data categories", facts.sensitivityLabels.join(", ")]]
       : []),
     ["Encryption", facts.encryptionSummary || "Not reported"],
+    // Risk / Harm assessment rows (harm-gate UI commit, 2026-08-02) — mirror
+    // the screen recap: the risk row renders only with an EU/UK jurisdiction
+    // selected, the harm row only when a selected jurisdiction carries a
+    // harmGate. Labels come from the shared display maps so the two surfaces
+    // cannot drift.
+    ...(facts.jurisdictions && (facts.jurisdictions.eu || facts.jurisdictions.uk)
+      ? [["Risk assessment", (facts.riskLevel && RISK_LEVEL_LABELS[facts.riskLevel]) || "Not assessed"]]
+      : []),
+    ...(facts.jurisdictions && harmGatedJurisdictions(facts.jurisdictions).length
+      ? [["Harm assessment", harmAssessmentSummary(facts.harmAssessment, facts.jurisdictions)]]
+      : []),
   ];
 
   // Keep-with-next: don't strand the heading without its first row.
@@ -513,6 +531,30 @@ function serviceBlocks(s) {
   ];
 }
 
+// Harm-suppressed card content (harm-gate UI commit, 2026-08-02) — mirrors
+// the screen's harm-suppressed card: the verbatim statutory standard with the
+// exemption framing (or the negated-duty-element framing for mechanism
+// character "duty_element" — VA), plus the harm citation. The harm mechanism
+// is read from suppression_reasons (never by index); on a double-suppressed
+// row encryption owns the flat fields and its line prints above the standard.
+function harmSuppressedBlocks(s, harm) {
+  const isDuty = harm.character === "duty_element";
+  const lead = isDuty ? "Duty element not established: " : "Statutory exemption applied: ";
+  const encryptionMech = s.suppression_type === "breach_definition"
+    ? "breach-definition exclusion"
+    : "unintelligibility exemption";
+  return [
+    { type: "topRow", left: s.authority },
+    ...(s.original_citation ? [{ type: "labelMono", label: "Original obligation", body: s.original_citation }] : []),
+    ...(s.suppression_type !== "harm" && s.suppression_citation
+      ? [{ type: "labelMono", label: "Also suppressed by", body: `${s.suppression_citation} (${encryptionMech})` }]
+      : []),
+    { type: "labelMono", label: "Suppressed by", body: harm.citation },
+    { type: "body", text: `${lead}“${harm.standard}”` },
+    ...(s.source_url ? [{ type: "url", label: "Source", url: s.source_url }] : []),
+  ];
+}
+
 function suppressedBlocks(s) {
   const mech = s.suppression_type === "breach_definition"
     ? "breach-definition exclusion"
@@ -566,6 +608,11 @@ function noteBlocks(note) {
 // the parchment note groups carry the placement eyebrows below.
 const REVIEW_LABEL = "Counsel review required";
 const SUPPRESSED_LABEL = "Notification likely not required";
+const HARM_SUPPRESSED_LABEL = "Suppressed — harm determination";
+// Group footer under the harm-suppressed cards — same admonition as the
+// screen (suppression stays quiet; no Ember anywhere in this section).
+const HARM_SUPPRESSED_FOOTNOTE =
+  "Document the determination contemporaneously. Suppression rests on counsel's attestation, applied under each statute's own standard.";
 const CAVEAT_EYEBROW = "Pre-Notification Considerations";
 const SECTORAL_EYEBROW = "Other Applicable Requirements";
 const PARALLEL_LEAD = "Parallel AG obligation — may also apply";
@@ -638,9 +685,20 @@ function buildBlockPlan(block) {
     card(noteBlocks({ title: a.title, content: a.body, citation: a.citation }), PARCHMENT)
   );
 
-  if (block.suppressedCards.length) {
+  // Suppressed cards split by mechanism, mirroring the screen: rows with any
+  // harm reason in suppression_reasons (including double-suppressed rows,
+  // where encryption owns the flat fields) render under their own label with
+  // the admonition footnote; everything else keeps the existing treatment.
+  const plainSuppressed = block.suppressedCards.filter((s) => !harmMechanismOf(s));
+  const harmSuppressed = block.suppressedCards.filter((s) => !!harmMechanismOf(s));
+  if (plainSuppressed.length) {
     label(SUPPRESSED_LABEL);
-    block.suppressedCards.forEach((s) => card(suppressedBlocks(s), MOSS));
+    plainSuppressed.forEach((s) => card(suppressedBlocks(s), MOSS));
+  }
+  if (harmSuppressed.length) {
+    label(HARM_SUPPRESSED_LABEL);
+    harmSuppressed.forEach((s) => card(harmSuppressedBlocks(s, harmMechanismOf(s)), MOSS));
+    plan.push({ t: "footnote", text: HARM_SUPPRESSED_FOOTNOTE });
   }
 
   if (block.sectoralNotes.length) {
@@ -656,7 +714,9 @@ function buildBlockPlan(block) {
 }
 
 function planItemHeight(item, fonts) {
-  return item.t === "label" ? SUBLABEL_H : measureCard(item.blocks, fonts);
+  if (item.t === "label") return SUBLABEL_H;
+  if (item.t === "footnote") return measureWrapped(item.text, fonts.sansReg, SIZE.citation, CONTENT_W) + 4;
+  return measureCard(item.blocks, fonts);
 }
 
 function drawJurisdictionBlock(state, block) {
@@ -686,6 +746,13 @@ function drawJurisdictionBlock(state, block) {
 
     if (item.t === "label") {
       drawSubLabel(state, item.text);
+    } else if (item.t === "footnote") {
+      // Quiet Mist admonition line under a card group (the harm-suppressed
+      // group footer) — text, not a card; never Ember.
+      state.cursorY = drawWrapped(state.currentPage(), item.text, CONTENT_X, state.cursorY, {
+        font: fonts.sansReg, size: SIZE.citation, color: MIST, maxWidth: CONTENT_W,
+      });
+      state.cursorY -= 4;
     } else {
       const cardBottom = drawCard(state.currentPage(), item.blocks, state.cursorY, item.color, fonts);
       state.cursorY = cardBottom - CARD_GAP;
@@ -1087,6 +1154,9 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
     jurisdictionList: buildJurisdictionList(facts),
     sensitivityLabels: facts.sensitivityLabels || [],
     encryptionSummary: facts.encryptionSummary,
+    jurisdictions: facts.jurisdictions || {},
+    riskLevel: facts.riskLevel,
+    harmAssessment: facts.harmAssessment,
   });
 
   // Jurisdiction-first grouping (shared with the on-screen results page via
@@ -1102,7 +1172,20 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
     advisories: advisories || [],
     jurisdictions: facts.jurisdictions || {},
   });
+  // NY/MA still-computing explainer — prints once, in the counsel-note idiom,
+  // directly above the first explainer-carrying jurisdiction block, whenever
+  // the screen renders its card (harm determination recorded + NY/MA
+  // selected). Composition shared with the screen via harmNonGateDisplay.
+  const harmExplainer = harmNonGateDisplay(facts.harmAssessment, facts.jurisdictions || {});
+  let harmExplainerDrawn = false;
   for (const block of groups) {
+    if (harmExplainer && !harmExplainerDrawn && harmExplainer.jurisdictionIds.includes(block.jurisdictionId)) {
+      const noteCardBlocks = noteBlocks({ title: harmExplainer.lead, content: harmExplainer.body });
+      state.ensureRoom(measureCard(noteCardBlocks, fonts));
+      const noteBottom = drawCard(state.currentPage(), noteCardBlocks, state.cursorY, PARCHMENT, fonts);
+      state.cursorY = noteBottom - CARD_GAP;
+      harmExplainerDrawn = true;
+    }
     drawJurisdictionBlock(state, block);
   }
 

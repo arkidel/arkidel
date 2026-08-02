@@ -612,9 +612,10 @@ history share a Supabase backend and should be sequenced together.
   - Gate verified the edit-data-categories jump fix live: the SSN row lands
     in view; the row top sits flush against the nav clearance — cosmetic
     tightness only, revisit only if it bothers JDC. (Gate render 2026-07-26.)
-- **Harm-gate form question** `[substance]` — **DONE (commit 1 of 2)
-  2026-08-02**; UI/memo rendering is commit 2, which follows — the pair
-  ships together after one JDC + Claude gate. Design settled in principle
+- **Harm-gate form question** `[substance]` — **DONE 2026-08-02, both
+  commits** (engine/data commit 1 d48ff1b + the § 3(b) explainer fix + the
+  UI/memo commit); the trio ships together after one JDC + Claude gate.
+  Design settled in principle
   (single generic question, per-jurisdiction harmGate mechanism carrying each
   statute's exact standard and character: exemption CT/DE, misuse
   determination CO, duty element VA, definitional-with-dual-trigger-bypass
@@ -647,6 +648,29 @@ history share a Supabase backend and should be sequenced together.
     111 in-file (was 98), 73 adversarial (was 63; new "J. Harm" group).
     NY design ruling made: not gateable by the generic question —
     `harmNonGateExplainer` instead.
+  - **MA explainer citation fix landed 2026-08-02** (own commit before the
+    UI commit; JDC ruling 2026-08-02): the trigger-two bypass lives in the
+    owner/licensor duty at § 3(b), not "§ 3(a)(2)"; explainer string now
+    cites M.G.L. c. 93H §§ 1, 3(b); the intake-forms (a)/(b) flag from the
+    2026-08-01 review is resolved.
+  - **Commit 2 (UI + memo) landed 2026-08-02** (mock ratified by JDC
+    2026-08-02): conditional "Harm Assessment" form question (renders only
+    when a selected jurisdiction carries a harmGate; three single-select
+    rows, "Not assessed" default; risk and harm never prefill each other);
+    data-driven "Applicable standards" rail card (CO tagged Residents / AG);
+    results render the "Suppressed — harm determination" group with per-row
+    verbatim standards + citations, VA negated-duty-element framing, and the
+    admonition footer; the NY/MA still-computing explainer card (dashed
+    advisory idiom) renders once above the first NY/MA block,
+    determined_unlikely only; memo mirrors the screen (Analysis Inputs
+    Risk/Harm rows, harm-suppressed cards with standards, the explainer in
+    the counsel-note idiom; no new Ember). Display composition centralized
+    in results-grouping.js (HARM_ASSESSMENT_LABELS / RISK_LEVEL_LABELS /
+    harmAssessmentSummary / harmNonGateDisplay / harmMechanismOf). Verified
+    headlessly: build, both suites (111 + 73), and the extended memo gate
+    (scripts/render-gate-memo.mjs — five fixtures; the harm fixture asserts
+    both CO strings distinct, VA framing, § 3(b), the Analysis Inputs row,
+    and ""-vs-"harm_likely" text parity except that row).
 - **Primary-source review cycle for all shipped jurisdictions — DONE
   2026-08-01** (JDC + Claude). All ten jurisdictions verified against
   official statute publications or regulatory authorities. ZERO substantive
