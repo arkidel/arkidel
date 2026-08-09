@@ -56,6 +56,53 @@ have descriptive messages that reference the specific rule changed and the
 primary source (e.g., "Update CA AG threshold to >500 per § 1798.82(f)
 post-SB-446 verification") rather than generic messages.
 
+### Citation standards (house rules, locked 2026-08-09)
+
+**Bluebook T1 is the house citation standard** for all structured citation
+fields (`statute`, `citation`, harmGate `citation`) across every surface.
+One citation string set — screen and memo render the same strings; never
+surface-condition or runtime-rewrite a citation. Reference forms:
+
+- `Colo. Rev. Stat. § 6-1-716(2)(a)`
+- `Conn. Gen. Stat. § 36a-701b(b)(1)`
+- `Mass. Gen. Laws ch. 93H, § 3(b)` (note the comma; replaces `M.G.L.` style)
+- `Del. Code Ann. tit. 6, § 12B-102(a)` (replaces `6 Del. C.` style)
+- `N.Y. Gen. Bus. Law § 899-aa(2)(a)`
+- `Cal. Civ. Code § 1798.82(a)` / `Cal. Health & Safety Code § 1280.15`
+- `Tex. Bus. & Com. Code Ann. § 521.053(b)` (add `Ann.`)
+- `Va. Code Ann. § 18.2-186.6(A)` (add `Ann.`)
+- `23 N.Y.C.R.R. § 500.17(a)` (replaces `23 NYCRR`)
+- `15 U.S.C. § 1681a(p)`
+- `GDPR art. 33` / `UK GDPR art. 33` (order and case; instrument name
+  distinguishes EU from UK — never a bare `Art. 33`)
+
+Only Colorado is conformed and verified as of 2026-08-09; the remaining
+forms above are the TARGET for each jurisdiction's own primary-source
+conformance pass and must not be applied in bulk ahead of verification.
+
+**First reference is per rendered surface, carried structurally**: the
+jurisdiction-level `statute` field and per-obligation `citation` slots are
+the full citations on every surface; prose (counsel notes, conditions,
+deadline phrases) may then use short forms. In prose, bare `§` short forms
+are permitted only in single-code jurisdictions. NY (Gen. Bus. Law /
+23 N.Y.C.R.R.), CA (Civ. Code / Health & Safety), and VA (§ 18.2-186.6 /
+§ 32.1-127.1:05) span two codes: retain the code name in prose there. EU/UK
+prose must always carry the instrument name with the article.
+
+**Pin precision**: cite the subsection that states the covered entity's
+duty, not the parent (e.g., the CO AG duty pins § 6-1-716(2)(f)(I), not
+(2)(f) — (f)(II) binds the AG, not the covered entity). Umbrella cites are
+correct only where the statute itself cross-references at that level
+(e.g., the § 6-1-716(3) safe harbors preserving notice "pursuant to
+subsection (2)(f)").
+
+**Hard constraint — no `" — "` in citation strings.** The memo render path
+(memo-pdf-core.js) composes and re-splits basis lines as
+`{citation} — {deadline_phrase}` on the `" — "` sequence. A citation string
+containing that sequence silently corrupts basis-line parsing. Em-dashes in
+prose fields are fine; in `statute`/`citation`/harmGate `citation` they are
+forbidden.
+
 ### `src/breach-clock/engine.js` — rules engine
 
 Pure JavaScript, no React. Contains `computeDeadlines(facts)`, `isHighRisk`,
@@ -1083,6 +1130,9 @@ typeface is intentional.
   forwarding and ended on /sign-in anyway via double redirect; awaiting the
   session clear first makes the destination deterministic. Do not navigate
   before the signOut promise resolves.
+- Advisory/note card titles can wrap mid-citation on screen (e.g.
+  `§ 6-` / `1-716(2)(a.3)`); a non-breaking treatment for citation tokens
+  in headings is a future cosmetic fix (noted 2026-08-09).
 
 ---
 
