@@ -1891,8 +1891,8 @@ const TEST_CASES = [
     expect: expectAll(
       expectCount(0),
       expectSuppressedCount(3),
-      expectHarmSuppressed("Colorado", "Colorado Residents", { citation: "Colo. Rev. Stat. § 6-1-716(2)(a)", standard: "misuse of the information has not occurred and is not reasonably likely to occur" }),
-      expectHarmSuppressed("Colorado", "Attorney General", { citation: "Colo. Rev. Stat. § 6-1-716(2)(f)(I)", standard: "misuse of the information has not occurred and is not likely to occur" }),
+      expectHarmSuppressed("Colorado", "Colorado Residents", { citation: "Colo. Rev. Stat. § 6-1-716(2)(a)", standard: "the misuse of information about a Colorado resident has not occurred and is not reasonably likely to occur" }),
+      expectHarmSuppressed("Colorado", "Attorney General", { citation: "Colo. Rev. Stat. § 6-1-716(2)(f)(I)", standard: "the misuse of information about a Colorado resident has not occurred and is not likely to occur" }),
       expectHarmSuppressed("Colorado", "Consumer Reporting", { citation: "Colo. Rev. Stat. § 6-1-716(2)(a)" }),
       (deadlines, suppressed = []) => {
         const harmOf = (auth) => suppressed

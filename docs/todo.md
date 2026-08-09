@@ -683,6 +683,14 @@ history share a Supabase backend and should be sequenced together.
   source upgrades (CO/CT/DE official sources; Justia retired), § 18.2-186.6(C)
   conform (VA), verbatim § 1 captures (MA, intake-record-only), UK PECR/DUAA
   counsel note, and verbatim harm-standard capture for the harm-gate design.
+  - **Residual Lexis read of codified CRS § 6-1-716 — DONE 2026-08-09**
+    (JDC): verified against the official C.R.S. Annotated database
+    (LexisNexis public portal), current through ch. 137, 2026 Reg. Sess.;
+    the Colorado primary-source conformance pass landed 2026-08-09 — see
+    the § 5.12 verification record in `docs/intake-forms.md`.
+- **1681a → 1681a(p) tightening pending for non-CO jurisdictions citing the
+  FCRA definition; handle in each jurisdiction's own conformance pass.**
+  `[substance]`
 
 ---
 

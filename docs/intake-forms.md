@@ -1070,14 +1070,14 @@ UK in parallel).
   a prompt good-faith investigation determines misuse has not occurred and is
   not reasonably likely to occur.
 
-## 5.4 Regulator notification — Colorado Attorney General (§ 6-1-716(2)(f))
+## 5.4 Regulator notification — Colorado Attorney General (§ 6-1-716(2)(f)(I))
 
 - **Required?** Yes, where 500 or more Colorado residents are reasonably
   believed to have been affected.
 - **Threshold:** 500 (gte)
 - **Deadline:** **30 days** after determination of the breach.
 - **Trigger event:** Determination of breach.
-- **Citation:** Colo. Rev. Stat. § 6-1-716(2)(f)
+- **Citation:** Colo. Rev. Stat. § 6-1-716(2)(f)(I)
 - **Source URL:** `https://coag.gov/resources/data-protection-laws/`
 
 ## 5.5 Consumer Reporting Agency notification (§ 6-1-716(2)(d))
@@ -1129,11 +1129,19 @@ UK in parallel).
   2026-08-01.** Where the investigation determines that online-account login
   credentials (§ 6-1-716(1)(g)(I)(B)) have been or are reasonably likely to be
   misused, the covered entity must direct the affected person to promptly
-  change passwords/security answers or take other protective steps; for login
-  credentials of an email account furnished by the covered entity, notice to
-  that email address does not comply — another § 6-1-716(1)(f) method or clear
-  and conspicuous online notice at a known IP address/online location is
-  required. Implemented as a `kind: "advisory"` obligation gated
+  change the person's password and security question or answer, as applicable,
+  or to take other steps appropriate to protect the online account with the
+  covered entity and all other online accounts for which the person uses the
+  same username or email address and password or security question or answer
+  *(granular credential language conformed to the codified C.R.S., 2026-08-09)*;
+  for login credentials of an email account furnished by the covered entity,
+  notice to that email address does not comply — another § 6-1-716(1)(f)
+  method or clear and conspicuous online notice at a known IP address/online
+  location is required. The direction must be given in the most expedient
+  time possible and without unreasonable delay, but not later than thirty
+  days after the date of determination that a security breach occurred
+  *(30-day deadline sentence added to the advisory's conditional language,
+  2026-08-09)*. Implemented as a `kind: "advisory"` obligation gated
   `{ anyOf: ["credentials"] }`, parallel to DE § 12B-102(f) and CT
   § 36a-701b(f). **Unlike the DE/CT parallels, the CO provision is textually
   conditioned on a misuse determination for credential-type PI — carried in
@@ -1167,6 +1175,13 @@ UK in parallel).
   `co-harm-exemption-6-1-716` added in the conformance pass — Colorado
   previously carried the misuse language only in the (2)(a) condition text.
   *(Conformed to modelled gate: JDC 2026-08-02.)*
+- Standing counsel note `co-safe-harbors-6-1-716-3` added in the Colorado
+  primary-source conformance pass (JDC 2026-08-09): the § 6-1-716(3)(a)
+  own-procedures and § 6-1-716(3)(b) regulator-procedures compliance safe
+  harbors, both expressly preserving Attorney General notification under
+  § 6-1-716(2)(f), with the (3)(b) shortest-time-frame conflict rule.
+  Informational only — not modelled as gating; Respond's deadlines reflect
+  the statutory defaults.
 - Breach-definition exclusion for encrypted data was not modelled in earlier versions; now added.
 - The CRA notification's `gt` comparator (not `gte`) was the bug that motivated
   the comparator field generally.
@@ -1192,9 +1207,10 @@ UK in parallel).
   April 26, 2026. **Status: fully consistent** on statute, trigger,
   individual 30-day deadline, AG 500-resident threshold and 30-day deadline,
   CRA 1,000-resident `gt` threshold, and encryption treatment.
-- **Sources confirmed via web search:** Colo. Rev. Stat. § 6-1-716 (2024
-  edition); Colorado AG breach reporting page; FindLaw and Justia mirrors of
-  the statute.
+- Verified against Colo. Rev. Stat. § 6-1-716, official C.R.S. Annotated
+  database (LexisNexis public portal), current through ch. 137, 2026 Reg.
+  Sess. (eff. May 19, 2026; compilation provisional pending OLLS comparison).
+  Section last amended by HB 18-1128 (2018). JDC 2026-08-09.
 - **Sources confirmed via project knowledge base:** IAPP US State Breach
   Notification Chart, February 2026 update.
 - **Source-URL liveness verified (2026-06-14):** All source URLs for this
@@ -1241,16 +1257,47 @@ UK in parallel).
 - **Harm-assessment gate encoded (2026-08-02, commit 1; reviewer: JDC,
   2026-08-02):** `harmGate` added per obligation, character `"exemption"`,
   standards verbatim per the 2026-08-01 capture — the residents obligation
-  and the CRA carry the § 6-1-716(2)(a) standard ("misuse of the information
-  has not occurred and is not reasonably likely to occur"); the AG carries
-  the deliberately different § 6-1-716(2)(f)(I) standard ("misuse of the
-  information has not occurred and is not likely to occur"). The two
+  and the CRA carry the § 6-1-716(2)(a) standard ("the misuse of information
+  about a Colorado resident has not occurred and is not reasonably likely to
+  occur"); the AG carries the deliberately different § 6-1-716(2)(f)(I)
+  standard ("the misuse of information about a Colorado resident has not
+  occurred and is not likely to occur"). The two
   standards are encoded as two distinct strings and pinned different by
   engine test. The CRA cascades on the resident standard because its duty
   arises from required resident notice. The § 6-1-716(2)(a.3) credentials
   advisory is NOT harm-gated — its own misuse condition is already in its
   language. See § 0A for the cross-jurisdiction model.
-- **Reviewer:** *(pending)*
+- **Colorado primary-source conformance pass (2026-08-09, JDC).** Statutory
+  language verified against the codified C.R.S. (official LexisNexis
+  database, current through ch. 137, 2026 Reg. Sess.) and transcribed
+  exactly. Changes: (1) both § 6-1-716(2)(a) harmGate standards
+  (residents, CRA) and the § 6-1-716(2)(f)(I) AG standard conformed to the
+  full codified phrases ("the misuse of information about a Colorado
+  resident has not occurred and is not reasonably likely to occur" for
+  residents/CRA under § 6-1-716(2)(a); "the misuse of information about a
+  Colorado resident has not occurred and is not likely to occur" for the
+  AG under § 6-1-716(2)(f)(I));
+  counsel note `co-harm-exemption-6-1-716` conformed to match and extended
+  with the (2)(f)(I) structural-predicate observation ("the covered entity
+  that must notify Colorado residents"); (2) the § 6-1-716(2)(a.3)
+  credentials advisory gained the granular credential language ("username
+  or email address and password or security question or answer", "online
+  account with the covered entity") and the thirty-day direction deadline
+  sentence; (3) new standing counsel note `co-safe-harbors-6-1-716-3` for
+  the § 6-1-716(3)(a)/(3)(b) compliance-procedure safe harbors; (4) the AG
+  obligation citation tightened from § 6-1-716(2)(f) to § 6-1-716(2)(f)(I)
+  — the covered entity's duty is stated entirely in (f)(I); (f)(II) imposes
+  a duty on the Attorney General, not the covered entity (gate-render
+  catch, 2026-08-09). Noted:
+  the planned 15 U.S.C. § 1681a → § 1681a(p) tightening was a no-op for
+  Colorado — neither the encoded CRA condition nor this section cites the
+  FCRA definition (the citation appears only in the Texas § 521.053(h)
+  materials); the per-jurisdiction 1681a(p) follow-up is recorded in
+  `docs/todo.md`. Engine expectations and the memo-gate fixture updated to
+  the corrected strings; the dual-standard distinctness pin is unchanged.
+- **Reviewer:** JDC, 2026-08-09 — protected-file diffs read in full;
+  statutory quotations checked against the codified C.R.S. in the open
+  Lexis session.
 
 ---
 

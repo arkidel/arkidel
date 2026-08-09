@@ -342,7 +342,7 @@ const JURISDICTIONS = [
         // ("reasonably likely" here; "likely" there) — encode both verbatim,
         // never share one string.
         harmGate: {
-          standard: "misuse of the information has not occurred and is not reasonably likely to occur",
+          standard: "the misuse of information about a Colorado resident has not occurred and is not reasonably likely to occur",
           citation: "Colo. Rev. Stat. § 6-1-716(2)(a)",
           character: "exemption",
         },
@@ -368,14 +368,14 @@ const JURISDICTIONS = [
         deadline_phrase: "30 days from determination of breach",
         gating: { residentThreshold: 500, comparator: "gte" },
         thresholdLabel: "AG notification",
-        citation: "Colo. Rev. Stat. § 6-1-716(2)(f)",
+        citation: "Colo. Rev. Stat. § 6-1-716(2)(f)(I)",
         source_url: "https://coag.gov/resources/data-protection-laws/",
         condition: "Required where 500 or more Colorado residents are reasonably believed to have been affected. Same 30-day ceiling applies. Online Data Breach Reporting Form available via the Colorado AG.",
         // Harm-gate pass (2026-08-02): the AG's OWN § 6-1-716(2)(f)(I)
         // standard — "not likely", without the resident standard's
         // "reasonably". The dual encoding is deliberate.
         harmGate: {
-          standard: "misuse of the information has not occurred and is not likely to occur",
+          standard: "the misuse of information about a Colorado resident has not occurred and is not likely to occur",
           citation: "Colo. Rev. Stat. § 6-1-716(2)(f)(I)",
           character: "exemption",
         },
@@ -407,7 +407,7 @@ const JURISDICTIONS = [
         // Harm-gate pass (2026-08-02): the CRA duty cascades on the RESIDENT
         // (2)(a) standard — it arises only from required resident notice.
         harmGate: {
-          standard: "misuse of the information has not occurred and is not reasonably likely to occur",
+          standard: "the misuse of information about a Colorado resident has not occurred and is not reasonably likely to occur",
           citation: "Colo. Rev. Stat. § 6-1-716(2)(a)",
           character: "exemption",
         },
@@ -437,7 +437,7 @@ const JURISDICTIONS = [
         gating: { categories: { anyOf: ["credentials"] } },
         citation: "Colo. Rev. Stat. § 6-1-716(2)(a.3)",
         source_url: "https://content.leg.colorado.gov/sites/default/files/2018a_1128_signed.pdf",
-        condition: "Where the investigation determines that login credentials for an online account (§ 6-1-716(1)(g)(I)(B)) have been misused or are reasonably likely to be misused, direct the affected person to promptly change the person's password and security question or answer, as applicable, or to take other steps appropriate to protect the online account and all other online accounts for which the person uses the same login credentials. Where the breached credentials are login credentials of an email account furnished by the covered entity, notice to that email address does not comply — provide notice by another method permitted under § 6-1-716(1)(f), or by clear and conspicuous notice delivered to the affected person online when the person is connected to the online account from an Internet protocol address or online location from which the covered entity knows the person customarily accesses the account.",
+        condition: "Where the investigation determines that login credentials for an online account (§ 6-1-716(1)(g)(I)(B)) have been misused or are reasonably likely to be misused, direct the affected person to promptly change the person's password and security question or answer, as applicable, or to take other steps appropriate to protect the online account with the covered entity and all other online accounts for which the person uses the same username or email address and password or security question or answer. Where the breached credentials are login credentials of an email account furnished by the covered entity, notice to that email address does not comply — provide notice by another method permitted under § 6-1-716(1)(f), or by clear and conspicuous notice delivered to the affected person online when the person is connected to the online account from an Internet protocol address or online location from which the covered entity knows the person customarily accesses the account. The direction must be given in the most expedient time possible and without unreasonable delay, but not later than thirty days after the date of determination that a security breach occurred.",
       },
     ],
     counselNotes: [
@@ -450,8 +450,20 @@ const JURISDICTIONS = [
         id: "co-harm-exemption-6-1-716",
         placement: "caveat",
         title: "Misuse-determination exemptions under § 6-1-716(2)(a) and (2)(f)(I) — modelled via the harm-assessment question",
-        content: "Colorado's notification duties carry misuse-determination exemptions under two deliberately different standards: resident notification (and the CRA duty that arises from it) is excused where a prompt good-faith investigation determines that misuse of the information has not occurred and is not reasonably likely to occur (§ 6-1-716(2)(a)); Attorney General notification is excused where the investigation determines that misuse has not occurred and is not likely to occur (§ 6-1-716(2)(f)(I)). Both are modelled via the harm-assessment question: recording a documented determination suppresses each obligation under its own standard. The misuse determination remains counsel's substantive judgment, made and documented outside the tool; absent that determination, Respond's deadlines reflect the default position that notification is required. Document the determination contemporaneously and consult counsel before relying on it.",
+        content: "Colorado's notification duties carry misuse-determination exemptions under two deliberately different standards: resident notification (and the CRA duty that arises from it) is excused where a prompt good-faith investigation determines that the misuse of information about a Colorado resident has not occurred and is not reasonably likely to occur (§ 6-1-716(2)(a)); Attorney General notification is excused where the investigation determines that the misuse of information about a Colorado resident has not occurred and is not likely to occur (§ 6-1-716(2)(f)(I)). Both are modelled via the harm-assessment question: recording a documented determination suppresses each obligation under its own standard. The misuse determination remains counsel's substantive judgment, made and documented outside the tool; absent that determination, Respond's deadlines reflect the default position that notification is required. Document the determination contemporaneously and consult counsel before relying on it. Note also the structural predicate of § 6-1-716(2)(f)(I): the Attorney General duty attaches to \"the covered entity that must notify Colorado residents\" — where the investigation excuses resident notification under § 6-1-716(2)(a), the predicate for the Attorney General duty is likewise absent. A documented determination should address both statutory phrasings.",
         citation: "Colo. Rev. Stat. § 6-1-716(2)(a), (2)(f)(I)",
+        source_url: "https://content.leg.colorado.gov/sites/default/files/2018a_1128_signed.pdf",
+      },
+      {
+        // Added in the Colorado primary-source conformance pass (JDC
+        // 2026-08-09, verified against the codified C.R.S.): standing note
+        // for the § 6-1-716(3) compliance-procedure safe harbors —
+        // informational only, not modelled as gating.
+        id: "co-safe-harbors-6-1-716-3",
+        placement: "caveat",
+        title: "Compliance-procedure safe harbors under § 6-1-716(3) — Attorney General notice preserved",
+        content: "Colorado deems a covered entity in compliance with this section's notice requirements where it notifies affected residents under its own notification procedures maintained as part of an information security policy, consistent with this section's timing requirements (§ 6-1-716(3)(a)), or where it maintains security-breach procedures pursuant to the laws, rules, regulations, guidances, or guidelines established by its state or federal regulator (§ 6-1-716(3)(b)). Both paths expressly preserve Attorney General notification under § 6-1-716(2)(f). In a conflict between the individual-notice time period under subsection (3) and the applicable state or federal law or regulation, the law or regulation with the shortest time frame for notice to the individual controls (§ 6-1-716(3)(b)). Respond's deadlines reflect the statutory defaults; counsel relying on a safe harbor should confirm eligibility and document the applicable regulatory procedures.",
+        citation: "Colo. Rev. Stat. § 6-1-716(3)(a), (3)(b)",
         source_url: "https://content.leg.colorado.gov/sites/default/files/2018a_1128_signed.pdf",
       },
     ],

@@ -164,8 +164,8 @@ function check(label, ok) {
   console.log(`\nFixture 4 (harm determination, CT+DE+CO+VA+NY+MA): wrote /tmp/gate-memo-harm.pdf (${bytes.length} bytes); deadlines: ${deadlines.length}; suppressed: ${suppressed.length}; services: ${services.length}`);
   const text = await extractText(bytes);
   check("harm-suppressed group label prints", text.includes("SUPPRESSED — HARM DETERMINATION"));
-  check("CO resident standard prints verbatim", text.includes("misuse of the information has not occurred and is not reasonably likely to occur"));
-  check("CO AG standard prints verbatim (distinct string)", text.includes("misuse of the information has not occurred and is not likely to occur"));
+  check("CO resident standard prints verbatim", text.includes("the misuse of information about a Colorado resident has not occurred and is not reasonably likely to occur"));
+  check("CO AG standard prints verbatim (distinct string)", text.includes("the misuse of information about a Colorado resident has not occurred and is not likely to occur"));
   check("CO AG citation (2)(f)(I) prints", text.includes("Colo. Rev. Stat. § 6-1-716(2)(f)(I)"));
   check("VA duty-element framing prints", text.includes("Duty element not established:"));
   check("VA standard prints verbatim", text.includes("identity theft or another fraud to any resident of the Commonwealth"));
