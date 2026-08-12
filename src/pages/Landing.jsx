@@ -177,7 +177,7 @@ export default function Landing() {
           </h2>
           <div className="space-y-5 text-base leading-relaxed text-midnight/80 max-w-prose">
             <p>
-              Respond is a triage tool for breach notification deadlines. Enter what you know — when you became aware, where the affected residents are, what kind of data was involved, whether encryption was applied — and Respond returns the obligations that fire under each jurisdiction's rules, with primary-source citations and a downloadable memo you can share with your team or counsel.
+              Respond is a triage tool for breach notification deadlines. Enter what you know — when you became aware, where the affected residents are, what kind of data was involved, whether encryption was applied — and Respond returns the obligations that apply under each jurisdiction's rules, with primary-source citations and a downloadable memo you can share with your team or counsel.
             </p>
             <p>
               Respond is built for that moment: it's 4:47 p.m. on a Friday. You're in compliance, or maybe in-house counsel. Your mind's already in weekend mode. An email pops up: security incident, personal data involved. Before the clock hits 5:00 p.m., you're sure you've got a personal data breach. Everyone's looking to you. What do we do? Which laws apply? How much time do we have? That's where we come in. Know your deadline before it knows you.

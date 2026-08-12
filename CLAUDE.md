@@ -1018,6 +1018,14 @@ Tone target: "Your data, kept." not "Revolutionize your compliance!"
 The Breach Clock is a tool, not a compliance program. Marketing copy and
 in-app text should reinforce this distinction, not obscure it.
 
+**Copy register rule (2026-08-09).** User-facing surfaces (screen, memo,
+intake copy) speak in counsel's register: 'notice is required,' 'the
+obligation applies,' 'the deadline runs from.' Engine vocabulary — 'fires,'
+'gates,' 'suppression' as a bare term — stays in code, tests, and internal
+docs. On-screen group headings use the established softened forms (e.g.
+'Notification Likely Not Required'). Statutory quotations are never
+rephrased under this rule.
+
 ---
 
 ## Stack

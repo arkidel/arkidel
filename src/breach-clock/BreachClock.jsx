@@ -90,6 +90,136 @@ const ALL_SECTION_IDS = [...FORM_SECTIONS.map((s) => s.id), "form-risk", "form-h
 // viewport edge. (If that nav is ever made sticky, bump this to ~its height.)
 const NAV_CLEARANCE = 32;
 
+// ── Jurisdiction picker (UI layer only) ─────────────────────────────────────
+// The picker is an additive combobox over the same jurisdictions/residentCounts
+// maps the checkbox block wrote — payload shape unchanged. EU/UK group under
+// "International"; every other modeled jurisdiction is "United States".
+const INTL_JURISDICTION_IDS = new Set(["eu", "uk"]);
+
+// The 54 IAPP-chart U.S. jurisdictions (50 states, DC, Guam, Puerto Rico,
+// U.S. Virgin Islands). UI-layer reference only — used by bulk paste to tell
+// "real U.S. jurisdiction we don't model yet" apart from "not recognized".
+// NOT substantive data; the modeled set lives in data.js.
+const US_CHART_JURISDICTIONS = [
+  { name: "Alabama", postal: "AL" },
+  { name: "Alaska", postal: "AK" },
+  { name: "Arizona", postal: "AZ" },
+  { name: "Arkansas", postal: "AR" },
+  { name: "California", postal: "CA" },
+  { name: "Colorado", postal: "CO" },
+  { name: "Connecticut", postal: "CT" },
+  { name: "Delaware", postal: "DE" },
+  { name: "District of Columbia", postal: "DC" },
+  { name: "Florida", postal: "FL" },
+  { name: "Georgia", postal: "GA" },
+  { name: "Guam", postal: "GU" },
+  { name: "Hawaii", postal: "HI" },
+  { name: "Idaho", postal: "ID" },
+  { name: "Illinois", postal: "IL" },
+  { name: "Indiana", postal: "IN" },
+  { name: "Iowa", postal: "IA" },
+  { name: "Kansas", postal: "KS" },
+  { name: "Kentucky", postal: "KY" },
+  { name: "Louisiana", postal: "LA" },
+  { name: "Maine", postal: "ME" },
+  { name: "Maryland", postal: "MD" },
+  { name: "Massachusetts", postal: "MA" },
+  { name: "Michigan", postal: "MI" },
+  { name: "Minnesota", postal: "MN" },
+  { name: "Mississippi", postal: "MS" },
+  { name: "Missouri", postal: "MO" },
+  { name: "Montana", postal: "MT" },
+  { name: "Nebraska", postal: "NE" },
+  { name: "Nevada", postal: "NV" },
+  { name: "New Hampshire", postal: "NH" },
+  { name: "New Jersey", postal: "NJ" },
+  { name: "New Mexico", postal: "NM" },
+  { name: "New York", postal: "NY" },
+  { name: "North Carolina", postal: "NC" },
+  { name: "North Dakota", postal: "ND" },
+  { name: "Ohio", postal: "OH" },
+  { name: "Oklahoma", postal: "OK" },
+  { name: "Oregon", postal: "OR" },
+  { name: "Pennsylvania", postal: "PA" },
+  { name: "Puerto Rico", postal: "PR" },
+  { name: "Rhode Island", postal: "RI" },
+  { name: "South Carolina", postal: "SC" },
+  { name: "South Dakota", postal: "SD" },
+  { name: "Tennessee", postal: "TN" },
+  { name: "Texas", postal: "TX" },
+  { name: "U.S. Virgin Islands", postal: "VI" },
+  { name: "Utah", postal: "UT" },
+  { name: "Vermont", postal: "VT" },
+  { name: "Virginia", postal: "VA" },
+  { name: "Washington", postal: "WA" },
+  { name: "West Virginia", postal: "WV" },
+  { name: "Wisconsin", postal: "WI" },
+  { name: "Wyoming", postal: "WY" },
+];
+
+// Combobox filter: case-insensitive substring over display name, short name,
+// the uppercase id as a postal code (CA, NY, …), and the statute string (so
+// "93H" finds Massachusetts and "899" finds New York).
+const jurisdictionMatchesQuery = (jur, q) =>
+  [jur.name, jur.short, jur.id.toUpperCase(), jur.statute].some((k) => k.toLowerCase().includes(q));
+
+// Bulk-paste matching: exact (case-insensitive) on name, short name, or
+// postal code — deliberately narrower than the combobox's substring filter so
+// "Virginia" can never claim a "West Virginia" line.
+const findModeledJurisdiction = (text) => {
+  const q = String(text || "").trim().toLowerCase();
+  if (!q) return null;
+  return (
+    JURISDICTIONS.find(
+      (j) => j.name.toLowerCase() === q || j.short.toLowerCase() === q || j.id.toLowerCase() === q
+    ) || null
+  );
+};
+const findChartJurisdiction = (text) => {
+  const q = String(text || "").trim().toLowerCase();
+  if (!q) return null;
+  return US_CHART_JURISDICTIONS.find((s) => s.name.toLowerCase() === q || s.postal.toLowerCase() === q) || null;
+};
+
+// One bulk-paste line → { jurText, countDigits }. Primary separators are tab,
+// comma, or two-plus spaces; a single-space "New York 500" falls back to a
+// trailing-number split. Thousands separators (commas, spaces) are stripped —
+// a comma-separated "California,1,500" reassembles to 1500 via the join.
+const parseBulkLine = (line) => {
+  let fields = line.split(/\t|,|\s{2,}/).map((f) => f.trim()).filter(Boolean);
+  if (fields.length === 1) {
+    const m = line.match(/^(.*?)\s+(\d[\d,.\s]*)$/);
+    if (m) fields = [m[1].trim(), m[2].trim()];
+  }
+  return {
+    jurText: fields[0] || "",
+    countDigits: fields.slice(1).join("").replace(/[\s,]/g, ""),
+  };
+};
+
+// Split a jurisdiction list into the two display groups, each alphabetical by
+// display name. US renders before International everywhere.
+const groupJurisdictions = (list) => ({
+  us: list.filter((j) => !INTL_JURISDICTION_IDS.has(j.id)).sort((a, b) => a.name.localeCompare(b.name)),
+  intl: list.filter((j) => INTL_JURISDICTION_IDS.has(j.id)).sort((a, b) => a.name.localeCompare(b.name)),
+});
+
+// Wrap the first case-insensitive occurrence of `query` in a quiet Parchment
+// highlight. Combobox options only.
+const highlightMatch = (text, query) => {
+  const q = query.trim();
+  if (!q) return text;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span style={{ background: "#E8DDC4", borderRadius: "2px" }}>{text.slice(idx, idx + q.length)}</span>
+      {text.slice(idx + q.length)}
+    </>
+  );
+};
+
 // Q1 personal-data categories — these ARE the engine `sensitivity` input, and
 // render from the canonical SENSITIVITY_OPTIONS export in data.js (imported
 // above; the former local copy predated the 2026-07-25 ssn split and is
@@ -419,6 +549,38 @@ export default function BreachClock() {
   // GDPR Art. 34(3)(a) unintelligibility (S5) — the dedicated EU/UK input that
   // replaced the derived encryptionApplied boolean. Tri-state, default unset.
   const [gdprUnintelligibility, setGdprUnintelligibility] = useState("");
+
+  // ── Jurisdiction-picker UI state (presentation only — the operative values
+  //    stay in the jurisdictions/residentCounts maps above) ──
+  const [jurQuery, setJurQuery] = useState("");
+  const [jurListOpen, setJurListOpen] = useState(false);
+  const [jurHighlight, setJurHighlight] = useState(0);
+  // Jurisdiction id whose freshly mounted resident-count input should take
+  // focus after a combobox commit (the row doesn't exist until the next
+  // render, so focus routes through state + the effect below).
+  const [focusCountFor, setFocusCountFor] = useState(null);
+  const countInputRefs = useRef({});
+  // Bulk "Paste counts" panel: open flag, textarea draft, and the last Apply's
+  // report ({ added, updated, unmatched, notModeled }; null = no apply yet).
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteReport, setPasteReport] = useState(null);
+  // Rows whose count a bulk Apply just updated — carries the brief "UPDATED"
+  // tag, cleared by the timeout effect below.
+  const [bulkFlash, setBulkFlash] = useState(() => new Set());
+
+  useEffect(() => {
+    if (!focusCountFor) return;
+    const el = countInputRefs.current[focusCountFor];
+    if (el) el.focus();
+    setFocusCountFor(null);
+  }, [focusCountFor]);
+
+  useEffect(() => {
+    if (!bulkFlash.size) return undefined;
+    const t = setTimeout(() => setBulkFlash(new Set()), 2500);
+    return () => clearTimeout(t);
+  }, [bulkFlash]);
 
   // ── Record state (incident report only; never seen by the engine) ──
   const [record, setRecord] = useState(() => ({ ...EMPTY_RECORD, dataSubjectBlocks: [makeBlock()] }));
@@ -840,7 +1002,99 @@ export default function BreachClock() {
   const removeBlockOther = (id, idx) =>
     mapBlocks((b) => (b.id === id ? { ...b, others: b.others.filter((_, i) => i !== idx) } : b));
 
-  const toggleJurisdiction = (k) => setJurisdictions({ ...jurisdictions, [k]: !jurisdictions[k] });
+  // ── Jurisdiction picker handlers ──
+  // Add: flip the id on, clear/close the combobox, and route focus to the new
+  // row's resident-count input (EU/UK rows have none — focus stays put).
+  const addJurisdiction = (jur) => {
+    setJurisdictions((prev) => ({ ...prev, [jur.id]: true }));
+    setJurQuery("");
+    setJurListOpen(false);
+    setJurHighlight(0);
+    if (jur.residentField) setFocusCountFor(jur.id);
+  };
+  // Remove clears the jurisdiction AND its resident count.
+  const removeJurisdiction = (id) => {
+    setJurisdictions((prev) => ({ ...prev, [id]: false }));
+    setResidentCounts((prev) => (id in prev ? { ...prev, [id]: "" } : prev));
+  };
+  // Add every modeled US jurisdiction not already selected; counts left blank.
+  const addAllUS = () => {
+    setJurisdictions((prev) => {
+      const next = { ...prev };
+      JURISDICTIONS.forEach((j) => {
+        if (!INTL_JURISDICTION_IDS.has(j.id)) next[j.id] = true;
+      });
+      return next;
+    });
+  };
+
+  // Bulk "Paste counts" Apply. Matched lines add the jurisdiction (if absent)
+  // and set its count; already-selected jurisdictions get their count updated
+  // (never duplicated) and a brief "UPDATED" tag. Everything else lands in the
+  // report — nothing is silently dropped. A first-line header row is tolerated
+  // only when its name column matches no known jurisdiction (so a real
+  // "California,750" first line is data, not a header).
+  const applyBulkPaste = () => {
+    const report = { added: [], updated: [], unmatched: [], notModeled: [] };
+    const nextJur = { ...jurisdictions };
+    const nextCounts = { ...residentCounts };
+    const flash = new Set();
+    let sawFirstLine = false;
+    pasteText.split(/\r?\n/).forEach((raw) => {
+      const line = raw.trim();
+      if (!line) return;
+      const isFirstLine = !sawFirstLine;
+      sawFirstLine = true;
+      const { jurText, countDigits } = parseBulkLine(line);
+      const countValid = /^\d+$/.test(countDigits);
+      if (
+        isFirstLine &&
+        !countValid &&
+        !findModeledJurisdiction(jurText) &&
+        !findChartJurisdiction(jurText)
+      ) {
+        return; // header row
+      }
+      const jur = findModeledJurisdiction(jurText);
+      if (!jur) {
+        const chart = findChartJurisdiction(jurText);
+        if (chart) {
+          if (!report.notModeled.includes(chart.name)) report.notModeled.push(chart.name);
+        } else {
+          report.unmatched.push(line);
+        }
+        return;
+      }
+      // A count column that is present but non-numeric is a failed intent —
+      // surface the line rather than adding the jurisdiction without it.
+      if (countDigits.length > 0 && !countValid) {
+        report.unmatched.push(line);
+        return;
+      }
+      if (nextJur[jur.id]) {
+        if (jur.residentField && countValid) {
+          nextCounts[jur.id] = countDigits;
+          flash.add(jur.id);
+        }
+        if (!report.updated.includes(jur.name)) report.updated.push(jur.name);
+      } else {
+        nextJur[jur.id] = true;
+        if (jur.residentField && countValid) nextCounts[jur.id] = countDigits;
+        if (!report.added.includes(jur.name)) report.added.push(jur.name);
+      }
+    });
+    setJurisdictions(nextJur);
+    setResidentCounts(nextCounts);
+    setBulkFlash(flash);
+    setPasteReport(report);
+    // Clean apply closes the panel; unmatched / not-modeled lines keep it open
+    // (textarea intact) so the user can correct them.
+    if (report.unmatched.length === 0 && report.notModeled.length === 0) {
+      setPasteOpen(false);
+      setPasteText("");
+    }
+  };
+
   const toggleSensitivity = (id) =>
     sensitivity.includes(id) ? setSensitivity(sensitivity.filter((s) => s !== id)) : setSensitivity([...sensitivity, id]);
 
@@ -1278,7 +1532,7 @@ export default function BreachClock() {
               </button>
             </div>
             <p style={{ fontSize: "17px", marginTop: "20px", maxWidth: "640px", lineHeight: 1.6, color: "#2C2418" }}>
-              Each case feeds a fact pattern to the deadline engine and asserts what should or should not fire. Run automatically every time this page loads.
+              Each case feeds a fact pattern to the deadline engine and asserts which obligations should and should not apply. Run automatically every time this page loads.
             </p>
           </header>
 
@@ -1743,50 +1997,284 @@ export default function BreachClock() {
     </div>
   );
 
+  // Jurisdiction picker: an additive "Add jurisdiction" combobox (ARIA
+  // combobox/listbox over a real <input>), a bulk "Paste counts" panel, an
+  // add-all-US control, and the selected jurisdictions as rows with their
+  // resident-count inputs inline. Writes the same jurisdictions/residentCounts
+  // maps the former checkbox block wrote — payload shape unchanged.
   const renderJurisdictionsField = () => {
-    const visibleCounts = JURISDICTIONS.filter((j) => j.residentField && jurisdictions[j.id]);
+    const q = jurQuery.trim().toLowerCase();
+    const available = JURISDICTIONS.filter((j) => !jurisdictions[j.id]);
+    const matches = q ? available.filter((j) => jurisdictionMatchesQuery(j, q)) : available;
+    const { us: usOptions, intl: intlOptions } = groupJurisdictions(matches);
+    const flatOptions = [...usOptions, ...intlOptions];
+    const highlightIdx = flatOptions.length ? Math.min(jurHighlight, flatOptions.length - 1) : 0;
+    const listVisible = jurListOpen && (flatOptions.length > 0 || q.length > 0);
+
+    const selected = JURISDICTIONS.filter((j) => jurisdictions[j.id]);
+    const { us: usSelected, intl: intlSelected } = groupJurisdictions(selected);
+    const selectedRows = [...usSelected, ...intlSelected];
+
+    const modeledUSCount = JURISDICTIONS.filter((j) => !INTL_JURISDICTION_IDS.has(j.id)).length;
+    const unselectedUSCount = JURISDICTIONS.filter(
+      (j) => !INTL_JURISDICTION_IDS.has(j.id) && !jurisdictions[j.id]
+    ).length;
+
+    const onComboKeyDown = (e) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!jurListOpen) {
+          setJurListOpen(true);
+          setJurHighlight(0);
+        } else {
+          setJurHighlight(Math.min(highlightIdx + 1, Math.max(flatOptions.length - 1, 0)));
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setJurHighlight(Math.max(highlightIdx - 1, 0));
+      } else if (e.key === "Enter") {
+        if (jurListOpen && flatOptions[highlightIdx]) {
+          e.preventDefault();
+          addJurisdiction(flatOptions[highlightIdx]);
+        }
+      } else if (e.key === "Escape") {
+        setJurListOpen(false);
+      }
+    };
+
+    const optionNode = (jur) => {
+      const idx = flatOptions.indexOf(jur);
+      return (
+        <div
+          key={jur.id}
+          id={`jur-opt-${jur.id}`}
+          role="option"
+          aria-selected={idx === highlightIdx}
+          className={`jur-option ${idx === highlightIdx ? "active" : ""}`}
+          onMouseEnter={() => setJurHighlight(idx)}
+          onClick={() => addJurisdiction(jur)}
+        >
+          <span className="jur-option-name">{highlightMatch(jur.name, jurQuery)}</span>
+          <span className="mono jur-option-sub">{highlightMatch(jur.statute, jurQuery)}</span>
+        </div>
+      );
+    };
+
     return (
       <div style={{ marginBottom: "24px" }}>
         {labelRow("Which jurisdictions' residents are affected?")}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "4px" }}>
-          {JURISDICTIONS.map((jur) => (
-            <div key={jur.id}>{checkRow(jurisdictions[jur.id], jur.name, () => toggleJurisdiction(jur.id), { sub: jur.statute })}</div>
-          ))}
-        </div>
-        {visibleCounts.length > 0 && (
-          <div style={{ marginTop: "20px", padding: "22px", border: "1px solid rgba(27,42,63,0.18)", background: "#fff", borderRadius: "12px" }}>
-            {labelRow("Residents affected — statutory-threshold count", "The number of this jurisdiction's residents whose data was affected. Used to test statutory notification thresholds — distinct from the per-category data-subject counts below.")}
-            <div style={{ display: "grid", gridTemplateColumns: visibleCounts.length === 1 ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "24px", marginTop: "4px" }}>
-              {visibleCounts.map((jur) => {
-                const thresholdObligations = jur.obligations.filter((o) => o.gating?.residentThreshold !== undefined);
-                return (
-                  <div key={jur.id}>
-                    <label className="field-mark" style={{ display: "block", marginBottom: "8px" }}>{jur.residentField.stateLabel}</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      placeholder={jur.residentField.placeholder || ""}
-                      value={residentCounts[jur.id] || ""}
-                      onChange={(e) => setResidentCounts({ ...residentCounts, [jur.id]: e.target.value })}
-                    />
-                    {thresholdObligations.length > 0 && (
-                      <div className="rule-text" style={{ marginTop: "8px" }}>
-                        {thresholdObligations.map((o, idx) => {
-                          const t = o.gating.residentThreshold;
-                          const cmp = o.gating.comparator || "gte";
-                          const phrase = cmp === "gt" ? `>${t.toLocaleString()}` : `${t.toLocaleString()}+`;
-                          return (
-                            <div key={idx}>
-                              {phrase} triggers {o.thresholdLabel || `${o.authority} notification`}
-                            </div>
-                          );
-                        })}
+
+        {/* Combobox + secondary controls */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ position: "relative", flex: "1 1 280px", maxWidth: "400px" }}>
+            <input
+              role="combobox"
+              aria-expanded={listVisible}
+              aria-controls="jur-listbox"
+              aria-autocomplete="list"
+              aria-activedescendant={
+                listVisible && flatOptions[highlightIdx] ? `jur-opt-${flatOptions[highlightIdx].id}` : undefined
+              }
+              aria-label="Add jurisdiction"
+              className="form-input"
+              placeholder="Add jurisdiction — name, postal code, or statute"
+              value={jurQuery}
+              onChange={(e) => {
+                setJurQuery(e.target.value);
+                setJurListOpen(true);
+                setJurHighlight(0);
+              }}
+              onFocus={() => setJurListOpen(true)}
+              onBlur={() => setJurListOpen(false)}
+              onKeyDown={onComboKeyDown}
+            />
+            {listVisible && (
+              <div
+                id="jur-listbox"
+                role="listbox"
+                aria-label="Jurisdictions"
+                className="jur-pane"
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                {flatOptions.length === 0 ? (
+                  <div className="jur-empty">No matching jurisdiction.</div>
+                ) : (
+                  <>
+                    {usOptions.length > 0 && (
+                      <div role="group" aria-label="United States">
+                        <div className="jur-group-label" aria-hidden="true">United States</div>
+                        {usOptions.map(optionNode)}
                       </div>
                     )}
-                  </div>
-                );
-              })}
+                    {intlOptions.length > 0 && (
+                      <div role="group" aria-label="International">
+                        <div className="jur-group-label" aria-hidden="true">International</div>
+                        {intlOptions.map(optionNode)}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ padding: "10px 16px", fontSize: "13px" }}
+            aria-expanded={pasteOpen}
+            onClick={() => {
+              setPasteReport(null);
+              setPasteOpen((o) => !o);
+            }}
+          >
+            Paste counts
+          </button>
+          <div>
+            <button
+              type="button"
+              className="btn-ghost"
+              style={{ padding: "10px 16px", fontSize: "13px" }}
+              onClick={addAllUS}
+              disabled={unselectedUSCount === 0}
+            >
+              Add all U.S. jurisdictions
+            </button>
+            <div className="rule-text" style={{ marginTop: "5px", fontSize: "12px" }}>
+              adds the {modeledUSCount} U.S. jurisdictions currently modeled
             </div>
+          </div>
+        </div>
+
+        {/* Bulk paste panel (inline, not a modal) */}
+        {pasteOpen && (
+          <div style={{ marginTop: "14px", padding: "20px", border: "1px solid rgba(27,42,63,0.18)", background: "#fff", borderRadius: "12px", maxWidth: "640px" }}>
+            {labelRow(
+              "Paste counts",
+              "One jurisdiction per line, then its resident count — separated by a tab, comma, or two or more spaces. A header row, thousands separators, and blank lines are tolerated."
+            )}
+            <textarea
+              className="form-textarea"
+              aria-label="Jurisdictions and counts, one per line"
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              placeholder={"California\t12,400\nNew York\t8,100"}
+              style={{ minHeight: "110px", fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: "13px" }}
+            />
+            <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+              <button type="button" className="btn-primary" style={{ padding: "9px 18px", fontSize: "13px" }} onClick={applyBulkPaste} disabled={!pasteText.trim()}>
+                Apply
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ padding: "9px 18px", fontSize: "13px" }}
+                onClick={() => {
+                  setPasteOpen(false);
+                  setPasteText("");
+                  setPasteReport(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+            {pasteReport && (
+              <div style={{ marginTop: "14px", fontSize: "13px", lineHeight: 1.6 }}>
+                <div>
+                  {pasteReport.added.length} added, {pasteReport.updated.length} updated.
+                </div>
+                {pasteReport.unmatched.length > 0 && (
+                  <div style={{ marginTop: "10px" }}>
+                    <div className="field-mark" style={{ marginBottom: "4px" }}>Not recognized</div>
+                    {pasteReport.unmatched.map((l, i) => (
+                      <div key={i} className="mono" style={{ fontSize: "12px" }}>{l}</div>
+                    ))}
+                  </div>
+                )}
+                {pasteReport.notModeled.length > 0 && (
+                  <div style={{ marginTop: "10px" }}>
+                    <div className="field-mark" style={{ marginBottom: "4px" }}>Not currently modeled</div>
+                    {pasteReport.notModeled.map((n) => (
+                      <div key={n}>{n} — not currently modeled</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {/* Clean apply closes the panel — keep its outcome visible in a quiet
+            one-line summary until the panel is next opened. */}
+        {!pasteOpen && pasteReport && (
+          <div className="rule-text" style={{ marginTop: "8px" }}>
+            Counts applied: {pasteReport.added.length} added, {pasteReport.updated.length} updated.
+          </div>
+        )}
+
+        {/* Selected jurisdictions — US group first, alphabetical within group */}
+        {selectedRows.length > 0 && (
+          <div style={{ marginTop: "16px", border: "1px solid rgba(27,42,63,0.18)", background: "#fff", borderRadius: "12px" }}>
+            {selectedRows.map((jur, i) => {
+              const thresholdObligations = jur.obligations.filter((o) => o.gating?.residentThreshold !== undefined);
+              return (
+                <div key={jur.id} className="jur-row" style={{ borderTop: i === 0 ? "none" : "1px solid rgba(27,42,63,0.12)" }}>
+                  <div style={{ flex: "1 1 auto", minWidth: 0, paddingTop: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "15px", lineHeight: 1.4 }}>{jur.name}</span>
+                      {bulkFlash.has(jur.id) && (
+                        <span
+                          className="mono"
+                          style={{ fontSize: "10px", letterSpacing: "0.08em", background: "#E8DDC4", color: "#1B2A3F", padding: "2px 6px", borderRadius: "6px" }}
+                        >
+                          UPDATED
+                        </span>
+                      )}
+                    </div>
+                    <span className="mono check-sub">{jur.statute}</span>
+                  </div>
+                  {jur.residentField && (
+                    <div style={{ flex: "0 0 230px" }}>
+                      <span className="field-mark" aria-hidden="true" style={{ display: "block", fontSize: "10px", marginBottom: "5px" }}>
+                        Residents affected
+                      </span>
+                      <input
+                        type="number"
+                        className="form-input"
+                        ref={(el) => {
+                          countInputRefs.current[jur.id] = el;
+                        }}
+                        aria-label={jur.residentField.stateLabel}
+                        placeholder={jur.residentField.placeholder || ""}
+                        value={residentCounts[jur.id] || ""}
+                        onChange={(e) => setResidentCounts({ ...residentCounts, [jur.id]: e.target.value })}
+                      />
+                      {thresholdObligations.length > 0 && (
+                        <div className="rule-text" style={{ marginTop: "6px", fontSize: "12px" }}>
+                          {thresholdObligations.map((o, idx) => {
+                            const t = o.gating.residentThreshold;
+                            const cmp = o.gating.comparator || "gte";
+                            const phrase = cmp === "gt" ? `>${t.toLocaleString()}` : `${t.toLocaleString()}+`;
+                            return (
+                              <div key={idx}>
+                                {phrase} — {o.thresholdLabel || `${o.authority} notification`} required
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-inline-remove"
+                    style={{ marginTop: "6px" }}
+                    onClick={() => removeJurisdiction(jur.id)}
+                    aria-label={`Remove ${jur.name}`}
+                  >
+                    <X size={13} /> Remove
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1983,21 +2471,21 @@ export default function BreachClock() {
     const greenBanner =
       riskSuppressed && !encryptionSuppressed && !harmSuppressed
         ? {
-            headline: "No notification obligations fire under the risk assessment provided.",
+            headline: "No notification obligations apply under the risk assessment provided.",
             body: "The breach was assessed as not meeting the notification threshold; document the assessment and the reasoning.",
           }
         : encryptionSuppressed && !riskSuppressed && !harmSuppressed
         ? {
-            headline: "No notification obligations fire under the facts provided.",
+            headline: "No notification obligations apply under the facts provided.",
             body: "Based on the encryption fact reported, every obligation that would otherwise apply has been suppressed — either because the breach falls outside the statutory definition (U.S. states) or because individual notification is exempted by an unintelligibility-of-data provision (EU/UK GDPR Art. 34(3)(a)). Confirm encryption met each jurisdiction's standard before relying on this analysis.",
           }
         : harmSuppressed && !riskSuppressed && !encryptionSuppressed
         ? {
-            headline: "No notification obligations fire under the harm determination recorded.",
+            headline: "No notification obligations apply under the harm determination recorded.",
             body: "Each suppressed obligation rests on counsel's documented determination, applied under that statute's own standard. Document the determination contemporaneously.",
           }
         : {
-            headline: "No notification obligations fire under the facts provided.",
+            headline: "No notification obligations apply under the facts provided.",
             body: "Every obligation that would otherwise apply has been suppressed — by the encryption fact reported, the risk assessment, and/or the harm determination recorded. See the bases below.",
           };
 
@@ -2657,7 +3145,7 @@ export default function BreachClock() {
         <div style={{ marginBottom: "16px", padding: "24px 28px", background: "#1B2A3F", color: "#FAF8F2", borderRadius: "12px" }}>
           <div className="section-mark" style={{ color: "#FAF8F2", opacity: 0.85, marginBottom: "8px" }}>No deadlines computed</div>
           <p style={{ fontSize: "14px", marginTop: "8px", opacity: 0.9, lineHeight: 1.6 }}>
-            No obligations fire under the inputs provided. Verify your jurisdiction selections and resident counts.
+            No notification obligations apply under the inputs provided. Verify your jurisdiction selections and resident counts.
           </p>
         </div>
       )}
@@ -3603,6 +4091,26 @@ export default function BreachClock() {
         .form-input:disabled, .form-select:disabled, .form-textarea:disabled {
           opacity: 0.45; cursor: not-allowed; background: #FAF8F2;
         }
+        /* Jurisdiction picker: the combobox pane mirrors the base-select
+           option pane (white surface, hairline border, 8px radius, popover
+           shadow); selected-jurisdiction rows are a quiet white list card. */
+        .jur-pane {
+          position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40;
+          background: #fff; border: 1px solid rgba(27,42,63,0.25); border-radius: 8px;
+          box-shadow: 0 6px 18px rgba(27,42,63,0.22); padding: 4px;
+          max-height: 320px; overflow-y: auto;
+        }
+        .jur-group-label {
+          font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 500;
+          letter-spacing: 0.14em; text-transform: uppercase; color: #1B2A3F;
+          opacity: 0.55; padding: 8px 13px 4px;
+        }
+        .jur-option { padding: 9px 13px; border-radius: 4px; cursor: pointer; }
+        .jur-option.active { background: rgba(27,42,63,0.10); }
+        .jur-option-name { display: block; font-size: 14px; color: #2C2418; line-height: 1.35; }
+        .jur-option-sub { display: block; font-size: 11px; letter-spacing: 0.06em; opacity: 0.6; margin-top: 2px; }
+        .jur-empty { padding: 11px 13px; font-size: 13px; color: #2C2418; opacity: 0.6; }
+        .jur-row { display: flex; align-items: flex-start; gap: 16px; padding: 14px 16px; }
         .counsel-note {
           background: #E8DDC4; color: #2C2418; padding: 16px 18px;
           border: 1px solid rgba(27,42,63,0.18); border-radius: 12px;

@@ -1578,6 +1578,8 @@ the model to support an `authorities[]` array on a single obligation.
   the `harmGate` can inform the § 1 analysis but can never suppress the
   second-trigger duty (unauthorized acquisition or use), which has no harm
   qualifier.
+- Dual-trigger counsel note: 'fires' → 'is met' (copy-register
+  conformance, JDC 2026-08-15).
 - **Harm-gate ruling (2026-08-02, commit 1; reviewer: JDC, 2026-08-02):**
   Massachusetts carries **no `harmGate`** — no `harmAssessment` value can
   suppress any MA obligation or the § 3A service (pinned by engine test
