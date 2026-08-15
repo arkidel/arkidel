@@ -21,6 +21,11 @@
 //   "Harm assessment" row.
 // Fixture 5: same facts under "" vs "harm_likely" — extracted memo text is
 //   identical except the Analysis Inputs harm row.
+// Fixture 7 (intake phase 2, 2026-08-15): CO with an unestablished resident
+//   count alongside CA with a known one — the Contingent Deadlines group
+//   (label, verbatim explainer, both comparator sentences, the conditional
+//   dates in their qualified "If required, due …" form) and the Analysis
+//   Inputs "resident count not established" line.
 // Fixture 6 (compute/persist unification, 2026-08-02): fresh-compute
 //   assertion — facts are mutated BETWEEN an initial compute and memo
 //   generation; the memo must reflect the mutation (it is generated from a
@@ -251,6 +256,50 @@ function check(label, ok) {
   check("memo reflects the post-mutation facts (CO citation prints)", text.includes("Colo. Rev. Stat. § 6-1-716"));
   check("memo Analysis Inputs lists the mutated jurisdiction set", text.includes("Colorado"));
   check("pre-mutation jurisdiction still prints (mutation is additive)", text.includes("California"));
+}
+
+// ── Fixture 7 — unknown resident count: the Contingent Deadlines group ──
+{
+  // CO count not established, CA count known and above the AG threshold. CO
+  // residents still carry a firm 30-day deadline (no threshold); CO AG and the
+  // CO CRA notice are contingent on the count. CA is the control: a known
+  // count computes firm obligations in the same memo.
+  const facts = {
+    awarenessDate: new Date("2026-08-10T15:00:00Z"),
+    jurisdictions: { co: true, ca: true },
+    residentCounts: { ca: 1000 },
+    residentCountUnknown: { co: true },
+    sensitivity: ["identifiers"],
+    sensitivityLabels: ["Identifiers (name, email, address)"],
+  };
+  const { deadlines, suppressed, review, contingent, services, advisories } = computeDeadlines(facts);
+  const bytes = await renderMemoPdfBytes(facts, deadlines, suppressed, renderOpts, review, null, services, advisories, contingent);
+  await fs.writeFile("/tmp/gate-memo-contingent.pdf", bytes);
+  console.log(`\nFixture 7 (CO unknown count + CA known): wrote /tmp/gate-memo-contingent.pdf (${bytes.length} bytes); deadlines: ${deadlines.length}; contingent: ${contingent.length}`);
+  const text = await extractText(bytes);
+  check("contingent group label prints", text.includes("CONTINGENT DEADLINES"));
+  check(
+    "group explainer prints verbatim",
+    text.includes("These obligations apply only if the affected-resident count meets the statutory threshold. Because the count for this jurisdiction has not yet been determined, the deadlines below are shown for planning purposes and should be treated as potentially applicable until the count is established.")
+  );
+  check("CO AG condition sentence prints (gte comparator)", text.includes("Notice to Colorado Attorney General is required if 500 or more Colorado residents are affected."));
+  check("CO CRA condition sentence prints (gt comparator)", text.includes("Notice to Nationwide Consumer Reporting Agencies is required if more than 1,000 Colorado residents are affected."));
+  check("CO AG conditional date prints, qualified", text.includes("If required, due September 9, 2026"));
+  check("CO CRA no-clock slot prints, qualified", text.includes("If required, no fixed deadline"));
+  check("contingent citations print", text.includes("Colo. Rev. Stat. § 6-1-716(2)(f)(I)") && text.includes("Colo. Rev. Stat. § 6-1-716(2)(d)"));
+  check("Analysis Inputs records the unestablished count", text.includes("RESIDENT COUNTS Colorado — resident count not established"));
+  // CO residents (firm, +30d) and the CO AG conditional date (also +30d) land
+  // on the same day, so the two forms of that date must be counted rather than
+  // matched: exactly one unqualified "Due …" (the firm card) and exactly one
+  // "If required, due …" (the contingent card).
+  const occurrences = (haystack, needle) => haystack.split(needle).length - 1;
+  const allSep9 = occurrences(text, "Due September 9, 2026");
+  const qualifiedSep9 = occurrences(text, "If required, due September 9, 2026");
+  check("the contingent slot is qualified and the firm slot is not (one of each)", allSep9 === 2 && qualifiedSep9 === 1);
+  check("CO firm resident deadline still prints (no threshold)", text.includes("Due September 9, 2026") && text.includes("Affected Colorado Residents"));
+  check("CA known count still computes firm obligations", text.includes("California Attorney General") && text.includes("Due September 24, 2026"));
+  check("CA is not contingent", !text.includes("Notice to California Attorney General is required if"));
+  check("nothing prints under the suppressed label", !text.includes("NOTIFICATION LIKELY NOT REQUIRED"));
 }
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);

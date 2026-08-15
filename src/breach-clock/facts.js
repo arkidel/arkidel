@@ -42,9 +42,17 @@ export function computableGate({ awareness, jurisdictions, sensitivity }, now) {
 // inputs ride the same passthrough: riskLevel and, as of the harm-gate pass
 // (2026-08-02), harmAssessment ("" | "determined_unlikely" | "harm_likely")
 // — its sibling. Neither needs mapping here; the spread carries them.
+//
+// `residentCountUnknown` (intake phase 2) — the { [jurId]: true } map of
+// jurisdictions whose resident count has not been established — rides the
+// same spread, but is normalized to an object here so an older payload
+// (written before the key existed) or a malformed value can never reach the
+// engine as something it would index into. Absent key → {}; no migration.
 export function factsFromPayload(payload = {}) {
+  const unknown = payload.residentCountUnknown;
   return {
     ...payload,
+    residentCountUnknown: unknown && typeof unknown === "object" ? unknown : {},
     awarenessDate: parseAwareness(payload.awareness),
   };
 }

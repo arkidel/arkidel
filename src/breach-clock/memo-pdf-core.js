@@ -31,6 +31,8 @@ import fontkit from "@pdf-lib/fontkit";
 import { JURISDICTIONS } from "./data.js";
 import {
   groupResultsByJurisdiction,
+  CONTINGENT_LABEL,
+  CONTINGENT_EXPLAINER,
   RISK_LEVEL_LABELS,
   harmGatedJurisdictions,
   harmAssessmentSummary,
@@ -274,6 +276,20 @@ function drawSectionHeading(page, fonts, text, topY) {
   return ruleY - 14;
 }
 
+// Selected jurisdictions flagged "count not yet known" with no numeric count,
+// in canonical data.js order. Mirrors the engine's precedence rule — a numeric
+// count always beats the flag — so the memo never states that a count is
+// unestablished when one was entered.
+function unknownCountJurisdictions(facts) {
+  const flags = facts.residentCountUnknown || {};
+  const selected = facts.jurisdictions || {};
+  return JURISDICTIONS.filter((j) => {
+    if (!selected[j.id] || !flags[j.id]) return false;
+    const n = parseInt(facts.residentCounts?.[j.id], 10);
+    return !Number.isFinite(n);
+  });
+}
+
 function drawIncidentSummary(state, facts) {
   const { fonts } = state;
   const labelW = 108; // 1.5"
@@ -285,10 +301,19 @@ function drawIncidentSummary(state, facts) {
   // status (the four-arg gate harnesses predate the lifecycle).
   const statusLabel = { draft: "Draft", active: "Active", closed: "Closed" }[facts.status];
 
+  // Unestablished resident counts (intake phase 2) — one line per flagged
+  // jurisdiction, stated as a fact of the record. The first line carries the
+  // label; continuation lines share it (blank label column), so several
+  // unknown jurisdictions read as one stack rather than a repeated heading.
+  const unknownCountLines = unknownCountJurisdictions(facts).map(
+    (j) => `${j.name} — resident count not established`
+  );
+
   const rows = [
     ...(statusLabel ? [["Status", statusLabel]] : []),
     ["Awareness", facts.awarenessDate ? formatAwareness(facts.awarenessDate) : "Not provided"],
     ["Jurisdictions", facts.jurisdictionList || "None selected"],
+    ...unknownCountLines.map((line, i) => [i === 0 ? "Resident counts" : "", line]),
     ...(facts.sensitivityLabels && facts.sensitivityLabels.length
       ? [["Data categories", facts.sensitivityLabels.join(", ")]]
       : []),
@@ -531,6 +556,28 @@ function serviceBlocks(s) {
   ];
 }
 
+// Contingent-obligation card (intake phase 2). Mirrors the screen: the
+// composed condition sentence as the body, the obligation's own citation, and
+// the conditional date in the right slot. The slot is deliberately NOT Ember
+// and NOT routed through formatDeadline — it carries the qualified "If
+// required, due …" wording in Ink, because Ember is the firm-deadline color
+// and nothing here is firm (same scoping as the service slots). An obligation
+// with no fixed clock states that instead of a date.
+function contingentBlocks(c) {
+  const due = c.conditional_deadline;
+  const dateOpts = { year: "numeric", month: "long", day: "numeric" };
+  const timeOpts = { hour: "2-digit", minute: "2-digit", timeZoneName: "short" };
+  const right = due
+    ? `If required, due ${due.toLocaleDateString("en-US", dateOpts)} at ${due.toLocaleTimeString("en-US", timeOpts)}`
+    : "If required, no fixed deadline";
+  return [
+    { type: "topRow", left: c.authority, right },
+    { type: "labelBody", label: "Basis", body: c.citation || "—" },
+    ...(c.condition ? [{ type: "body", text: c.condition }] : []),
+    ...(c.source_url ? [{ type: "url", label: "Source", url: c.source_url }] : []),
+  ];
+}
+
 // Harm-suppressed card content (harm-gate UI commit, 2026-08-02) — mirrors
 // the screen's harm-suppressed card: the verbatim statutory standard with the
 // exemption framing (or the negated-duty-element framing for mechanism
@@ -657,9 +704,24 @@ function buildBlockPlan(block) {
     block.caveatNotes.forEach(noteCard);
   }
 
+  // Contingent group (intake phase 2) — same within-block position as the
+  // screen: after the active deadline cards, before counsel review. The
+  // explainer prints under the group label as a quiet footnote line; nothing
+  // in the group claims firm status.
+  let contingentEmitted = false;
+  const emitContingent = () => {
+    if (contingentEmitted) return;
+    contingentEmitted = true;
+    if (!block.contingentCards || !block.contingentCards.length) return;
+    label(CONTINGENT_LABEL);
+    plan.push({ t: "explainer", text: CONTINGENT_EXPLAINER });
+    block.contingentCards.forEach((c) => card(contingentBlocks(c), MIDNIGHT));
+  };
+
   let reviewLabelled = false;
   for (const ob of block.obligations) {
     if (ob.role === "review" && !reviewLabelled) {
+      emitContingent();
       label(REVIEW_LABEL);
       reviewLabelled = true;
     }
@@ -672,6 +734,10 @@ function buildBlockPlan(block) {
       noteCard(pn);
     });
   }
+
+  // No counsel-review card in this block — the contingent group follows the
+  // active cards directly.
+  emitContingent();
 
   // Service cards after the deadline cards, then advisories after any service
   // cards (ratified placement; mirrors the screen via the shared grouping).
@@ -715,7 +781,12 @@ function buildBlockPlan(block) {
 
 function planItemHeight(item, fonts) {
   if (item.t === "label") return SUBLABEL_H;
-  if (item.t === "footnote") return measureWrapped(item.text, fonts.sansReg, SIZE.citation, CONTENT_W) + 4;
+  // "footnote" trails a card group (the harm admonition); "explainer" LEADS
+  // one (the contingent group), so it is drawn identically but guarded like a
+  // header — see the keep-with-next branch in drawJurisdictionBlock.
+  if (item.t === "footnote" || item.t === "explainer") {
+    return measureWrapped(item.text, fonts.sansReg, SIZE.citation, CONTENT_W) + 4;
+  }
   return measureCard(item.blocks, fonts);
 }
 
@@ -734,9 +805,15 @@ function drawJurisdictionBlock(state, block) {
     const item = plan[i];
     const h = planItemHeight(item, fonts);
     const pagesBefore = state.pages.length;
-    if (item.t === "label") {
-      // Keep a label with the first item that follows it.
-      const nextH = i + 1 < plan.length ? planItemHeight(plan[i + 1], fonts) : 0;
+    if (item.t === "label" || item.t === "explainer") {
+      // Keep a header with the first item that follows it. A label whose next
+      // item is a group explainer reserves the explainer AND the card after it
+      // — otherwise the label and explainer strand at a page foot with their
+      // cards overleaf, which reads as a group with nothing in it.
+      const next = plan[i + 1];
+      const after = plan[i + 2];
+      let nextH = next ? planItemHeight(next, fonts) : 0;
+      if (item.t === "label" && next?.t === "explainer" && after) nextH += planItemHeight(after, fonts);
       keepHeaderWithNext(state, h, nextH);
     } else {
       state.ensureRoom(h);
@@ -746,9 +823,10 @@ function drawJurisdictionBlock(state, block) {
 
     if (item.t === "label") {
       drawSubLabel(state, item.text);
-    } else if (item.t === "footnote") {
-      // Quiet Mist admonition line under a card group (the harm-suppressed
-      // group footer) — text, not a card; never Ember.
+    } else if (item.t === "footnote" || item.t === "explainer") {
+      // Quiet Mist line attached to a card group — the harm-suppressed group's
+      // trailing admonition, or the contingent group's leading explainer.
+      // Text, not a card; never Ember.
       state.cursorY = drawWrapped(state.currentPage(), item.text, CONTENT_X, state.cursorY, {
         font: fonts.sansReg, size: SIZE.citation, color: MIST, maxWidth: CONTENT_W,
       });
@@ -1126,10 +1204,14 @@ function drawIncidentReport(state, sections) {
 // advisories: Array — the engine's additive advisory entries (declared +
 //             auto "ssn_unconfirmed"); print in the counsel-note idiom after
 //             the service cards. Same trailing-default convention.
+// contingent: Array — the engine's contingent obligations (threshold-gated,
+//             resident count not established). Print inside their jurisdiction
+//             section between the deadline cards and counsel review, under the
+//             shared group label + explainer. Same trailing-default convention.
 //
 // Returns: Uint8Array — the serialized PDF bytes
 //
-export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontBytes, logoBytes, generatedAt }, review = [], notificationRecord = null, services = [], advisories = []) {
+export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontBytes, logoBytes, generatedAt }, review = [], notificationRecord = null, services = [], advisories = [], contingent = []) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
 
@@ -1155,6 +1237,8 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
     sensitivityLabels: facts.sensitivityLabels || [],
     encryptionSummary: facts.encryptionSummary,
     jurisdictions: facts.jurisdictions || {},
+    residentCounts: facts.residentCounts || {},
+    residentCountUnknown: facts.residentCountUnknown || {},
     riskLevel: facts.riskLevel,
     harmAssessment: facts.harmAssessment,
   });
@@ -1168,6 +1252,7 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
     deadlines: deadlines || [],
     suppressed: suppressed || [],
     review: review || [],
+    contingent: contingent || [],
     services: services || [],
     advisories: advisories || [],
     jurisdictions: facts.jurisdictions || {},

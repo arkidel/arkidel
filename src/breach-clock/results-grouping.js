@@ -39,6 +39,14 @@
 //   - advisoryCards — DISPLAY objects built by `advisoryDisplay` below (the
 //     one place the auto-advisory title/body copy is composed, so the screen
 //     and the memo cannot drift); render after the service cards.
+//
+// CONTINGENT DEADLINES (intake phase 2). The engine's `contingent` bucket —
+// threshold-gated obligations live but for an unestablished resident count —
+// groups into `contingentCards`, passed through by reference. Within-block
+// position is fixed on both surfaces: active deadline cards → Contingent
+// Deadlines → counsel review → suppressed → notes. The group heading and its
+// explainer are exported below (CONTINGENT_LABEL / CONTINGENT_EXPLAINER) so
+// the screen and the memo print the same words.
 // =============================================================================
 
 import { JURISDICTIONS } from "./data.js";
@@ -139,6 +147,16 @@ function advisoryDisplay(a) {
     citation: a.citation,
   };
 }
+
+// ── Contingent-deadline group copy (intake phase 2, 2026-08-15) ───────────
+// One string set for both surfaces: the screen renders the label in the
+// section-mark idiom with the explainer beneath it; the memo prints the same
+// label as a group sub-label with the same explainer under it. Counsel
+// register — the group states what the obligations turn on, and claims no
+// firm status for the dates below it.
+export const CONTINGENT_LABEL = "Contingent Deadlines";
+export const CONTINGENT_EXPLAINER =
+  "These obligations apply only if the affected-resident count meets the statutory threshold. Because the count for this jurisdiction has not yet been determined, the deadlines below are shown for planning purposes and should be treated as potentially applicable until the count is established.";
 
 // ── Harm-assessment display helpers (harm-gate UI commit, 2026-08-02) ──────
 // Shared by the form recap, the results view, and the memo so the three
@@ -245,13 +263,14 @@ function splitNotesByPlacement(entries) {
  * @param {Array}   [result.deadlines]     - active deadline cards (engine `deadlines`)
  * @param {Array}   [result.suppressed]    - suppressed / not-required cards
  * @param {Array}   [result.review]        - counsel-review cards
+ * @param {Array}   [result.contingent]    - contingent obligations (engine `contingent`)
  * @param {Array}   [result.services]      - computed service obligations (engine `services`)
  * @param {Array}   [result.advisories]    - advisory entries (engine `advisories`; declared + auto)
  * @param {Object}  [result.jurisdictions] - { [id]: boolean } selected-jurisdiction map (facts.jurisdictions),
  *                                           used to attach each selected jurisdiction's counsel notes.
  * @returns {Array<{
  *   jurisdictionId, name, statuteSubtitle,
- *   activeCards, counselReviewCards, suppressedCards,
+ *   activeCards, contingentCards, counselReviewCards, suppressedCards,
  *   serviceCards,                                   // engine service entries — render AFTER the deadline cards
  *   advisoryCards,                                  // advisoryDisplay objects — render AFTER the service cards
  *   caveatNotes,                                    // [{ jurShort, note }] — render ABOVE the cards
@@ -266,6 +285,7 @@ export function groupResultsByJurisdiction({
   deadlines = [],
   suppressed = [],
   review = [],
+  contingent = [],
   services = [],
   advisories = [],
   jurisdictions = {},
@@ -281,6 +301,7 @@ export function groupResultsByJurisdiction({
         name: meta.name,
         statuteSubtitle: meta.statute,
         activeCards: [],
+        contingentCards: [],
         counselReviewCards: [],
         suppressedCards: [],
         serviceCards: [],
@@ -296,6 +317,10 @@ export function groupResultsByJurisdiction({
   deadlines.forEach((d) => {
     const b = ensureBlock(d.jurisdiction);
     if (b) b.activeCards.push(d);
+  });
+  contingent.forEach((c) => {
+    const b = ensureBlock(c.jurisdiction);
+    if (b) b.contingentCards.push(c);
   });
   review.forEach((r) => {
     const b = ensureBlock(r.jurisdiction);

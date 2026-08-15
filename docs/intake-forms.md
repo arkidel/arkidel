@@ -103,6 +103,14 @@ non-gate rationale, CA/TX structural inertness) and the § 5/6/7/8/9/10
 sign-offs for the per-jurisdiction `harmGate` records. All standards are
 carried verbatim from the 2026-08-01 primary-source review.
 
+**Contingent deadlines for unknown resident counts** (August 15, 2026 update;
+reviewer: JDC, 2026-08-15). A jurisdiction whose affected-resident count is not
+yet established can now be flagged as such, and its threshold-gated obligations
+are surfaced as **contingent** — stated with the deadline they would carry —
+instead of being silently absent. No rule, threshold, comparator, clock, harbor,
+or standard changed; see § 0.7 for the semantics, the precedence ruling
+(suppression outranks contingency), and the explainer text as shipped.
+
 ---
 
 # 0. Data-category model (cross-jurisdiction)
@@ -180,6 +188,67 @@ carried verbatim from the 2026-08-01 primary-source review.
 
 - User-facing strings and documentation say **"computed"**, never "fired";
   "fires" may remain in engine internals and test code only.
+
+## 0.7 Contingent Deadlines — unknown resident counts
+
+*Added August 15, 2026 (intake phase 2). Reviewer: JDC, 2026-08-15. No
+substantive rule changed: every threshold, comparator, clock, harbor, and harm
+standard is exactly as previously verified. What changed is what the tool does
+when the covered entity does not yet know how many residents are affected.*
+
+**The input.** A per-jurisdiction "Count not yet known" toggle writes
+`residentCountUnknown: { [jurId]: true }` — a sparse map, absent key meaning
+nothing claimed, so payloads written before this pass need no migration. It is
+mutually exclusive with the resident count in both directions on the form
+(checking clears and disables the count; entering a count clears the toggle).
+
+**The semantics.** A threshold-gated obligation in a flagged jurisdiction with
+no numeric count is **contingent**: it is stated as potentially applicable, with
+the deadline it *would* carry, rather than being dropped as it was before. This
+is the conservative reading — an unestablished count is not evidence that the
+threshold is unmet, and the previous behavior (silent absence) invited counsel
+to overlook an obligation that a later headcount would confirm. Contingency is
+never asserted as a duty: the group carries its own explainer, the memo's dates
+are qualified ("If required, due …"), and the saved-incidents list shows
+"≤ {date} · contingent".
+
+**Precedence (ruled 2026-08-15).** Suppression and counsel review **outrank**
+contingency. Where an encryption or redaction harbor, a conditional gate, or a
+documented harm determination excuses the obligation, it lands in the suppressed
+(or counsel-review) group exactly as it would on a known above-threshold count —
+never in the contingent group. An obligation that is affirmatively excused is
+not merely uncertain, and showing it twice, or showing it as pending on a count,
+would misstate the position. A **numeric count always beats the flag** (0 is an
+established count); a **known below-threshold count is unchanged** — the
+obligation stays silently absent, as before.
+
+**The condition sentence** is composed from the obligation's own threshold and
+its exact comparator, never approximated:
+"Notice to {authority} is required if {more than N | N or more} {jurisdiction}
+residents are affected." So Colorado's AG duty (500, `gte`) reads "500 or more
+Colorado residents" while its CRA duty (1,000, `gt`) reads "more than 1,000
+Colorado residents".
+
+**Conditional deadlines** are the obligation's normal clock math run as if the
+threshold were met, dependent clocks included — California's AG clock resolves
+to the conditional resident deadline + 15 days, Delaware's to the resident
+deadline (0-hour cascade) — and are absent where the obligation has no fixed
+clock (e.g. the Colorado CRA notice).
+
+**Explainer text as shipped** (identical on screen and in the memo, under the
+"Contingent Deadlines" group heading):
+
+> These obligations apply only if the affected-resident count meets the
+> statutory threshold. Because the count for this jurisdiction has not yet been
+> determined, the deadlines below are shown for planning purposes and should be
+> treated as potentially applicable until the count is established.
+
+**Engine shape.** `computeDeadlines` returns a fifth outcome bucket,
+`contingent`, alongside `deadlines` / `suppressed` / `pending` / `review`; every
+evaluated obligation lands in exactly one (the quint-state invariant). Coverage:
+the "Contingent deadlines" group in the in-file harness, the `K. Contingent`
+group in `scripts/adversarial-engine-tests.mjs`, and fixture 7 in
+`scripts/render-gate-memo.mjs`.
 
 ---
 

@@ -190,11 +190,14 @@ function deriveGates(ob) {
  * @param {Date}   facts.awarenessDate       - Required.
  * @param {Object} facts.jurisdictions       - { [id]: boolean } map of selected jurisdictions.
  * @param {Object} [facts.residentCounts]    - { [id]: number|string } resident counts per jurisdiction.
+ * @param {Object} [facts.residentCountUnknown] - { [id]: true } jurisdictions whose resident count is
+ *                                             not yet established. A numeric count always wins over
+ *                                             the flag (defensive; the UI prevents the combination).
  * @param {string[]} [facts.sensitivity]     - Array of sensitivity category ids.
  * @param {string} [facts.encrypted] - US encryption-cluster inputs ("yes"|"no"|unset): encrypted, plus encryptionStrength ("ge_128"|"below_128"|"unknown"), redacted, keyAcquired, reidentificationAcquired.
  * @param {string} [facts.gdprUnintelligibility] - GDPR Art. 34(3)(a) input ("yes"|"no"|unset): measures rendering the data unintelligible.
  * @param {string} [facts.harmAssessment] - Harm-determination attestation ("" | "determined_unlikely" | "harm_likely"). Only the exact value "determined_unlikely" suppresses harm-gated obligations; every other value is inert.
- * @returns {{deadlines: Array, suppressed: Array, pending: Array, review: Array, services: Array, advisories: Array}}
+ * @returns {{deadlines: Array, suppressed: Array, pending: Array, review: Array, contingent: Array, services: Array, advisories: Array}}
  *   deadlines  — obligations that fire under the facts.
  *   suppressed — obligations that would have fired but were affirmatively
  *                excused (encryption/redaction/unintelligibility harbors, the
@@ -210,6 +213,17 @@ function deriveGates(ob) {
  *                assessment).
  *   review     — obligations whose outcome turns on a substantive legal
  *                judgment the engine does not make.
+ *   contingent — threshold-gated obligations that are live but for a resident
+ *                count the user has flagged as not yet established
+ *                (`residentCountUnknown`). Each entry carries the threshold,
+ *                its comparator, the counsel-register `condition` sentence,
+ *                and `conditional_deadline` — the obligation's normal clock
+ *                math run AS IF the threshold were met (dependent deadlines
+ *                included; null where the obligation has no fixed clock).
+ *                Suppression and counsel review OUTRANK contingency: an
+ *                obligation excused by a harbor or a harm determination lands
+ *                in `suppressed` (or `review`), never here. A KNOWN
+ *                below-threshold count is unchanged — silently absent.
  *   services   — additive: computed category-gated service obligations
  *                (statutory duration, no deadline date).
  *   advisories — additive: declared advisories whose category gate is met,
@@ -228,6 +242,7 @@ function computeDeadlines(facts) {
     awarenessDate,
     jurisdictions = {},
     residentCounts = {},
+    residentCountUnknown = {},
     sensitivity = [],
     riskLevel,
     encrypted,
@@ -254,6 +269,13 @@ function computeDeadlines(facts) {
   // in exactly one of the four arrays. EMPTY until Stage 4 wires the MA gate — no
   // gate emits "review" yet.
   const review = [];
+  // Fifth bucket (intake phase 2): threshold-gated obligations whose
+  // jurisdiction carries `residentCountUnknown` and no numeric count — live
+  // but for a count that has not been established. QUINT-state invariant:
+  // every considered obligation lands in exactly ONE of deadlines /
+  // suppressed / pending / review / contingent. A known below-threshold count
+  // is still excluded from all five (silently absent) — unchanged.
+  const contingent = [];
   // Additive output arrays (category-conditioned pass). The existing
   // deadline-output shape is unchanged; a UI that ignores these keys keeps
   // working.
@@ -272,7 +294,7 @@ function computeDeadlines(facts) {
   //                gov_id is present.
   const services = [];
   const advisories = [];
-  if (!awarenessDate) return { deadlines, suppressed, pending, review, services, advisories };
+  if (!awarenessDate) return { deadlines, suppressed, pending, review, contingent, services, advisories };
 
   // Two-pass build:
   //   Pass 1 — collect obligations that fire, computing deadlines that anchor
@@ -290,6 +312,10 @@ function computeDeadlines(facts) {
     const residentCount = residentCountRaw === undefined || residentCountRaw === null || residentCountRaw === ""
       ? NaN
       : (typeof residentCountRaw === "number" ? residentCountRaw : parseInt(residentCountRaw, 10));
+    // "Count not yet known" (intake phase 2). A numeric count ALWAYS takes
+    // precedence over the flag — the UI clears one when the other is set, but
+    // a stale flag riding a saved payload must never override a real count.
+    const countUnknown = isNaN(residentCount) && !!residentCountUnknown[jur.id];
 
     jur.obligations.forEach((ob) => {
       // Declared advisories — advisory-only content, never a deadline. A met
@@ -366,12 +392,24 @@ function computeDeadlines(facts) {
         return;
       }
 
+      // Resident-threshold gate. A numeric count evaluates the threshold
+      // exactly as before (below threshold → silently absent). With no numeric
+      // count, the obligation is dropped as before UNLESS the jurisdiction is
+      // flagged "count not yet known", in which case it is held as CONTINGENT
+      // and emitted below — after every suppression / review path has had its
+      // say, because an obligation affirmatively excused is not merely
+      // uncertain.
+      let contingentGate = null;
       if (ob.gating?.residentThreshold !== undefined) {
         const threshold = ob.gating.residentThreshold;
         const comparator = ob.gating.comparator || "gte";
-        if (isNaN(residentCount)) return;
-        const met = comparator === "gt" ? residentCount > threshold : residentCount >= threshold;
-        if (!met) return;
+        if (isNaN(residentCount)) {
+          if (!countUnknown) return;
+          contingentGate = { threshold, comparator };
+        } else {
+          const met = comparator === "gt" ? residentCount > threshold : residentCount >= threshold;
+          if (!met) return;
+        }
       }
 
       // Conditional-gate seam, Pass 2 — safeHarbors (affirmative excuses),
@@ -418,17 +456,23 @@ function computeDeadlines(facts) {
           });
           return;
         }
-        services.push({
-          jurisdiction: jur.short,
-          authority: ob.authority,
-          service_duration_display: ob.service_duration_display,
-          trigger_note: ob.trigger_note,
-          condition: ob.condition,
-          citation: ob.citation,
-          source_url: ob.source_url,
-          statute: jur.statute,
-        });
-        return;
+        // A threshold-gated service on an unestablished count is contingent,
+        // not computed: it falls through to the contingent emission below
+        // rather than asserting a service duty. No modeled service carries a
+        // residentThreshold today, so this guard is structural.
+        if (!contingentGate) {
+          services.push({
+            jurisdiction: jur.short,
+            authority: ob.authority,
+            service_duration_display: ob.service_duration_display,
+            trigger_note: ob.trigger_note,
+            condition: ob.condition,
+            citation: ob.citation,
+            source_url: ob.source_url,
+            statute: jur.statute,
+          });
+          return;
+        }
       }
 
       // Review outranks harm as it outranks suppress-harbors: never silently
@@ -478,6 +522,39 @@ function computeDeadlines(facts) {
           suppression_reasons: [harmMech],
           source_url: ob.source_url,
           statute: jur.statute,
+        });
+        return;
+      }
+
+      // Contingent (unknown resident count) — reached only after every
+      // suppression / review path above has declined, so suppression and
+      // review outrank contingency by construction. `conditional_deadline` is
+      // the obligation's normal clock math run as if the threshold were met;
+      // dependent clocks get null here and resolve in pass 2, exactly like
+      // firing deadlines.
+      if (contingentGate) {
+        const { threshold, comparator } = contingentGate;
+        const thresholdPhrase = comparator === "gt"
+          ? `more than ${threshold.toLocaleString()}`
+          : `${threshold.toLocaleString()} or more`;
+        let conditionalDeadline = null;
+        if (!ob.deadline_relative_to && ob.deadline_hours !== null && ob.deadline_hours !== undefined) {
+          conditionalDeadline = new Date(awarenessDate.getTime() + ob.deadline_hours * 3600 * 1000);
+        }
+        contingent.push({
+          jurisdiction: jur.short,
+          authority: ob.authority,
+          threshold,
+          comparator,
+          conditional_deadline: conditionalDeadline,
+          condition: `Notice to ${ob.authority} is required if ${thresholdPhrase} ${jur.short} residents are affected.`,
+          citation: ob.citation,
+          source_url: ob.source_url,
+          statute: jur.statute,
+          // Internal — used in pass 2. Stripped before return.
+          _jurId: jur.id,
+          _deadlineRelativeTo: ob.deadline_relative_to || null,
+          _deadlineHours: ob.deadline_hours,
         });
         return;
       }
@@ -547,13 +624,37 @@ function computeDeadlines(facts) {
     resolved.push(d);
   });
 
-  // Strip internal fields before returning.
-  const cleaned = resolved.map((d) => {
-    const { _jurId, _deadlineRelativeTo, _deadlineHours, ...rest } = d;
-    return rest;
+  // Pass 2b — resolve dependent CONDITIONAL deadlines the same way. The anchor
+  // is looked up first among the resolved firing deadlines (CA's AG clock runs
+  // from the resident notification, which is not threshold-gated and fires
+  // normally) and then among the contingent entries themselves, so a dependent
+  // whose parent is ALSO contingent still gets a conditional date. A parent
+  // that is not in play at all drops the dependent, mirroring pass 2; a parent
+  // with no fixed clock leaves the conditional date null rather than hiding a
+  // potentially applicable obligation.
+  const resolvedContingent = [];
+  contingent.forEach((c) => {
+    if (!c._deadlineRelativeTo) {
+      resolvedContingent.push(c);
+      return;
+    }
+    const sameJur = (p) => p._jurId === c._jurId && p.authority === c._deadlineRelativeTo.parent_authority;
+    const firmParent = resolved.find(sameJur);
+    const contingentParent = firmParent ? null : contingent.find((p) => p !== c && sameJur(p));
+    if (!firmParent && !contingentParent) return;
+    const anchor = firmParent ? firmParent.deadline : contingentParent.conditional_deadline;
+    if (anchor && c._deadlineHours !== null && c._deadlineHours !== undefined) {
+      c.conditional_deadline = new Date(anchor.getTime() + c._deadlineHours * 3600 * 1000);
+    }
+    resolvedContingent.push(c);
   });
 
-  return { deadlines: cleaned, suppressed, pending, review, services, advisories };
+  // Strip internal fields before returning.
+  const stripInternal = ({ _jurId, _deadlineRelativeTo, _deadlineHours, ...rest }) => rest;
+  const cleaned = resolved.map(stripInternal);
+  const cleanedContingent = resolvedContingent.map(stripInternal);
+
+  return { deadlines: cleaned, suppressed, pending, review, contingent: cleanedContingent, services, advisories };
 }
 
 
@@ -598,9 +699,9 @@ const expectCount = (n) => (deadlines) =>
     ? { pass: true }
     : { pass: false, message: `Expected ${n} deadlines; got ${deadlines.length}` };
 
-const expectAll = (...checks) => (deadlines, suppressed, pending, review, services, advisories) => {
+const expectAll = (...checks) => (deadlines, suppressed, pending, review, services, advisories, contingent) => {
   const failures = checks
-    .map((c) => c(deadlines, suppressed, pending, review, services, advisories))
+    .map((c) => c(deadlines, suppressed, pending, review, services, advisories, contingent))
     .filter((r) => !r.pass)
     .map((r) => r.message);
   return failures.length === 0
@@ -742,6 +843,58 @@ const expectHarmSuppressed = (jurisdiction, authoritySubstring, expected = {}) =
   return { pass: true };
 };
 
+// Contingent expectations (intake phase 2, unknown resident counts). Entries
+// ride the seventh positional argument, so every pre-existing expectation is
+// untouched. `expected` may pin the composed condition sentence, the threshold
+// and comparator, and the conditional deadline as an hour offset off the
+// awareness instant (`conditionalHours`, or explicitly null for a
+// no-fixed-clock obligation).
+const findContingent = (contingent, jurisdiction, authoritySubstring) =>
+  (contingent || []).find(
+    (c) => c.jurisdiction === jurisdiction && c.authority.toLowerCase().includes(authoritySubstring.toLowerCase())
+  );
+
+const expectContingent = (jurisdiction, authoritySubstring, expected = {}) =>
+  (deadlines, suppressed = [], pending = [], review = [], services = [], advisories = [], contingent = []) => {
+    const found = findContingent(contingent, jurisdiction, authoritySubstring);
+    if (!found) {
+      return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" to be contingent; got ${contingent.length} contingent: ${contingent.map((c) => `${c.jurisdiction}/${c.authority}`).join(" | ")}` };
+    }
+    for (const key of ["condition", "threshold", "comparator", "citation"]) {
+      if (expected[key] !== undefined && found[key] !== expected[key]) {
+        return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" ${key} ${JSON.stringify(expected[key])}; got ${JSON.stringify(found[key])}` };
+      }
+    }
+    if (expected.conditionalHours !== undefined) {
+      if (expected.conditionalHours === null) {
+        return found.conditional_deadline === null
+          ? { pass: true }
+          : { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" to have no conditional deadline; got ${found.conditional_deadline}` };
+      }
+      if (!found.conditional_deadline) {
+        return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" conditional deadline at +${expected.conditionalHours}h; got null` };
+      }
+      const actualHours = (found.conditional_deadline.getTime() - TEST_AWARENESS.getTime()) / (3600 * 1000);
+      if (Math.abs(actualHours - expected.conditionalHours) >= 0.01) {
+        return { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" conditional deadline at +${expected.conditionalHours}h; got +${actualHours.toFixed(2)}h` };
+      }
+    }
+    return { pass: true };
+  };
+
+const expectContingentCount = (n) =>
+  (deadlines, suppressed = [], pending = [], review = [], services = [], advisories = [], contingent = []) =>
+    contingent.length === n
+      ? { pass: true }
+      : { pass: false, message: `Expected ${n} contingent obligations; got ${contingent.length}: ${contingent.map((c) => `${c.jurisdiction}/${c.authority}`).join(" | ")}` };
+
+const expectNotContingent = (jurisdiction, authoritySubstring) =>
+  (deadlines, suppressed = [], pending = [], review = [], services = [], advisories = [], contingent = []) => {
+    const found = findContingent(contingent, jurisdiction, authoritySubstring);
+    return found
+      ? { pass: false, message: `Expected ${jurisdiction} / "${authoritySubstring}" NOT to be contingent; but it was (${found.condition})` }
+      : { pass: true };
+  };
 
 
 // --- Test cases --------------------------------------------------------------
@@ -1984,6 +2137,158 @@ const TEST_CASES = [
       expectPending("EU GDPR", "Data Subjects")
     ),
   },
+  // === Contingent deadlines — unknown resident counts (intake phase 2) ===
+  // `residentCountUnknown` holds a threshold-gated obligation as CONTINGENT
+  // instead of dropping it: live but for a count that has not been
+  // established. Suppression and review outrank contingency; a numeric count
+  // always beats the flag; a KNOWN below-threshold count is unchanged.
+  {
+    name: "CO unknown count: residents fire with a firm 30-day deadline (no threshold); AG and CRA are contingent",
+    category: "Contingent deadlines",
+    facts: { jurisdictions: { co: true }, residentCountUnknown: { co: true }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectCount(1),
+      expectFires("Colorado", "Colorado Residents"),
+      expectDeadlineHoursFromAwareness("Colorado", "Colorado Residents", 30 * 24),
+      expectContingentCount(2),
+      expectContingent("Colorado", "Attorney General", {
+        threshold: 500,
+        comparator: "gte",
+        conditionalHours: 30 * 24,
+        citation: "Colo. Rev. Stat. § 6-1-716(2)(f)(I)",
+        condition: "Notice to Colorado Attorney General is required if 500 or more Colorado residents are affected.",
+      }),
+      expectContingent("Colorado", "Consumer Reporting", {
+        threshold: 1000,
+        comparator: "gt",
+        conditionalHours: null,
+        condition: "Notice to Nationwide Consumer Reporting Agencies is required if more than 1,000 Colorado residents are affected.",
+      }),
+      expectSuppressedCount(0)
+    ),
+  },
+  {
+    name: "CA unknown count: AG is contingent at the conditional resident deadline + 15 days (dependent clock resolves)",
+    category: "Contingent deadlines",
+    facts: { jurisdictions: { ca: true }, residentCountUnknown: { ca: true }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectCount(1),
+      expectFires("California", "California Residents"),
+      expectDeadlineHoursFromAwareness("California", "California Residents", 30 * 24),
+      expectContingentCount(1),
+      expectContingent("California", "Attorney General", {
+        threshold: 500,
+        comparator: "gt",
+        conditionalHours: 45 * 24,
+        condition: "Notice to California Attorney General is required if more than 500 California residents are affected.",
+      })
+    ),
+  },
+  {
+    name: "CO unknown count + encryption (key not acquired): everything suppressed, ZERO contingent (suppression outranks contingency)",
+    category: "Contingent deadlines",
+    facts: {
+      jurisdictions: { co: true },
+      residentCountUnknown: { co: true },
+      sensitivity: ["financial"],
+      encrypted: "yes",
+      keyAcquired: "no",
+    },
+    expect: expectAll(
+      expectCount(0),
+      expectContingentCount(0),
+      expectSuppressedCount(3),
+      expectSuppressed("Colorado", "Colorado Residents", "breach_definition"),
+      expectSuppressed("Colorado", "Attorney General", "breach_definition"),
+      expectSuppressed("Colorado", "Consumer Reporting", "breach_definition")
+    ),
+  },
+  {
+    name: "CO unknown count + harm determined unlikely: harm-suppressed, ZERO contingent",
+    category: "Contingent deadlines",
+    facts: {
+      jurisdictions: { co: true },
+      residentCountUnknown: { co: true },
+      sensitivity: ["identifiers"],
+      harmAssessment: "determined_unlikely",
+    },
+    expect: expectAll(
+      expectCount(0),
+      expectContingentCount(0),
+      expectSuppressedCount(3),
+      expectHarmSuppressed("Colorado", "Attorney General", { citation: "Colo. Rev. Stat. § 6-1-716(2)(f)(I)" })
+    ),
+  },
+  {
+    name: "Numeric count beats a stale unknown flag: CO 5,000 computes AG + CRA, nothing contingent",
+    category: "Contingent deadlines",
+    facts: {
+      jurisdictions: { co: true },
+      residentCounts: { co: 5000 },
+      residentCountUnknown: { co: true },
+      sensitivity: ["identifiers"],
+    },
+    expect: expectAll(
+      expectCount(3),
+      expectFires("Colorado", "Attorney General"),
+      expectFires("Colorado", "Consumer Reporting"),
+      expectContingentCount(0)
+    ),
+  },
+  {
+    name: "Known below-threshold count is UNCHANGED: CO 100 leaves AG/CRA silently absent, not contingent",
+    category: "Contingent deadlines",
+    facts: { jurisdictions: { co: true }, residentCounts: { co: 100 }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectCount(1),
+      expectFires("Colorado", "Colorado Residents"),
+      expectDoesNotFire("Colorado", "Attorney General"),
+      expectContingentCount(0),
+      expectNotContingent("Colorado", "Attorney General"),
+      expectNotContingent("Colorado", "Consumer Reporting")
+    ),
+  },
+  {
+    name: "Unknown flag without a threshold-gated obligation changes nothing (MA has no thresholds)",
+    category: "Contingent deadlines",
+    facts: { jurisdictions: { ma: true }, residentCountUnknown: { ma: true }, sensitivity: ["identifiers"] },
+    expect: expectAll(expectCount(3), expectContingentCount(0)),
+  },
+  {
+    name: "DE unknown count: AG is contingent on the 0-hour cascade — conditional deadline equals the resident deadline",
+    category: "Contingent deadlines",
+    facts: { jurisdictions: { de: true }, residentCountUnknown: { de: true }, sensitivity: ["identifiers"] },
+    expect: expectAll(
+      expectCount(1),
+      expectDeadlineHoursFromAwareness("Delaware", "Delaware Residents", 60 * 24),
+      expectContingentCount(1),
+      expectContingent("Delaware", "Attorney General", {
+        threshold: 500,
+        comparator: "gt",
+        conditionalHours: 60 * 24,
+        condition: "Notice to Delaware Attorney General is required if more than 500 Delaware residents are affected.",
+      })
+    ),
+  },
+  {
+    name: "Unknown counts are per jurisdiction: CO unknown + CA 1,000 known — CO AG/CRA contingent while CA AG computes",
+    category: "Contingent deadlines",
+    facts: {
+      jurisdictions: { co: true, ca: true },
+      residentCounts: { ca: 1000 },
+      residentCountUnknown: { co: true },
+      sensitivity: ["identifiers"],
+    },
+    expect: expectAll(
+      expectFires("California", "Attorney General"),
+      expectFires("Colorado", "Colorado Residents"),
+      expectDoesNotFire("Colorado", "Attorney General"),
+      expectContingentCount(2),
+      expectContingent("Colorado", "Attorney General"),
+      expectContingent("Colorado", "Consumer Reporting"),
+      expectNotContingent("California", "Attorney General")
+    ),
+  },
   {
     name: "CO: harm suppression respects thresholds — a below-threshold AG/CRA stays silently absent, not suppressed",
     category: "Harm gate",
@@ -2009,8 +2314,8 @@ function runTests() {
         ...t.facts,
         awarenessDate: t.facts._skipAwareness ? undefined : TEST_AWARENESS,
       };
-      const { deadlines, suppressed, pending, review, services, advisories } = computeDeadlines(facts);
-      const result = t.expect(deadlines, suppressed, pending, review, services, advisories);
+      const { deadlines, suppressed, pending, review, services, advisories, contingent } = computeDeadlines(facts);
+      const result = t.expect(deadlines, suppressed, pending, review, services, advisories, contingent);
       return {
         name: t.name,
         category: t.category,

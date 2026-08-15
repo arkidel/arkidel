@@ -34,6 +34,8 @@ import { JURISDICTIONS, SENSITIVITY_OPTIONS } from "./data.js";
 import { isHighRisk, computeDeadlines, runTests, TEST_AWARENESS } from "./engine.js";
 import {
   groupResultsByJurisdiction,
+  CONTINGENT_LABEL,
+  CONTINGENT_EXPLAINER,
   HARM_ASSESSMENT_LABELS,
   RISK_LEVEL_LABELS,
   harmGatedJurisdictions,
@@ -488,6 +490,7 @@ const factsSignatureOf = (p) =>
     p.awareness,
     p.jurisdictions,
     p.residentCounts,
+    p.residentCountUnknown,
     p.sensitivity,
     p.encrypted,
     p.encryptionStrength,
@@ -538,6 +541,12 @@ export default function BreachClock() {
   const [residentCounts, setResidentCounts] = useState(
     () => Object.fromEntries(JURISDICTIONS.filter((j) => j.residentField).map((j) => [j.id, ""]))
   );
+  // "Count not yet known" per jurisdiction (intake phase 2) — a sparse
+  // { [jurId]: true } map, absent key meaning nothing claimed. Mutually
+  // exclusive with a numeric count in BOTH directions: toggling on clears the
+  // count input, typing a count clears the toggle. The engine holds each
+  // threshold-gated obligation of a flagged jurisdiction as CONTINGENT.
+  const [residentCountUnknown, setResidentCountUnknown] = useState({});
   const [sensitivity, setSensitivity] = useState([]);
   // US encryption cluster (S3b) — five tri-state inputs, each defaulting to unset
   // (""). They feed the US per-obligation safeHarbor gates in the engine.
@@ -666,6 +675,14 @@ export default function BreachClock() {
       ...Object.fromEntries(JURISDICTIONS.filter((j) => j.residentField).map((j) => [j.id, ""])),
       ...(p.residentCounts && typeof p.residentCounts === "object" ? p.residentCounts : {}),
     });
+    // Sparse map; an older payload has no key at all (no migration). Only
+    // truthy entries are kept, so a serialized `false` never renders as
+    // "not yet known".
+    setResidentCountUnknown(
+      p.residentCountUnknown && typeof p.residentCountUnknown === "object"
+        ? Object.fromEntries(Object.entries(p.residentCountUnknown).filter(([, v]) => !!v).map(([k]) => [k, true]))
+        : {}
+    );
     setSensitivity(Array.isArray(p.sensitivity) ? p.sensitivity : []);
     setEncrypted(p.encrypted || "");
     setEncryptionStrength(p.encryptionStrength || "");
@@ -759,6 +776,7 @@ export default function BreachClock() {
     awareness,
     jurisdictions,
     residentCounts,
+    residentCountUnknown,
     sensitivity,
     encrypted,
     encryptionStrength,
@@ -1012,10 +1030,37 @@ export default function BreachClock() {
     setJurHighlight(0);
     if (jur.residentField) setFocusCountFor(jur.id);
   };
-  // Remove clears the jurisdiction AND its resident count.
+  // Remove clears the jurisdiction, its resident count, AND any "count not yet
+  // known" claim — nothing about a removed jurisdiction should survive into
+  // the payload.
   const removeJurisdiction = (id) => {
     setJurisdictions((prev) => ({ ...prev, [id]: false }));
     setResidentCounts((prev) => (id in prev ? { ...prev, [id]: "" } : prev));
+    clearCountUnknown(id);
+  };
+
+  // ── "Count not yet known" handlers (mutual exclusion, both directions) ──
+  // Toggling ON clears the count input; typing a count clears the toggle. The
+  // engine defends against the combination anyway (a numeric count always
+  // beats the flag), but the form never produces it.
+  const clearCountUnknown = (id) =>
+    setResidentCountUnknown((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  const setCountUnknown = (id, on) => {
+    if (!on) {
+      clearCountUnknown(id);
+      return;
+    }
+    setResidentCountUnknown((prev) => ({ ...prev, [id]: true }));
+    setResidentCounts((prev) => (id in prev ? { ...prev, [id]: "" } : prev));
+  };
+  const setResidentCount = (id, value) => {
+    setResidentCounts((prev) => ({ ...prev, [id]: value }));
+    if (value !== "") clearCountUnknown(id);
   };
   // Add every modeled US jurisdiction not already selected; counts left blank.
   const addAllUS = () => {
@@ -1085,6 +1130,15 @@ export default function BreachClock() {
     });
     setJurisdictions(nextJur);
     setResidentCounts(nextCounts);
+    // A pasted count establishes the number — the same mutual exclusion the
+    // typed input enforces, applied to every jurisdiction this Apply counted.
+    setResidentCountUnknown((prev) => {
+      const next = { ...prev };
+      Object.keys(nextCounts).forEach((id) => {
+        if (nextCounts[id] !== "" && nextCounts[id] !== undefined) delete next[id];
+      });
+      return next;
+    });
     setBulkFlash(flash);
     setPasteReport(report);
     // Clean apply closes the panel; unmatched / not-modeled lines keep it open
@@ -1160,7 +1214,9 @@ export default function BreachClock() {
   // `services` / `advisories` are the engine's additive category-conditioned
   // outputs (commit f02f0ef): computed service obligations (statutory duration,
   // no deadline) and advisory entries (declared + auto "ssn_unconfirmed").
-  const { deadlines, suppressed, pending, review, services, advisories } = computeDeadlines(factsFromPayload(buildPayload()));
+  // `contingent` (intake phase 2) carries threshold-gated obligations held on
+  // an unestablished resident count — live but for the count, never firm.
+  const { deadlines, suppressed, pending, review, contingent, services, advisories } = computeDeadlines(factsFromPayload(buildPayload()));
 
   // ── Minimal operative inputs required to submit (mirrors the old
   //    canAdvance) — read from the shared gate above. ──
@@ -1310,12 +1366,15 @@ export default function BreachClock() {
       // Save-without-Submit path, where it guarantees the memo can never
       // print superseded analysis. Shadows the render-scope destructure
       // deliberately.
-      const { deadlines, suppressed, review, services, advisories } =
+      const { deadlines, suppressed, review, contingent, services, advisories } =
         computeDeadlines(factsFromPayload(buildPayload()));
       const facts = {
         awarenessDate,
         jurisdictions,
         residentCounts,
+        // Drives the Analysis Inputs "resident count not established" lines;
+        // the contingent cards themselves ride the trailing array below.
+        residentCountUnknown,
         sensitivity,
         sensitivityLabels: sensitivityLabelsForMemo,
         encryptionSummary: encryptionRecap,
@@ -1350,7 +1409,7 @@ export default function BreachClock() {
         });
       const notificationRecord =
         notifRows.length || memoLogEntries.length ? { rows: notifRows, entries: memoLogEntries } : null;
-      const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed, review, notificationRecord, services, advisories);
+      const pdfBytes = await generateMemoPdf(facts, deadlines, suppressed, review, notificationRecord, services, advisories, contingent);
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -2245,8 +2304,33 @@ export default function BreachClock() {
                         aria-label={jur.residentField.stateLabel}
                         placeholder={jur.residentField.placeholder || ""}
                         value={residentCounts[jur.id] || ""}
-                        onChange={(e) => setResidentCounts({ ...residentCounts, [jur.id]: e.target.value })}
+                        disabled={!!residentCountUnknown[jur.id]}
+                        onChange={(e) => setResidentCount(jur.id, e.target.value)}
+                        style={residentCountUnknown[jur.id] ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
                       />
+                      {/* "Count not yet known" — a real checkbox (not the
+                          .check-row idiom, which is the selection-list
+                          control): this is a compact per-row qualifier on the
+                          count input beside it. Checking it clears and
+                          disables the count; typing a count unchecks it. */}
+                      <label
+                        style={{
+                          display: "flex", alignItems: "center", gap: "8px",
+                          marginTop: "8px", fontSize: "12.5px", lineHeight: 1.4,
+                          color: "#2C2418", cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          /* Named per jurisdiction so the control is
+                             unambiguous out of visual context. */
+                          aria-label={`Count not yet known — ${jur.name}`}
+                          checked={!!residentCountUnknown[jur.id]}
+                          onChange={(e) => setCountUnknown(jur.id, e.target.checked)}
+                          style={{ width: "14px", height: "14px", accentColor: "#1B2A3F", cursor: "pointer" }}
+                        />
+                        Count not yet known
+                      </label>
                       {thresholdObligations.length > 0 && (
                         <div className="rule-text" style={{ marginTop: "6px", fontSize: "12px" }}>
                           {thresholdObligations.map((o, idx) => {
@@ -2495,7 +2579,7 @@ export default function BreachClock() {
     // consolidated banner above, so a pending-only jurisdiction yields no block.
     // blockSections() returns each block's non-empty card-type groups in the
     // shared within-block order (the order knob lives in results-grouping.js).
-    const groups = groupResultsByJurisdiction({ deadlines, suppressed, review, services, advisories, jurisdictions });
+    const groups = groupResultsByJurisdiction({ deadlines, suppressed, review, contingent, services, advisories, jurisdictions });
 
     // NY/MA still-computing explainer — non-null only when a harm
     // determination is recorded and NY/MA is selected; renders once, above
@@ -2747,6 +2831,86 @@ export default function BreachClock() {
               Record notification date
             </button>
           )}
+        </div>
+      );
+    };
+
+    // Contingent-deadline card (intake phase 2). The existing deadline-card
+    // vocabulary, no new motifs: authority title, mono citation, the composed
+    // condition sentence as the body, primary-source link, and the standard
+    // right-slot date treatment for the conditional deadline — countdown +
+    // Ember "Due …", the existing urgent/missed variants when it is close or
+    // past, the static Mist due line on a closed incident, and the
+    // "No fixed notification deadline" badge when the obligation has no
+    // clock. Deliberately NO record-notification footer: nothing has been
+    // determined to notify against yet.
+    const renderContingentCard = (c, key, extraStyle) => {
+      const due = c.conditional_deadline;
+      const timeRemaining = due ? due.getTime() - now.getTime() : null;
+      const isClosed = status === "closed";
+      const isMissed = timeRemaining !== null && timeRemaining < 0;
+      const isUrgent = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 3600 * 1000;
+      return (
+        <div
+          key={key}
+          className={`deadline-card ${isMissed ? "missed" : isUrgent && !isClosed ? "urgent" : ""}`}
+          style={{
+            ...extraStyle,
+            ...(isClosed && isMissed ? { borderLeftColor: "#9FAEC2" } : {}),
+          }}
+        >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
+            <div>
+              <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
+                {c.authority}
+              </div>
+              <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>{c.citation}</div>
+              <div className="rule-text">{c.condition}</div>
+              {c.source_url && (
+                <a
+                  href={c.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "6px",
+                    fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500,
+                    marginTop: "14px", color: "inherit", textDecoration: "none",
+                    borderBottom: "1px solid currentColor", paddingBottom: "2px", opacity: 0.8,
+                  }}
+                >
+                  View primary source ↗
+                </a>
+              )}
+            </div>
+            <div style={{ textAlign: "right", minWidth: "200px" }}>
+              {due ? (
+                <>
+                  {!isMissed && !isClosed && (
+                    <div className="section-mark" style={{ marginBottom: "6px" }}>Time remaining</div>
+                  )}
+                  {isClosed ? (
+                    <div className="mono" style={{ fontSize: "26px", fontWeight: 400, letterSpacing: "-0.02em", color: "#9FAEC2" }}>
+                      Due {due.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em", ...(isMissed ? { color: "#C76E3A" } : {}) }}>
+                        {formatDuration(timeRemaining)}
+                      </div>
+                      <div className="mono" style={{ fontSize: "13px", fontWeight: 500, color: "#C76E3A", marginTop: "6px" }}>
+                        Due {due.toLocaleString()}
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 14px", border: "1px solid currentColor" }}>
+                  <AlertTriangle size={14} />
+                  <div className="section-mark">No fixed notification deadline</div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       );
     };
@@ -3057,7 +3221,31 @@ export default function BreachClock() {
       if (hasCaveat) {
         out.push(renderParchmentPanel({ key: "caveat", notes: block.caveatNotes, eyebrow: "Pre-Notification Considerations", lapEdge: "bottom", marginTop: 16, collapsible: true }));
       }
+      // Within-block order (intake phase 2): active deadline cards →
+      // Contingent Deadlines → counsel review → suppressed → notes. The
+      // obligations array is active-first then review, so the contingent group
+      // is emitted at the boundary — before the first review card, or after
+      // the active cards when the block has none.
+      const firstReviewIdx = block.obligations.findIndex((ob) => ob.role === "review");
+      const contingentAt = firstReviewIdx === -1 ? block.obligations.length : firstReviewIdx;
+      const emitContingentGroup = () => {
+        if (!block.contingentCards || block.contingentCards.length === 0) return;
+        out.push(
+          <div key="cont-label" className="section-mark" style={{ margin: "24px 0 10px" }}>
+            {CONTINGENT_LABEL}
+          </div>
+        );
+        out.push(
+          <p key="cont-explainer" className="rule-text" style={{ margin: "0 4px 4px", maxWidth: "760px" }}>
+            {CONTINGENT_EXPLAINER}
+          </p>
+        );
+        block.contingentCards.forEach((c, i) =>
+          out.push(renderContingentCard(c, `cont-${i}`, { marginTop: "16px", position: "relative", zIndex: 1 }))
+        );
+      };
       block.obligations.forEach((ob, idx) => {
+        if (idx === contingentAt) emitContingentGroup();
         const first = idx === 0;
         const cardStyle = { marginTop: first ? (hasCaveat ? "-16px" : "16px") : "16px", position: "relative", zIndex: 1 };
         out.push(
@@ -3069,6 +3257,7 @@ export default function BreachClock() {
           out.push(renderParchmentPanel({ key: `par-${idx}-${j}`, notes: [pn], perNoteLead: PARALLEL_LEAD, lapEdge: "top", marginTop: -16 }))
         );
       });
+      if (contingentAt >= block.obligations.length) emitContingentGroup();
       // Service cards after the jurisdiction's deadline cards, then advisory
       // cards after any service cards (ratified placement).
       block.serviceCards.forEach((s, i) => out.push(renderServiceCard(s, `svc-${i}`)));
@@ -3129,7 +3318,7 @@ export default function BreachClock() {
         </div>
       )}
 
-      {!hasPending && review.length === 0 && deadlines.length === 0 && suppressed.length > 0 && (
+      {!hasPending && review.length === 0 && deadlines.length === 0 && contingent.length === 0 && suppressed.length > 0 && (
         <div style={{ marginBottom: "16px", padding: "24px 28px", background: "#5A6E4A", color: "#FAF8F2", borderRadius: "12px" }}>
           <div className="section-mark" style={{ color: "#FAF8F2", opacity: 0.85, marginBottom: "8px" }}>Result</div>
           <div className="serif" style={{ fontSize: "24px", fontWeight: 400, lineHeight: 1.2 }}>
@@ -3141,7 +3330,7 @@ export default function BreachClock() {
         </div>
       )}
 
-      {!hasPending && review.length === 0 && deadlines.length === 0 && suppressed.length === 0 && (
+      {!hasPending && review.length === 0 && deadlines.length === 0 && contingent.length === 0 && suppressed.length === 0 && (
         <div style={{ marginBottom: "16px", padding: "24px 28px", background: "#1B2A3F", color: "#FAF8F2", borderRadius: "12px" }}>
           <div className="section-mark" style={{ color: "#FAF8F2", opacity: 0.85, marginBottom: "8px" }}>No deadlines computed</div>
           <p style={{ fontSize: "14px", marginTop: "8px", opacity: 0.9, lineHeight: 1.6 }}>
@@ -3809,7 +3998,13 @@ export default function BreachClock() {
               "Jurisdictions",
               JURISDICTIONS.filter((j) => jurisdictions[j.id]).map((j) => {
                 const c = residentCounts[j.id];
-                const suffix = j.residentField && c ? ` (${fmtCount(c)} residents)` : "";
+                // An unestablished count is stated, not left blank — the same
+                // fact the memo's Analysis Inputs records.
+                const suffix = j.residentField && c
+                  ? ` (${fmtCount(c)} residents)`
+                  : j.residentField && residentCountUnknown[j.id]
+                  ? " (count not established)"
+                  : "";
                 return `${j.short}${suffix}`;
               }).join(" · ") || "—"
             )}

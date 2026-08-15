@@ -10,8 +10,10 @@
 // The Next-deadline column computes client-side from each row's saved payload:
 // the SAME completeness gate the editor uses (computableGate in
 // src/breach-clock/facts.js — extracted, not duplicated) and the same pure
-// engine, taking the soonest fired obligation deadline. Static per load — no
-// ticking on this page.
+// engine, taking the soonest computed obligation deadline. Firm deadlines
+// govern; a contingent obligation (unestablished resident count) surfaces only
+// when its conditional date is the nearest one, and then as "≤ {date} ·
+// contingent". Static per load — no ticking on this page.
 //
 // Product chrome styling: inline styles on the Bone canvas with the same
 // tokens as BreachClock (white card surface, 12px card radius, Parchment card
@@ -101,15 +103,28 @@ const jurisdictionLabel = (payload) => {
   return `${abbrs.slice(0, 3).join(" · ")} +${abbrs.length - 3}`;
 };
 
-// Soonest fired obligation deadline across the incident's jurisdictions, or
-// null when the draft fails the editor's completeness gate or no fired
-// obligation carries a fixed-hour deadline.
+// Soonest obligation deadline across the incident's jurisdictions, or null
+// when the draft fails the editor's completeness gate or nothing carries a
+// date. The column is about FIRM deadlines: contingent obligations (a
+// threshold-gated duty held on an unestablished resident count) count only
+// when their conditional date is the nearest one — including the case where
+// there are no firm dates at all — and the cell then says so rather than
+// presenting the date as settled.
 const nextDeadline = (payload, now) => {
   const p = payload || {};
   if (!computableGate(p, now).canCompute) return null;
-  const dated = computeDeadlines(factsFromPayload(p)).deadlines.filter((d) => d.deadline);
-  if (dated.length === 0) return null;
-  return new Date(Math.min(...dated.map((d) => d.deadline.getTime())));
+  const result = computeDeadlines(factsFromPayload(p));
+  const soonest = (list, key) => {
+    const times = list.filter((x) => x[key]).map((x) => x[key].getTime());
+    return times.length ? Math.min(...times) : null;
+  };
+  const firm = soonest(result.deadlines, "deadline");
+  const cont = soonest(result.contingent || [], "conditional_deadline");
+  if (firm === null && cont === null) return null;
+  if (firm === null || (cont !== null && cont < firm)) {
+    return { date: new Date(cont), contingent: true };
+  }
+  return { date: new Date(firm), contingent: false };
 };
 
 // Status chip — the app's chip anatomy (mono caps, 6px radius per the
@@ -145,28 +160,34 @@ const StatusChip = ({ status }) => (
 // results page's overdue countdown); not computable → Mist em-dash. A closed
 // incident's row is muted: never the Ember overdue treatment — when
 // computable, the plain due date renders in Mist; otherwise the em-dash.
+// A contingent nearest date (intake phase 2) renders "≤ {date} · contingent"
+// in Mist and NEVER takes the overdue treatment: the obligation turns on a
+// resident count that has not been established, so the table must not assert
+// that anything is due, let alone late.
 const NextDeadlineCell = ({ next, now, muted }) => {
   if (!next) return <span style={{ color: MIST }}>—</span>;
-  if (muted) {
+  const dateText = next.date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  if (next.contingent) {
     return (
-      <span style={{ fontSize: 13, color: MIST }}>
-        {next.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+      /* Wraps rather than nowraps — the qualified form is longer than the
+         110px column and reads fine over two lines. */
+      <span style={{ fontSize: 13, color: MIST, lineHeight: 1.35 }}>
+        ≤ {dateText} · contingent
       </span>
     );
   }
-  if (next.getTime() < now.getTime()) {
-    const days = Math.floor((now.getTime() - next.getTime()) / 86400000);
+  if (muted) {
+    return <span style={{ fontSize: 13, color: MIST }}>{dateText}</span>;
+  }
+  if (next.date.getTime() < now.getTime()) {
+    const days = Math.floor((now.getTime() - next.date.getTime()) / 86400000);
     return (
       <span style={{ fontFamily: MONO_STACK, fontWeight: 600, fontSize: 13, color: EMBER, whiteSpace: "nowrap" }}>
         {days}d overdue
       </span>
     );
   }
-  return (
-    <span style={{ fontSize: 13 }}>
-      {next.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
-    </span>
-  );
+  return <span style={{ fontSize: 13 }}>{dateText}</span>;
 };
 
 // Row grid shared by the header row and every incident row so columns align:

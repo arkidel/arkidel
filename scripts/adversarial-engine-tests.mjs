@@ -699,6 +699,237 @@ T("J. Harm", "Harm suppression respects thresholds: below-threshold obligations 
 });
 
 // =============================================================================
+// K. CONTINGENT DEADLINES / QUINT-STATE INVARIANT (intake phase 2, 2026-08-15)
+//
+//    `residentCountUnknown` adds a FIFTH outcome bucket: a threshold-gated
+//    obligation whose jurisdiction has no established count is `contingent` —
+//    live but for the count — instead of being dropped. The invariant the
+//    engine must hold: every obligation the engine EVALUATES lands in exactly
+//    one of deadlines / suppressed / pending / review / contingent.
+//    Threshold-failures on a KNOWN count remain outside all five (silently
+//    absent), and services/advisories stay outside as additive output.
+// =============================================================================
+
+// Every non-service, non-advisory obligation declared in data.js, keyed the
+// way the buckets key their entries.
+const ALL_OBLIGATION_KEYS = (selected) =>
+  JURISDICTIONS.filter((j) => selected[j.id]).flatMap((j) =>
+    j.obligations
+      .filter((o) => o.kind !== "advisory" && o.kind !== "service")
+      .map((o) => `${j.short}/${o.authority}`)
+  );
+
+const BUCKET_KEYS = (r) => {
+  const of = (list) => (list || []).map((x) => `${x.jurisdiction}/${x.authority}`);
+  return {
+    deadlines: of(r.deadlines),
+    suppressed: of(r.suppressed),
+    pending: of(r.pending),
+    review: of(r.review),
+    contingent: of(r.contingent),
+  };
+};
+
+// Assert the quint-state invariant over one scenario: no obligation in two
+// buckets, and every obligation accounted for either by a bucket or by a
+// KNOWN below-threshold count (the only permitted silent absence).
+function assertQuintState(a, facts, label) {
+  const r = computeDeadlines(facts);
+  const buckets = BUCKET_KEYS(r);
+  const seen = new Map();
+  for (const [name, keys] of Object.entries(buckets)) {
+    for (const k of keys) {
+      if (seen.has(k)) a.ok(false, `${label}: ${k} in both ${seen.get(k)} and ${name}`);
+      seen.set(k, name);
+    }
+  }
+  const belowKnownThreshold = new Set(
+    JURISDICTIONS.filter((j) => facts.jurisdictions[j.id]).flatMap((j) => {
+      const raw = facts.residentCounts?.[j.id];
+      const n = typeof raw === "number" ? raw : parseInt(raw, 10);
+      return j.obligations
+        .filter((o) => {
+          if (o.gating?.residentThreshold === undefined) return false;
+          if (!Number.isFinite(n)) return !facts.residentCountUnknown?.[j.id];
+          return (o.gating.comparator || "gte") === "gt" ? !(n > o.gating.residentThreshold) : !(n >= o.gating.residentThreshold);
+        })
+        .map((o) => `${j.short}/${o.authority}`);
+    })
+  );
+  for (const k of ALL_OBLIGATION_KEYS(facts.jurisdictions)) {
+    if (seen.has(k) || belowKnownThreshold.has(k)) continue;
+    // Dependent obligations whose parent never fired are the one other
+    // permitted absence; none of these scenarios produces that.
+    a.ok(false, `${label}: ${k} landed in no bucket and is not a threshold failure`);
+  }
+  return r;
+}
+
+T("K. Contingent", "Quint-state invariant holds; all five buckets are exercised across the scenario set", (a) => {
+  // The five buckets cannot all co-occur under the current data model, and
+  // that is a property of the DATA, not of the invariant: `review` exists only
+  // through MA's encryption harbor, and those same encryption facts satisfy
+  // every other US state's harbor (suppressing them) — so a review scenario's
+  // firing obligations can only be EU/UK Art. 33, which requires a riskLevel,
+  // which empties `pending`. Two scenarios therefore span the five; the
+  // invariant is asserted on each.
+  const scenarios = [
+    // deadlines + suppressed + pending + contingent: EU awaiting a risk
+    // assessment, CT harm-suppressed, CA unknown count (residents fire, AG
+    // contingent).
+    ["four-bucket", {
+      awarenessDate: AW,
+      jurisdictions: { ca: true, ct: true, eu: true },
+      residentCountUnknown: { ca: true },
+      residentCounts: { ct: 800 },
+      sensitivity: ["identifiers"],
+      harmAssessment: "determined_unlikely",
+    }],
+    // deadlines + suppressed + review: EU Art. 33 fires, CA/CO encryption-
+    // suppressed, MA in counsel review. Unknown counts are set on the
+    // suppressed states to prove suppression outranks contingency here too.
+    ["review-scenario", {
+      awarenessDate: AW,
+      jurisdictions: { ca: true, co: true, ma: true, eu: true },
+      residentCountUnknown: { ca: true, co: true },
+      sensitivity: ["financial"],
+      riskLevel: "risk",
+      encrypted: "yes",
+      encryptionStrength: "ge_128",
+      keyAcquired: "no",
+    }],
+  ];
+  const exercised = new Set();
+  for (const [label, facts] of scenarios) {
+    const r = assertQuintState(a, facts, label);
+    for (const [name, keys] of Object.entries(BUCKET_KEYS(r))) {
+      if (keys.length) exercised.add(name);
+    }
+  }
+  for (const bucket of ["deadlines", "suppressed", "pending", "review", "contingent"]) {
+    a.ok(exercised.has(bucket), `bucket ${bucket} exercised by the scenario set`);
+  }
+});
+
+T("K. Contingent", "Quint-state invariant holds with every modeled jurisdiction and mixed count states", (a) => {
+  assertQuintState(a, {
+    awarenessDate: AW,
+    jurisdictions: { eu: true, uk: true, ca: true, tx: true, co: true, ma: true, ny: true, va: true, de: true, ct: true },
+    residentCounts: { ca: 501, tx: 100, ny: 5000 },
+    residentCountUnknown: { co: true, va: true, de: true },
+    sensitivity: ["identifiers", "ssn"],
+    riskLevel: "high",
+  }, "all-jurisdictions");
+});
+
+T("K. Contingent", "Threshold failures on a KNOWN count stay out of all five buckets (unchanged)", (a) => {
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { co: true }, residentCounts: { co: 100 } });
+  a.eq(r.contingent.length, 0, "no contingent entries on a known count");
+  a.ok(!D(r, "Colorado", "Attorney General"), "CO AG absent");
+  a.ok(!S(r, "Colorado", "Attorney General"), "CO AG not suppressed");
+});
+
+T("K. Contingent", "Numeric count beats the unknown flag; 0 is a real count, not unknown", (a) => {
+  const stale = computeDeadlines({ awarenessDate: AW, jurisdictions: { co: true }, residentCounts: { co: 5000 }, residentCountUnknown: { co: true } });
+  a.eq(stale.contingent.length, 0, "numeric count wins over a stale flag");
+  a.ok(D(stale, "Colorado", "Attorney General"), "CO AG fires on the numeric count");
+  const zero = computeDeadlines({ awarenessDate: AW, jurisdictions: { co: true }, residentCounts: { co: 0 }, residentCountUnknown: { co: true } });
+  a.eq(zero.contingent.length, 0, "0 is an established count, not unknown");
+  a.ok(!D(zero, "Colorado", "Attorney General"), "CO AG does not fire at 0");
+});
+
+T("K. Contingent", "Unparseable count with the flag set IS contingent ('abc' establishes nothing)", (a) => {
+  // parseInt('abc') is NaN, so nothing is established — the flag governs.
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { co: true }, residentCounts: { co: "abc" }, residentCountUnknown: { co: true } });
+  a.eq(r.contingent.length, 2, "CO AG + CRA contingent");
+});
+
+T("K. Contingent", "Falsy / malformed flag values never create contingency", (a) => {
+  const base = { awarenessDate: AW, jurisdictions: { co: true } };
+  for (const flags of [{ co: false }, { co: 0 }, { co: "" }, { co: null }, { co: undefined }, {}]) {
+    const r = computeDeadlines({ ...base, residentCountUnknown: flags });
+    a.eq(r.contingent.length, 0, `flag ${J(flags)} -> no contingent entries`);
+  }
+});
+
+T("K. Contingent", "Suppression outranks contingency (encryption AND harm), review too", (a) => {
+  const enc = computeDeadlines({
+    awarenessDate: AW, jurisdictions: { co: true }, residentCountUnknown: { co: true },
+    sensitivity: ["financial"], encrypted: "yes", keyAcquired: "no",
+  });
+  a.eq(enc.contingent.length, 0, "encryption-suppressed -> nothing contingent");
+  a.eq(enc.suppressed.length, 3, "all three CO obligations suppressed");
+  const harm = computeDeadlines({
+    awarenessDate: AW, jurisdictions: { co: true }, residentCountUnknown: { co: true },
+    harmAssessment: "determined_unlikely",
+  });
+  a.eq(harm.contingent.length, 0, "harm-suppressed -> nothing contingent");
+  a.eq(harm.suppressed.length, 3, "all three CO obligations harm-suppressed");
+});
+
+T("K. Contingent", "Conditional deadlines use the obligation's own clock, dependents included", (a) => {
+  // CA AG = resident clock (+30d) + 15d = +45d; DE AG = resident clock (+60d)
+  // + 0h; CO AG = +30d from awareness; CO CRA has no fixed clock -> null.
+  const r = computeDeadlines({
+    awarenessDate: AW,
+    jurisdictions: { ca: true, de: true, co: true },
+    residentCountUnknown: { ca: true, de: true, co: true },
+  });
+  const C = (j, au) => r.contingent.find((x) => x.jurisdiction === j && x.authority.toLowerCase().includes(au.toLowerCase()));
+  a.eq(ISO(C("California", "Attorney General")?.conditional_deadline), "2026-06-15T09:00:00.000Z", "CA AG +45d");
+  a.eq(ISO(C("Delaware", "Attorney General")?.conditional_deadline), "2026-06-30T09:00:00.000Z", "DE AG +60d");
+  a.eq(ISO(C("Colorado", "Attorney General")?.conditional_deadline), "2026-05-31T09:00:00.000Z", "CO AG +30d");
+  a.eq(C("Colorado", "Consumer Reporting")?.conditional_deadline, null, "CO CRA has no fixed clock");
+});
+
+T("K. Contingent", "Condition sentences use exact comparator semantics and never engine vocabulary", (a) => {
+  const r = computeDeadlines({
+    awarenessDate: AW,
+    jurisdictions: { ca: true, co: true, tx: true },
+    residentCountUnknown: { ca: true, co: true, tx: true },
+  });
+  const C = (j, au) => r.contingent.find((x) => x.jurisdiction === j && x.authority.toLowerCase().includes(au.toLowerCase()));
+  a.eq(C("California", "Attorney General")?.condition,
+    "Notice to California Attorney General is required if more than 500 California residents are affected.", "CA gt sentence");
+  a.eq(C("Colorado", "Attorney General")?.condition,
+    "Notice to Colorado Attorney General is required if 500 or more Colorado residents are affected.", "CO gte sentence");
+  a.eq(C("Texas", "Consumer Reporting")?.condition,
+    "Notice to Nationwide Consumer Reporting Agencies is required if more than 10,000 Texas residents are affected.", "TX CRA gt sentence");
+  for (const c of r.contingent) {
+    a.ok(!/\bfires?\b|\bgates?\b|\btriggered\b|suppress/i.test(c.condition), `engine vocabulary in condition: ${c.condition}`);
+    a.eq(c.comparator, c.comparator === "gt" ? "gt" : "gte", "comparator carried through");
+  }
+});
+
+T("K. Contingent", "Record noise + residentCountUnknown: engine output identical to the operative set alone", (a) => {
+  // The parity property of group F, extended to the new operative key: the
+  // flag map is operative and must survive, while record-only fields around
+  // it change nothing.
+  const operative = {
+    awarenessDate: AW,
+    jurisdictions: { co: true, ca: true, eu: true },
+    residentCounts: { ca: 1000 },
+    residentCountUnknown: { co: true },
+    sensitivity: ["identifiers"],
+    riskLevel: "risk",
+  };
+  const full = {
+    ...operative,
+    sensitivityLabels: ["Identifiers (name, email, address)"],
+    incidentTitle: "ACME breach 2026-08",
+    incidentReport: [{ type: "group", title: "Incident summary" }, { type: "field", label: "X", value: "Y" }],
+    residentCountUnknownNote: "counsel is still reconciling the export",
+    dataSubjectCategories: [{ name: "Customers", count: 1000, elements: ["Name"] }],
+    randomGarbage: { nested: [1, 2, 3] },
+  };
+  a.eq(J(computeDeadlines(full)), J(computeDeadlines(operative)), "record noise never changes engine output");
+  // And the flag genuinely mattered — parity is not passing because both sides
+  // ignore it.
+  const withoutFlag = computeDeadlines({ ...operative, residentCountUnknown: {} });
+  a.ok(J(withoutFlag) !== J(computeDeadlines(operative)), "the flag is operative, not inert");
+});
+
+// =============================================================================
 // REPORT
 // =============================================================================
 

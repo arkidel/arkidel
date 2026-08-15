@@ -106,12 +106,12 @@ forbidden.
 ### `src/breach-clock/engine.js` — rules engine
 
 Pure JavaScript, no React. Contains `computeDeadlines(facts)`, `isHighRisk`,
-`runTests`, and 111 test cases as of the harm-gate pass (96 as of the
-category-conditioned pass, 60 as of the risk-assessment addition; every EU/UK
-case carries an explicit `riskLevel`). After any engine change, the test
-harness must pass — check the in-app Tests view (footer link in the rendered
-component) or run programmatically, plus
-`node scripts/adversarial-engine-tests.mjs` (73 cases).
+`runTests`, and 120 test cases as of the unknown-count pass (111 as of the
+harm-gate pass, 96 as of the category-conditioned pass, 60 as of the
+risk-assessment addition; every EU/UK case carries an explicit `riskLevel`).
+After any engine change, the test harness must pass — check the in-app Tests
+view (footer link in the rendered component) or run programmatically, plus
+`node scripts/adversarial-engine-tests.mjs` (83 cases).
 
 The engine is the correctness instrument for the substantive layer. If a
 test fails after a `data.js` edit, the substantive change is wrong, not the
@@ -233,6 +233,43 @@ cascades via the resident (b)(1) standard; DE carries the express
 treatment of services. Covered by the "Harm gate" in-file group and the
 `J. Harm` adversarial group.
 
+**Unknown resident counts and the `contingent` bucket (live as of the
+2026-08-15 intake phase 2 pass; JDC sign-off).** `residentCountUnknown` is an
+explicit user input — a sparse `{ [jurId]: true }` map written by the form's
+per-jurisdiction "Count not yet known" toggle, absent key meaning nothing
+claimed (old payloads need no migration). A threshold-gated obligation whose
+jurisdiction carries the flag and has **no numeric count** is held as
+**contingent** instead of being dropped: live but for a count that has not been
+established. Three ordering rules, all pinned by tests:
+
+- **Suppression and review outrank contingency.** The harbors, the harm gate,
+  and the conditional gates are evaluated first; an obligation affirmatively
+  excused lands in `suppressed` (or `review`) exactly as it would on a known
+  above-threshold count — never in `contingent`. An excused obligation is not
+  merely uncertain.
+- **A numeric count always beats the flag.** The UI clears one when the other is
+  set; the engine enforces it anyway so a stale flag riding a saved payload can
+  never override a real count. `0` is an established count, not an unknown one.
+- **A known below-threshold count is unchanged** — silently absent, in no
+  bucket.
+
+Each entry is `{ jurisdiction, authority, threshold, comparator,
+conditional_deadline, condition, citation, source_url, statute }`.
+`conditional_deadline` is the obligation's own clock math run **as if** the
+threshold were met, including pass-2 dependent clocks (CA AG = the conditional
+resident deadline + 15 days), and is `null` where the obligation has no fixed
+clock. `condition` is composed in counsel register from the threshold and its
+**exact** comparator — `"Notice to {authority} is required if {more than N | N
+or more} {jurisdiction} residents are affected."` — never approximated. Both
+surfaces render the group in one fixed within-block position — active deadline
+cards → **Contingent Deadlines** → counsel review → suppressed → notes — under
+the shared `CONTINGENT_LABEL` / `CONTINGENT_EXPLAINER` strings exported from
+`results-grouping.js`. The memo's contingent right slot is deliberately Ink and
+qualified ("If required, due …"), not Ember: Ember is the firm-deadline color,
+and nothing in the group is firm. On the Respond home list the Next-deadline
+column is about firm deadlines; a contingent nearest date renders
+"≤ {date} · contingent" and never takes the overdue treatment.
+
 **Three deliberate engine assumptions — durable decisions, do not "fix".**
 
 - **Awareness-anchor for determination-states.** Texas and Colorado statutes run
@@ -251,17 +288,25 @@ treatment of services. Covered by the "Harm gate" in-file group and the
   end of the statutory final day — conservative versus calendar-day counting.
   Deliberate; the adversarial harness's `D. Time` group pins this (spring-forward,
   fall-back, end-of-month, leap February, sub-second).
-- **Quad-state invariant.** `computeDeadlines` returns **four** buckets —
-  `deadlines`, `suppressed`, `pending`, and `review` — and every obligation that
-  is evaluated lands in **exactly one**. `review` means the obligation's outcome
-  turns on a substantive legal judgment the engine does not make (currently only
-  MA's § 3(b) second trigger; the harm gate and the NY inadvertent-disclosure
-  exception will also produce it). The earlier "unreachable tri-state" no longer
-  holds: because encryption is now routed *per obligation*, combinations once
-  impossible **do** co-occur in one result — e.g. firing + suppressed + review (a
-  US state fires, EU/UK Art. 34 is exempt, MA is in review), or firing + pending
-  (a US state fires while EU/UK await a risk assessment). The results page and PDF
-  memo must render any combination of the four; do not assume mutual exclusivity.
+- **Quint-state invariant** (was quad-state until the 2026-08-15 unknown-count
+  pass). `computeDeadlines` returns **five** outcome buckets — `deadlines`,
+  `suppressed`, `pending`, `review`, and `contingent` — and every obligation that
+  is evaluated lands in **exactly one**. A threshold failure on a **known** count
+  is still outside all five (silently absent), and `services` / `advisories`
+  remain additive output outside the invariant. `review` means the obligation's
+  outcome turns on a substantive legal judgment the engine does not make
+  (currently only MA's § 3(b) second trigger; the harm gate and the NY
+  inadvertent-disclosure exception will also produce it). The earlier
+  "unreachable tri-state" no longer holds: because encryption is routed *per
+  obligation*, combinations once impossible **do** co-occur in one result — e.g.
+  firing + suppressed + review (a US state fires, EU/UK Art. 34 is exempt, MA is
+  in review), or firing + pending (a US state fires while EU/UK await a risk
+  assessment). The results page and PDF memo must render any combination of the
+  five; do not assume mutual exclusivity. (All five at once is currently
+  unreachable — `review` arises only through MA's encryption harbor, and those
+  same facts suppress every other US state — but that is a property of the data,
+  not of the invariant; the adversarial `K. Contingent` group spans the five
+  across two scenarios.)
 
 **Notification-record durable decisions (2026-07-24).** Notification records
 are non-evaluative: dates only, no computed lateness deltas, on screen or in
