@@ -224,10 +224,27 @@ obligation stays silently absent, as before.
 
 **The condition sentence** is composed from the obligation's own threshold and
 its exact comparator, never approximated:
-"Notice to {authority} is required if {more than N | N or more} {jurisdiction}
-residents are affected." So Colorado's AG duty (500, `gte`) reads "500 or more
-Colorado residents" while its CRA duty (1,000, `gt`) reads "more than 1,000
-Colorado residents".
+"Notice is required if {more than N | N or more} {jurisdiction} residents are
+affected." So Colorado's AG duty (500, `gte`) reads "500 or more Colorado
+residents" while its CRA duty (1,000, `gt`) reads "more than 1,000 Colorado
+residents". *(Revised from "Notice to {authority} is required if …", JDC
+2026-08-16: the authority already titles the card on both surfaces, so naming
+it again in the sentence duplicated the heading and forced per-authority
+article handling; the threshold and comparator semantics are unchanged.)*
+
+**Screen and memo differentiation (JDC 2026-08-16, Phase 2.1).** Dated
+contingent cards on screen carry a "Contingent on resident count" badge (the
+same section-mark badge idiom as "No fixed notification deadline") and a due
+line qualified "If required, due …", matching the memo's existing wording.
+Mist is the contingent-state treatment on both surfaces: the card's left
+accent bar (dated and no-clock alike) and the qualifier line render Mist
+while the conditional date is not yet past, flipping to Ember once it is —
+but the card surface stays white; the Midnight overdue slab remains exclusive
+to firm deadlines. The countdown numerals stay Ink, the firm-card default,
+while not yet due (JDC contrast ruling (b), 2026-08-16 — Mist numerals at
+countdown size are illegible on white), taking the same Ember flip when
+overdue. Color is reinforcement only: the badge and the "If required" wording
+carry the contingency.
 
 **Conditional deadlines** are the obligation's normal clock math run as if the
 threshold were met, dependent clocks included — California's AG clock resolves

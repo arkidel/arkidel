@@ -282,8 +282,8 @@ function check(label, ok) {
     "group explainer prints verbatim",
     text.includes("These obligations apply only if the affected-resident count meets the statutory threshold. Because the count for this jurisdiction has not yet been determined, the deadlines below are shown for planning purposes and should be treated as potentially applicable until the count is established.")
   );
-  check("CO AG condition sentence prints (gte comparator)", text.includes("Notice to Colorado Attorney General is required if 500 or more Colorado residents are affected."));
-  check("CO CRA condition sentence prints (gt comparator)", text.includes("Notice to Nationwide Consumer Reporting Agencies is required if more than 1,000 Colorado residents are affected."));
+  check("CO AG condition sentence prints (gte comparator)", text.includes("Notice is required if 500 or more Colorado residents are affected."));
+  check("CO CRA condition sentence prints (gt comparator)", text.includes("Notice is required if more than 1,000 Colorado residents are affected."));
   check("CO AG conditional date prints, qualified", text.includes("If required, due September 9, 2026"));
   check("CO CRA no-clock slot prints, qualified", text.includes("If required, no fixed deadline"));
   check("contingent citations print", text.includes("Colo. Rev. Stat. § 6-1-716(2)(f)(I)") && text.includes("Colo. Rev. Stat. § 6-1-716(2)(d)"));
@@ -298,7 +298,7 @@ function check(label, ok) {
   check("the contingent slot is qualified and the firm slot is not (one of each)", allSep9 === 2 && qualifiedSep9 === 1);
   check("CO firm resident deadline still prints (no threshold)", text.includes("Due September 9, 2026") && text.includes("Affected Colorado Residents"));
   check("CA known count still computes firm obligations", text.includes("California Attorney General") && text.includes("Due September 24, 2026"));
-  check("CA is not contingent", !text.includes("Notice to California Attorney General is required if"));
+  check("CA is not contingent", !text.includes("Notice is required if more than 500 California residents are affected."));
   check("nothing prints under the suppressed label", !text.includes("NOTIFICATION LIKELY NOT REQUIRED"));
 }
 

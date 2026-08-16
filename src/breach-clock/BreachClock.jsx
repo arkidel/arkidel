@@ -2835,29 +2835,33 @@ export default function BreachClock() {
       );
     };
 
-    // Contingent-deadline card (intake phase 2). The existing deadline-card
-    // vocabulary, no new motifs: authority title, mono citation, the composed
-    // condition sentence as the body, primary-source link, and the standard
-    // right-slot date treatment for the conditional deadline — countdown +
-    // Ember "Due …", the existing urgent/missed variants when it is close or
-    // past, the static Mist due line on a closed incident, and the
-    // "No fixed notification deadline" badge when the obligation has no
-    // clock. Deliberately NO record-notification footer: nothing has been
+    // Contingent-deadline card (intake phase 2; Mist differentiation, JDC
+    // 2026-08-16). The existing deadline-card vocabulary — authority title,
+    // mono citation, condition sentence body, primary-source link — but the
+    // card is never confusable with a firm deadline: a Mist left accent bar
+    // (both dated and null-clock), a "Contingent on resident count" badge on
+    // dated cards, and the due line qualified "If required, due …" (matching
+    // the memo). The qualifier line renders Mist while the conditional date
+    // is not yet past and flips to Ember when it is; the countdown numerals
+    // stay Ink — the firm-card default — while not yet due (JDC contrast
+    // ruling (b), 2026-08-16: Mist numerals at countdown size read too faint
+    // on white) and take the same Ember flip when overdue. The SURFACE stays
+    // white with the Mist bar; the urgent cream tint and the Midnight
+    // overdue slab remain exclusive to firm cards. Color is reinforcement
+    // only: the badge and the "If required" wording carry the contingency.
+    // Deliberately NO record-notification footer: nothing has been
     // determined to notify against yet.
     const renderContingentCard = (c, key, extraStyle) => {
       const due = c.conditional_deadline;
       const timeRemaining = due ? due.getTime() - now.getTime() : null;
       const isClosed = status === "closed";
       const isMissed = timeRemaining !== null && timeRemaining < 0;
-      const isUrgent = timeRemaining !== null && timeRemaining > 0 && timeRemaining < 24 * 3600 * 1000;
+      const qualifierColor = isMissed && !isClosed ? "#C76E3A" : "#9FAEC2";
       return (
         <div
           key={key}
-          className={`deadline-card ${isMissed ? "missed" : isUrgent && !isClosed ? "urgent" : ""}`}
-          style={{
-            ...extraStyle,
-            ...(isClosed && isMissed ? { borderLeftColor: "#9FAEC2" } : {}),
-          }}
+          className="deadline-card"
+          style={{ ...extraStyle, borderLeftColor: "#9FAEC2" }}
         >
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
             <div>
@@ -2885,20 +2889,24 @@ export default function BreachClock() {
             <div style={{ textAlign: "right", minWidth: "200px" }}>
               {due ? (
                 <>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 14px", border: "1px solid currentColor", marginBottom: "10px" }}>
+                    <AlertTriangle size={14} />
+                    <div className="section-mark">Contingent on resident count</div>
+                  </div>
                   {!isMissed && !isClosed && (
                     <div className="section-mark" style={{ marginBottom: "6px" }}>Time remaining</div>
                   )}
                   {isClosed ? (
                     <div className="mono" style={{ fontSize: "26px", fontWeight: 400, letterSpacing: "-0.02em", color: "#9FAEC2" }}>
-                      Due {due.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                      If required, due {due.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
                     </div>
                   ) : (
                     <>
                       <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em", ...(isMissed ? { color: "#C76E3A" } : {}) }}>
                         {formatDuration(timeRemaining)}
                       </div>
-                      <div className="mono" style={{ fontSize: "13px", fontWeight: 500, color: "#C76E3A", marginTop: "6px" }}>
-                        Due {due.toLocaleString()}
+                      <div className="mono" style={{ fontSize: "13px", fontWeight: 500, color: qualifierColor, marginTop: "6px" }}>
+                        If required, due {due.toLocaleString()}
                       </div>
                     </>
                   )}

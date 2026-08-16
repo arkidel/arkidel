@@ -466,8 +466,10 @@ function drawCard(page, blocks, topY, borderColor, fonts) {
           y - SIZE.authority + 1,
           fonts.sansReg,
           SIZE.body,
-          // Due dates render Ember unconditionally (see EMBER above).
-          b.rightColor === "ember" ? EMBER : INK
+          // Due dates render Ember unconditionally (see EMBER above). The
+          // contingent qualifier slot rides "mist" until its conditional
+          // date is past (Phase 2.1, JDC 2026-08-16).
+          b.rightColor === "ember" ? EMBER : b.rightColor === "mist" ? MIST : INK
         );
       }
       y -= lines.length * SIZE.authority * LINE;
@@ -556,22 +558,27 @@ function serviceBlocks(s) {
   ];
 }
 
-// Contingent-obligation card (intake phase 2). Mirrors the screen: the
-// composed condition sentence as the body, the obligation's own citation, and
-// the conditional date in the right slot. The slot is deliberately NOT Ember
-// and NOT routed through formatDeadline — it carries the qualified "If
-// required, due …" wording in Ink, because Ember is the firm-deadline color
-// and nothing here is firm (same scoping as the service slots). An obligation
-// with no fixed clock states that instead of a date.
-function contingentBlocks(c) {
+// Contingent-obligation card (intake phase 2; Mist qualifier, JDC
+// 2026-08-16). Mirrors the screen: the composed condition sentence as the
+// body, the obligation's own citation, and the conditional date in the right
+// slot. The slot is NOT routed through formatDeadline — it carries the
+// qualified "If required, due …" wording in Mist (the contingent-state
+// color) while the conditional date is not yet past, flipping to Ember once
+// it is, matching the firm-overdue convention; nothing here is firm, so the
+// unconditional-Ember rule for deadline slots never applies. An obligation
+// with no fixed clock states that instead of a date, also in Mist. `nowMs`
+// is the memo's generatedAt — the pastness judgment is made at generation
+// time, like every other date in the memo.
+function contingentBlocks(c, nowMs) {
   const due = c.conditional_deadline;
   const dateOpts = { year: "numeric", month: "long", day: "numeric" };
   const timeOpts = { hour: "2-digit", minute: "2-digit", timeZoneName: "short" };
   const right = due
     ? `If required, due ${due.toLocaleDateString("en-US", dateOpts)} at ${due.toLocaleTimeString("en-US", timeOpts)}`
     : "If required, no fixed deadline";
+  const rightColor = due && due.getTime() < nowMs ? "ember" : "mist";
   return [
-    { type: "topRow", left: c.authority, right },
+    { type: "topRow", left: c.authority, right, rightColor },
     { type: "labelBody", label: "Basis", body: c.citation || "—" },
     ...(c.condition ? [{ type: "body", text: c.condition }] : []),
     ...(c.source_url ? [{ type: "url", label: "Source", url: c.source_url }] : []),
@@ -693,7 +700,7 @@ function drawContinuedHeader(state, name) {
 // Ordered render plan for one block: { t: "label", text } | { t: "card", blocks, color }.
 // Placement order mirrors the screen: caveat group → obligations (each followed
 // by its parallel notes) → suppressed group → sectoral group → orphaned parallels.
-function buildBlockPlan(block) {
+function buildBlockPlan(block, nowMs) {
   const plan = [];
   const label = (text) => plan.push({ t: "label", text });
   const card = (blocks, color) => plan.push({ t: "card", blocks, color });
@@ -715,7 +722,7 @@ function buildBlockPlan(block) {
     if (!block.contingentCards || !block.contingentCards.length) return;
     label(CONTINGENT_LABEL);
     plan.push({ t: "explainer", text: CONTINGENT_EXPLAINER });
-    block.contingentCards.forEach((c) => card(contingentBlocks(c), MIDNIGHT));
+    block.contingentCards.forEach((c) => card(contingentBlocks(c, nowMs), MIDNIGHT));
   };
 
   let reviewLabelled = false;
@@ -790,9 +797,9 @@ function planItemHeight(item, fonts) {
   return measureCard(item.blocks, fonts);
 }
 
-function drawJurisdictionBlock(state, block) {
+function drawJurisdictionBlock(state, block, nowMs) {
   const { fonts } = state;
-  const plan = buildBlockPlan(block);
+  const plan = buildBlockPlan(block, nowMs);
   if (plan.length === 0) return;
 
   // Keep the jurisdiction heading with its first plan item (a label, or the
@@ -1271,7 +1278,7 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
       state.cursorY = noteBottom - CARD_GAP;
       harmExplainerDrawn = true;
     }
-    drawJurisdictionBlock(state, block);
+    drawJurisdictionBlock(state, block, generatedAt instanceof Date ? generatedAt.getTime() : Date.now());
   }
 
   // Notification Record (the Authority/Due/Notified table) — after the

@@ -890,11 +890,11 @@ T("K. Contingent", "Condition sentences use exact comparator semantics and never
   });
   const C = (j, au) => r.contingent.find((x) => x.jurisdiction === j && x.authority.toLowerCase().includes(au.toLowerCase()));
   a.eq(C("California", "Attorney General")?.condition,
-    "Notice to California Attorney General is required if more than 500 California residents are affected.", "CA gt sentence");
+    "Notice is required if more than 500 California residents are affected.", "CA gt sentence");
   a.eq(C("Colorado", "Attorney General")?.condition,
-    "Notice to Colorado Attorney General is required if 500 or more Colorado residents are affected.", "CO gte sentence");
+    "Notice is required if 500 or more Colorado residents are affected.", "CO gte sentence");
   a.eq(C("Texas", "Consumer Reporting")?.condition,
-    "Notice to Nationwide Consumer Reporting Agencies is required if more than 10,000 Texas residents are affected.", "TX CRA gt sentence");
+    "Notice is required if more than 10,000 Texas residents are affected.", "TX CRA gt sentence");
   for (const c of r.contingent) {
     a.ok(!/\bfires?\b|\bgates?\b|\btriggered\b|suppress/i.test(c.condition), `engine vocabulary in condition: ${c.condition}`);
     a.eq(c.comparator, c.comparator === "gt" ? "gt" : "gte", "comparator carried through");

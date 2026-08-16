@@ -164,11 +164,11 @@ describe("Contingent Deadlines group (results view)", () => {
       )
     ).toBeTruthy();
     expect(
-      screen.getByText("Notice to Colorado Attorney General is required if 500 or more Colorado residents are affected.")
+      screen.getByText("Notice is required if 500 or more Colorado residents are affected.")
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Notice to Nationwide Consumer Reporting Agencies is required if more than 1,000 Colorado residents are affected."
+        "Notice is required if more than 1,000 Colorado residents are affected."
       )
     ).toBeTruthy();
     // The firm resident obligation is unaffected and still leads the block.

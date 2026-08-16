@@ -547,7 +547,7 @@ function computeDeadlines(facts) {
           threshold,
           comparator,
           conditional_deadline: conditionalDeadline,
-          condition: `Notice to ${ob.authority} is required if ${thresholdPhrase} ${jur.short} residents are affected.`,
+          condition: `Notice is required if ${thresholdPhrase} ${jur.short} residents are affected.`,
           citation: ob.citation,
           source_url: ob.source_url,
           statute: jur.statute,
@@ -2156,13 +2156,13 @@ const TEST_CASES = [
         comparator: "gte",
         conditionalHours: 30 * 24,
         citation: "Colo. Rev. Stat. § 6-1-716(2)(f)(I)",
-        condition: "Notice to Colorado Attorney General is required if 500 or more Colorado residents are affected.",
+        condition: "Notice is required if 500 or more Colorado residents are affected.",
       }),
       expectContingent("Colorado", "Consumer Reporting", {
         threshold: 1000,
         comparator: "gt",
         conditionalHours: null,
-        condition: "Notice to Nationwide Consumer Reporting Agencies is required if more than 1,000 Colorado residents are affected.",
+        condition: "Notice is required if more than 1,000 Colorado residents are affected.",
       }),
       expectSuppressedCount(0)
     ),
@@ -2180,7 +2180,7 @@ const TEST_CASES = [
         threshold: 500,
         comparator: "gt",
         conditionalHours: 45 * 24,
-        condition: "Notice to California Attorney General is required if more than 500 California residents are affected.",
+        condition: "Notice is required if more than 500 California residents are affected.",
       })
     ),
   },
@@ -2266,7 +2266,7 @@ const TEST_CASES = [
         threshold: 500,
         comparator: "gt",
         conditionalHours: 60 * 24,
-        condition: "Notice to Delaware Attorney General is required if more than 500 Delaware residents are affected.",
+        condition: "Notice is required if more than 500 Delaware residents are affected.",
       })
     ),
   },

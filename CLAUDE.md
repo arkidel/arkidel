@@ -259,14 +259,22 @@ conditional_deadline, condition, citation, source_url, statute }`.
 threshold were met, including pass-2 dependent clocks (CA AG = the conditional
 resident deadline + 15 days), and is `null` where the obligation has no fixed
 clock. `condition` is composed in counsel register from the threshold and its
-**exact** comparator — `"Notice to {authority} is required if {more than N | N
-or more} {jurisdiction} residents are affected."` — never approximated. Both
+**exact** comparator — `"Notice is required if {more than N | N or more}
+{jurisdiction} residents are affected."` — never approximated. The sentence is
+deliberately authority-less (Phase 2.1, JDC 2026-08-16): the authority already
+titles the card on both surfaces, so naming it in the sentence duplicated the
+heading and would have required per-authority article data. Both
 surfaces render the group in one fixed within-block position — active deadline
 cards → **Contingent Deadlines** → counsel review → suppressed → notes — under
 the shared `CONTINGENT_LABEL` / `CONTINGENT_EXPLAINER` strings exported from
-`results-grouping.js`. The memo's contingent right slot is deliberately Ink and
-qualified ("If required, due …"), not Ember: Ember is the firm-deadline color,
-and nothing in the group is firm. On the Respond home list the Next-deadline
+`results-grouping.js`. The memo's contingent right slot is qualified ("If
+required, due …") and never routed through the unconditional-Ember deadline
+rule: it renders Mist while the conditional date is not yet past and Ember
+once it is (Phase 2.1; pastness is judged at `generatedAt`), because nothing
+in the group is firm. On screen, dated contingent cards carry a "Contingent
+on resident count" badge and the same qualified due line — see the Mist
+contingent-state semantic in the brand palette section. On the Respond home
+list the Next-deadline
 column is about firm deadlines; a contingent nearest date renders
 "≤ {date} · contingent" and never takes the overdue treatment.
 
@@ -937,6 +945,21 @@ Each column is numbered 01–04 in Parchment mono over a thin Parchment top rule
 
 Marketing surfaces are Midnight-dominant. Product UI keeps a Bone canvas
 with Midnight used sparingly for chrome and accents.
+
+**Mist is the contingent-state color on result cards (Phase 2.1, JDC
+2026-08-16).** On contingent-deadline cards — screen and memo — Mist carries
+the not-yet-firm state: the card's left accent bar (dated and no-clock cards
+alike) and the "If required, due …" qualifier line render Mist while the
+conditional date is not yet past. The countdown numerals stay **Ink** — the
+firm-card default — while not yet due (JDC contrast ruling (b), 2026-08-16:
+Mist numerals at countdown size are illegible on the white surface). When the
+conditional date is past, the numerals and qualifier line flip to Ember as on
+firm cards, but the card surface stays white with the Mist bar — the Midnight
+overdue slab (and the cream urgent tint) remain exclusive to firm deadlines.
+The "Contingent on resident count" badge keeps the shared section-mark badge
+idiom (currentColor border, per the ratified spec). Color is reinforcement
+only: the badge and the "If required" wording carry the contingency, never
+the color alone.
 
 In addition to the named tokens above, three off-palette values are
 deliberate and recur in the Breach Clock UI. They are intentional — a
