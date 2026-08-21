@@ -52,9 +52,12 @@
 import { JURISDICTIONS } from "./data.js";
 
 // CROSS_BLOCK_URGENCY_FIRST — block order ACROSS jurisdictions.
-//   true  → jurisdictions with at least one active deadline first, ordered by
-//           soonest deadline; then jurisdictions with no active deadline;
-//           canonical data.js order as the tie-break.
+//   true  → the SHARED urgency comparator (compareBlocksByUrgency below):
+//           firm-deadline blocks by earliest firm date, then contingent-only
+//           blocks by earliest conditional date, then blocks with neither;
+//           ties alphabetical. The screen's default order and the memo both
+//           consume this one comparator (JDC ruling 2026-08-21), so their
+//           default sequences are identical by construction.
 //   false → fixed canonical data.js order, ignoring urgency.
 export const CROSS_BLOCK_URGENCY_FIRST = true;
 
@@ -104,14 +107,6 @@ function sortActiveCards(cards) {
     .map((x) => x.card);
 }
 
-function soonestActive(block) {
-  let min = Infinity;
-  block.activeCards.forEach((c) => {
-    if (isDate(c.deadline)) min = Math.min(min, c.deadline.getTime());
-  });
-  return min;
-}
-
 // Short display name for a service obligation, used in the auto-advisory
 // title ("{Service short name} may apply — …"). Strips the "for Affected …
 // Residents" suffix, then applies the ratified-mock casing: "Credit
@@ -145,6 +140,134 @@ function advisoryDisplay(a) {
     title: a.authority,
     body: a.condition,
     citation: a.citation,
+  };
+}
+
+// ── Results at scale (2026-08-21): block ordering + deadline queue ─────────
+// Presentation helpers for large incidents. All are pure and deliberately
+// read NOTHING time-varying: comparators use only the deadline timestamps
+// the engine already computed plus jurisdiction names, so a given computed
+// result always yields the same order — the order can never shift on a
+// countdown tick, only on an explicit re-sort (toggle) or a fresh compute.
+// compareBlocksByUrgency is THE cross-surface block order (amendment, JDC
+// 2026-08-21): groupResultsByJurisdiction sorts with it (so the memo prints
+// it) and the screen's default order applies it through orderBlocks — one
+// comparator, parity by construction. The screen's A–Z view is the only
+// divergence, and only when the user selects it.
+
+// The deadline queue renders only when at least this many jurisdiction blocks
+// have a queue-eligible row (an active or contingent obligation) — below
+// that, the blocks themselves are already a complete overview.
+export const QUEUE_MIN_BLOCKS = 3;
+
+// Earliest fixed-clock deadline among a block's active cards (Infinity when
+// none is dated), and the contingent equivalent over conditional deadlines.
+const earliestFirmTime = (block) => {
+  let min = Infinity;
+  (block.activeCards || []).forEach((c) => {
+    if (isDate(c.deadline)) min = Math.min(min, c.deadline.getTime());
+  });
+  return min;
+};
+const earliestContingentTime = (block) => {
+  let min = Infinity;
+  (block.contingentCards || []).forEach((c) => {
+    if (isDate(c.conditional_deadline)) min = Math.min(min, c.conditional_deadline.getTime());
+  });
+  return min;
+};
+
+// The urgency tier and sort key for one block:
+//   tier 0 — blocks with active obligations, keyed by earliest fixed-clock
+//            deadline (a block whose actives are all no-fixed-clock keys to
+//            Infinity: after the dated tier-0 blocks, still ahead of tier 1;
+//            an overdue deadline is simply the earliest timestamp, so overdue
+//            blocks lead naturally);
+//   tier 1 — contingent-only blocks, keyed by earliest conditional deadline;
+//   tier 2 — blocks with neither (suppressed / counsel-review / notes only).
+const urgencyTier = (b) =>
+  (b.activeCards || []).length > 0 ? 0 : (b.contingentCards || []).length > 0 ? 1 : 2;
+const urgencyTime = (b) => {
+  const tier = urgencyTier(b);
+  return tier === 0 ? earliestFirmTime(b) : tier === 1 ? earliestContingentTime(b) : Infinity;
+};
+
+/**
+ * THE shared cross-block urgency comparator (JDC ruling 2026-08-21) — tier,
+ * then earliest relevant date, ties alphabetical by jurisdiction name. Both
+ * surfaces consume it: groupResultsByJurisdiction sorts its output with it
+ * (so the memo prints this order), and the screen's default "urgency" view is
+ * the same sort re-applied via orderBlocks. Do not fork it per surface —
+ * screen-default/memo parity is structural, not conventional.
+ */
+export const compareBlocksByUrgency = (a, b) =>
+  urgencyTier(a) - urgencyTier(b) || urgencyTime(a) - urgencyTime(b) || a.name.localeCompare(b.name);
+
+/**
+ * Order jurisdiction blocks for the results screen.
+ *
+ * @param {Array} blocks - groupResultsByJurisdiction output
+ * @param {"alpha"|"urgency"} mode
+ *   - "urgency" (the DEFAULT view on both surfaces): compareBlocksByUrgency
+ *     above.
+ *   - "alpha": jurisdiction name A–Z — the screen's secondary view.
+ * @returns {Array} a new array; the input is not mutated.
+ */
+export function orderBlocks(blocks, mode) {
+  return [...blocks].sort(mode === "urgency" ? compareBlocksByUrgency : (a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Flatten jurisdiction blocks into the deadline-queue rows plus the counts
+ * the queue's summary line and visibility gate need.
+ *
+ * Row order: dated active obligations by deadline ascending (overdue rows are
+ * the earliest dates, so they lead) → dated contingent obligations by
+ * conditional deadline → no-fixed-clock rows (active first, then contingent),
+ * alphabetical. Suppressed and counsel-review obligations are counted, never
+ * rows. Services and advisories are not deadlines and stay out entirely.
+ *
+ * @returns {{ rows: Array<{kind:"firm"|"contingent", jurisdictionId, jurisdiction,
+ *   authority, date: Date|null, card}>, suppressedCount, reviewCount,
+ *   eligibleBlockCount }}
+ */
+export function buildDeadlineQueue(blocks) {
+  const firmDated = [];
+  const firmUndated = [];
+  const contDated = [];
+  const contUndated = [];
+  let suppressedCount = 0;
+  let reviewCount = 0;
+  let eligibleBlockCount = 0;
+  blocks.forEach((b) => {
+    if ((b.activeCards || []).length > 0 || (b.contingentCards || []).length > 0) eligibleBlockCount += 1;
+    suppressedCount += (b.suppressedCards || []).length;
+    reviewCount += (b.counselReviewCards || []).length;
+    (b.activeCards || []).forEach((card) => {
+      const date = isDate(card.deadline) ? card.deadline : null;
+      const row = { kind: "firm", jurisdictionId: b.jurisdictionId, jurisdiction: b.name, authority: card.authority, date, card };
+      (date ? firmDated : firmUndated).push(row);
+    });
+    (b.contingentCards || []).forEach((card) => {
+      const date = isDate(card.conditional_deadline) ? card.conditional_deadline : null;
+      const row = { kind: "contingent", jurisdictionId: b.jurisdictionId, jurisdiction: b.name, authority: card.authority, date, card };
+      (date ? contDated : contUndated).push(row);
+    });
+  });
+  const byDate = (a, b) =>
+    a.date.getTime() - b.date.getTime() ||
+    a.jurisdiction.localeCompare(b.jurisdiction) ||
+    a.authority.localeCompare(b.authority);
+  const byName = (a, b) => a.jurisdiction.localeCompare(b.jurisdiction) || a.authority.localeCompare(b.authority);
+  firmDated.sort(byDate);
+  contDated.sort(byDate);
+  firmUndated.sort(byName);
+  contUndated.sort(byName);
+  return {
+    rows: [...firmDated, ...contDated, ...firmUndated, ...contUndated],
+    suppressedCount,
+    reviewCount,
+    eligibleBlockCount,
   };
 }
 
@@ -378,17 +501,13 @@ export function groupResultsByJurisdiction({
     b.footParallelNotes = footParallelNotes;
   });
 
-  list.sort((a, b) => {
-    if (!CROSS_BLOCK_URGENCY_FIRST) return a._index - b._index;
-    const aHas = a.activeCards.length > 0;
-    const bHas = b.activeCards.length > 0;
-    if (aHas !== bHas) return aHas ? -1 : 1; // active-deadline jurisdictions first
-    if (aHas && bHas) {
-      const d = soonestActive(a) - soonestActive(b); // soonest deadline first
-      if (d !== 0) return d;
-    }
-    return a._index - b._index; // tie-break: data.js order
-  });
+  // Cross-block order: the shared urgency comparator (amendment, JDC
+  // 2026-08-21) — the same tiers and alphabetical ties as the screen's
+  // default view, so memo and screen-default sequences are identical by
+  // construction. (The former inline sort ranked only active-vs-not with
+  // data.js-order ties; contingent-only blocks now precede no-output blocks
+  // and ties are alphabetical.)
+  list.sort(CROSS_BLOCK_URGENCY_FIRST ? compareBlocksByUrgency : (a, b) => a._index - b._index);
 
   // Strip internal fields before returning.
   return list.map(({ _index, _kindByAuthority, _notes, ...rest }) => rest);

@@ -42,6 +42,9 @@ import {
   harmAssessmentSummary,
   harmNonGateDisplay,
   harmMechanismOf,
+  orderBlocks,
+  buildDeadlineQueue,
+  QUEUE_MIN_BLOCKS,
 } from "./results-grouping.js";
 import { computableGate, factsFromPayload } from "./facts.js";
 import { generateMemoPdf } from "./memo-pdf.js";
@@ -320,6 +323,12 @@ const OTHER_PARTY = "__other__";
 const JUR_SHORT_TO_ID = Object.fromEntries(JURISDICTIONS.map((j) => [j.short, j.id]));
 const notifKey = (d) => `${JUR_SHORT_TO_ID[d.jurisdiction] || d.jurisdiction}:${d.authority}`;
 
+// Stable DOM anchor for an obligation card on the results view — the deadline
+// queue's row-click jump target. (jurId, authority) is unique across the
+// engine's outcome buckets: one obligation lands in exactly one bucket.
+const obligationAnchorId = (jurId, authority) =>
+  `oblig-${jurId}-${String(authority).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+
 // Parse a "YYYY-MM-DD" date-only string as LOCAL midnight (new Date(str)
 // would parse it as UTC and shift the calendar day in western timezones).
 const parseDateOnly = (s) => {
@@ -519,6 +528,22 @@ export default function BreachClock() {
       return next;
     });
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  // ── Results-at-scale view state (results page; presentation only) ──
+  // Block order across jurisdiction blocks: "urgency" (default — the shared
+  // compareBlocksByUrgency order both surfaces lead with, JDC amendment
+  // 2026-08-21) | "alpha" (the screen's secondary view). SESSION-LOCAL ONLY
+  // (deliberate): the incidents table has no column that can carry explicit
+  // view state — payload must stay byte-identical to the facts (never view
+  // state), and notifications / incident_log are legally meaningful records
+  // with their own established shapes. Persisting the choice would need a
+  // schema change, which this pass does not make; every load therefore
+  // starts at Urgency. Neither value ever enters buildPayload.
+  const [blockOrder, setBlockOrder] = useState("urgency");
+  // Per-block expand/collapse OVERRIDES ({ [jurId]: bool }) on top of the
+  // computed defaults (see blockExpanded below). Cleared on every entry into
+  // results (submit, rehydrate auto-compute, back-to-results) so a fresh
+  // results render always starts from the defaults.
+  const [expandedBlocks, setExpandedBlocks] = useState({});
   const [isNarrow, setIsNarrow] = useState(false);
   const [isWide, setIsWide] = useState(false);
   const [activeSection, setActiveSection] = useState(FORM_SECTIONS[0].id);
@@ -726,6 +751,8 @@ export default function BreachClock() {
       setNotifEditing(null);
       setNotifDraft("");
       setLogDraft(EMPTY_LOG_DRAFT);
+      setBlockOrder("urgency");
+      setExpandedBlocks({});
       applyPayload({});
       setLoadState("ready");
       return undefined;
@@ -754,6 +781,8 @@ export default function BreachClock() {
         setNotifEditing(null);
         setNotifDraft("");
         setLogDraft(EMPTY_LOG_DRAFT);
+        setBlockOrder("urgency");
+        setExpandedBlocks({});
         setSavedAt(null);
         setAutoComputePending(true);
         setLoadState("ready");
@@ -1218,6 +1247,59 @@ export default function BreachClock() {
   // an unestablished resident count — live but for the count, never firm.
   const { deadlines, suppressed, pending, review, contingent, services, advisories } = computeDeadlines(factsFromPayload(buildPayload()));
 
+  // ── Results-at-scale derivations (presentation only) ──
+  // Jurisdiction-first grouping, computed once per render and shared by the
+  // deadline queue and the block renderer. `pending` is deliberately NOT
+  // grouped (it stays the consolidated banner above the blocks). The default
+  // "urgency" view re-applies the same compareBlocksByUrgency order the
+  // grouping (and therefore the memo) already carries — parity by
+  // construction; "alpha" is the screen's secondary divergence. The
+  // comparators read only deadline timestamps and names, so the block order
+  // can change only on the toggle or on a fresh compute, never on a
+  // countdown tick.
+  const resultGroups = groupResultsByJurisdiction({ deadlines, suppressed, review, contingent, services, advisories, jurisdictions });
+  const orderedResultGroups = orderBlocks(resultGroups, blockOrder);
+  const deadlineQueue = buildDeadlineQueue(orderedResultGroups);
+  // Collapsing operates only past 3 SELECTED jurisdictions — at or below, the
+  // blocks render expanded exactly as before (zero change to the small-
+  // incident experience).
+  const selectedJurisdictionCount = JURISDICTIONS.filter((j) => jurisdictions[j.id]).length;
+  const collapsibleBlocks = selectedJurisdictionCount > 3;
+  // A block holding a firm-overdue obligation (dated, unrecorded, past due)
+  // defaults EXPANDED regardless of count — overdue must cost effort to hide,
+  // not to find. (A recorded notification stops being a live matter, so it
+  // does not hold the block open.)
+  const blockHasFirmOverdue = (block) =>
+    block.activeCards.some(
+      (c) => c.deadline && typeof c.deadline.getTime === "function" && !notifications[notifKey(c)] && c.deadline.getTime() < now.getTime()
+    );
+  const blockExpanded = (block) =>
+    !collapsibleBlocks || (expandedBlocks[block.jurisdictionId] ?? blockHasFirmOverdue(block));
+  const setBlockExpanded = (jurId, open) => setExpandedBlocks((prev) => ({ ...prev, [jurId]: open }));
+  const expandAllBlocks = () => setExpandedBlocks(Object.fromEntries(resultGroups.map((b) => [b.jurisdictionId, true])));
+  const collapseAllBlocks = () => setExpandedBlocks(Object.fromEntries(resultGroups.map((b) => [b.jurisdictionId, false])));
+  // Queue row click: expand the row's block, then scroll to the card once the
+  // expanded layout has committed (the same pendingScroll effect the form's
+  // section jumps ride).
+  const jumpToObligation = (row) => {
+    setBlockExpanded(row.jurisdictionId, true);
+    setPendingScroll(obligationAnchorId(row.jurisdictionId, row.authority));
+  };
+  // Queue summary-line jumps: the first block (in the rendered order) with a
+  // suppressed group / a counsel-review card.
+  const jumpToFirstSuppressed = () => {
+    const target = orderedResultGroups.find((b) => b.suppressedCards.length > 0);
+    if (!target) return;
+    setBlockExpanded(target.jurisdictionId, true);
+    setPendingScroll(`suppressed-group-${target.jurisdictionId}`);
+  };
+  const jumpToFirstReview = () => {
+    const target = orderedResultGroups.find((b) => b.counselReviewCards.length > 0);
+    if (!target) return;
+    setBlockExpanded(target.jurisdictionId, true);
+    setPendingScroll(obligationAnchorId(target.jurisdictionId, target.counselReviewCards[0].authority));
+  };
+
   // ── Minimal operative inputs required to submit (mirrors the old
   //    canAdvance) — read from the shared gate above. ──
   const hasAwareness = gate.hasAwareness;
@@ -1239,6 +1321,7 @@ export default function BreachClock() {
     setAutoComputePending(false);
     if (canCompute) {
       setExpandedCaveats(new Set());
+      setExpandedBlocks({});
       // The silent equivalent of pressing Submit: record the computed facts
       // signature (no banner over a fresh compute; enables Back-to-results)
       // — but never a save or a status transition.
@@ -1472,6 +1555,7 @@ export default function BreachClock() {
       lastSavedPayloadRef.current = payload;
       setSavedAt(new Date());
       setExpandedCaveats(new Set());
+      setExpandedBlocks({});
       setComputedSignature(factsSignatureOf(payload));
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1501,6 +1585,7 @@ export default function BreachClock() {
   const handleBackToResults = () => {
     applyPayload(lastSavedPayloadRef.current || {});
     setExpandedCaveats(new Set());
+    setExpandedBlocks({});
     setSubmitted(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -2578,8 +2663,10 @@ export default function BreachClock() {
     // jurisdiction. `pending` is deliberately NOT grouped — it stays the
     // consolidated banner above, so a pending-only jurisdiction yields no block.
     // blockSections() returns each block's non-empty card-type groups in the
-    // shared within-block order (the order knob lives in results-grouping.js).
-    const groups = groupResultsByJurisdiction({ deadlines, suppressed, review, contingent, services, advisories, jurisdictions });
+    // shared within-block order. Cross-block order comes from the shared
+    // urgency comparator by default (identical to the memo's, by
+    // construction); the A–Z toggle choice is the screen's only divergence.
+    const groups = orderedResultGroups;
 
     // NY/MA still-computing explainer — non-null only when a harm
     // determination is recorded and NY/MA is selected; renders once, above
@@ -2591,7 +2678,7 @@ export default function BreachClock() {
 
     // Card renderers — markup IDENTICAL to the former outcome-first sections,
     // only relocated into the per-jurisdiction blocks. No copy or style change.
-    const renderActiveCard = (d, i, blockActive, extraStyle) => {
+    const renderActiveCard = (d, i, blockActive, extraStyle, anchorId) => {
       const timeRemaining = d.deadline ? d.deadline.getTime() - now.getTime() : null;
       // Notification record for this obligation. A recorded card stops being a
       // live matter: no countdown, no urgent/missed treatment — the stripe and
@@ -2634,8 +2721,10 @@ export default function BreachClock() {
       return (
         <div
           key={i}
+          id={anchorId}
           className={`deadline-card ${isMissed ? "missed" : isUrgent && !isClosed ? "urgent" : ""}`}
           style={{
+            scrollMarginTop: `${NAV_CLEARANCE}px`,
             ...extraStyle,
             ...(isClosed && isMissed ? { borderLeftColor: "#9FAEC2" } : {}),
             // Recorded stripe: Moss only when a computed due date was met;
@@ -2851,7 +2940,7 @@ export default function BreachClock() {
     // only: the badge and the "If required" wording carry the contingency.
     // Deliberately NO record-notification footer: nothing has been
     // determined to notify against yet.
-    const renderContingentCard = (c, key, extraStyle) => {
+    const renderContingentCard = (c, key, extraStyle, anchorId) => {
       const due = c.conditional_deadline;
       const timeRemaining = due ? due.getTime() - now.getTime() : null;
       const isClosed = status === "closed";
@@ -2860,8 +2949,9 @@ export default function BreachClock() {
       return (
         <div
           key={key}
+          id={anchorId}
           className="deadline-card"
-          style={{ ...extraStyle, borderLeftColor: "#9FAEC2" }}
+          style={{ scrollMarginTop: `${NAV_CLEARANCE}px`, ...extraStyle, borderLeftColor: "#9FAEC2" }}
         >
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "32px", alignItems: "start" }}>
             <div>
@@ -3088,8 +3178,8 @@ export default function BreachClock() {
       );
     };
 
-    const renderReviewCard = (r, i, extraStyle) => (
-      <div key={i} style={{ background: "#fff", borderLeft: "4px solid #9FAEC2", padding: "20px 24px", borderRadius: "0 12px 12px 0", boxShadow: "0 2px 8px rgba(27,42,63,0.10)", ...extraStyle }}>
+    const renderReviewCard = (r, i, extraStyle, anchorId) => (
+      <div key={i} id={anchorId} style={{ background: "#fff", borderLeft: "4px solid #9FAEC2", padding: "20px 24px", borderRadius: "0 12px 12px 0", boxShadow: "0 2px 8px rgba(27,42,63,0.10)", scrollMarginTop: `${NAV_CLEARANCE}px`, ...extraStyle }}>
         <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
           {r.authority}
         </div>
@@ -3249,17 +3339,25 @@ export default function BreachClock() {
           </p>
         );
         block.contingentCards.forEach((c, i) =>
-          out.push(renderContingentCard(c, `cont-${i}`, { marginTop: "16px", position: "relative", zIndex: 1 }))
+          out.push(
+            renderContingentCard(
+              c,
+              `cont-${i}`,
+              { marginTop: "16px", position: "relative", zIndex: 1 },
+              obligationAnchorId(block.jurisdictionId, c.authority)
+            )
+          )
         );
       };
       block.obligations.forEach((ob, idx) => {
         if (idx === contingentAt) emitContingentGroup();
         const first = idx === 0;
         const cardStyle = { marginTop: first ? (hasCaveat ? "-16px" : "16px") : "16px", position: "relative", zIndex: 1 };
+        const anchorId = obligationAnchorId(block.jurisdictionId, ob.card.authority);
         out.push(
           ob.role === "active"
-            ? renderActiveCard(ob.card, `ob-${idx}`, block.activeCards, cardStyle)
-            : renderReviewCard(ob.card, `ob-${idx}`, cardStyle)
+            ? renderActiveCard(ob.card, `ob-${idx}`, block.activeCards, cardStyle, anchorId)
+            : renderReviewCard(ob.card, `ob-${idx}`, cardStyle, anchorId)
         );
         ob.parallelNotes.forEach((pn, j) =>
           out.push(renderParchmentPanel({ key: `par-${idx}-${j}`, notes: [pn], perNoteLead: PARALLEL_LEAD, lapEdge: "top", marginTop: -16 }))
@@ -3277,14 +3375,17 @@ export default function BreachClock() {
       // existing treatment.
       const harmCards = block.suppressedCards.filter((s) => !!harmMechanismOf(s));
       const plainCards = block.suppressedCards.filter((s) => !harmMechanismOf(s));
+      // The first suppressed group label carries the queue summary-line's
+      // jump anchor (one per block; plain group first when both render).
+      const suppressedAnchor = `suppressed-group-${block.jurisdictionId}`;
       if (plainCards.length > 0) {
-        out.push(<div key="sup-label" className="section-mark" style={{ margin: "24px 0 12px" }}>Notification likely not required</div>);
+        out.push(<div key="sup-label" id={suppressedAnchor} className="section-mark" style={{ margin: "24px 0 12px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>Notification likely not required</div>);
         plainCards.forEach((s, i) =>
           out.push(<div key={`sup-${i}`} style={{ marginTop: i === 0 ? 0 : "12px" }}>{renderSuppressedCard(s, i)}</div>)
         );
       }
       if (harmCards.length > 0) {
-        out.push(<div key="hsup-label" className="section-mark" style={{ margin: "24px 0 12px" }}>Suppressed — harm determination</div>);
+        out.push(<div key="hsup-label" id={plainCards.length === 0 ? suppressedAnchor : undefined} className="section-mark" style={{ margin: "24px 0 12px", scrollMarginTop: `${NAV_CLEARANCE}px` }}>Suppressed — harm determination</div>);
         harmCards.forEach((s, i) =>
           out.push(<div key={`hsup-${i}`} style={{ marginTop: i === 0 ? 0 : "12px" }}>{renderHarmSuppressedCard(s, i)}</div>)
         );
@@ -3301,6 +3402,67 @@ export default function BreachClock() {
         out.push(renderParchmentPanel({ key: `fpar-${j}`, notes: [pn], perNoteLead: PARALLEL_LEAD, lapEdge: null, marginTop: j === 0 && block.sectoralNotes.length === 0 ? 24 : 12 }))
       );
       return out;
+    };
+
+    // ── Collapsible block chrome (>3 selected jurisdictions only) ──
+    // Collapsed summary row: jurisdiction name + statute sub-line (existing
+    // header style), the next relevant date (firm first, else the qualified
+    // contingent form), and count chips in the app's chip anatomy (mono caps,
+    // 6px radius, solid token fills — the incidents-list StatusChip idiom).
+    const fmtDateShort = (d) => d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+    const minDateOf = (arr, get) => arr.map(get).sort((a, b) => a - b)[0];
+    const blockNextDateLine = (block) => {
+      const isClosed = status === "closed";
+      const dated = block.activeCards.filter((c) => c.deadline && typeof c.deadline.getTime === "function");
+      const unrecorded = dated.filter((c) => !notifications[notifKey(c)]);
+      if (unrecorded.length > 0) {
+        const min = minDateOf(unrecorded, (c) => c.deadline);
+        const overdue = !isClosed && min.getTime() < now.getTime();
+        return (
+          <span className="mono" style={{ fontSize: "13px", fontWeight: overdue ? 600 : 500, color: overdue ? "#C76E3A" : isClosed ? "#9FAEC2" : "#2C2418" }}>
+            Due {fmtDateShort(min)}
+          </span>
+        );
+      }
+      if (dated.length > 0) {
+        // Every dated obligation is recorded — the date is record, not a live
+        // matter, so it takes the neutral Mist treatment (never Ember).
+        return (
+          <span className="mono" style={{ fontSize: "13px", color: "#9FAEC2" }}>
+            Due {fmtDateShort(minDateOf(dated, (c) => c.deadline))}
+          </span>
+        );
+      }
+      const contDated = block.contingentCards.filter((c) => c.conditional_deadline && typeof c.conditional_deadline.getTime === "function");
+      if (contDated.length > 0) {
+        return (
+          <span className="mono" style={{ fontSize: "13px", color: "#9FAEC2" }}>
+            If required, due {fmtDateShort(minDateOf(contDated, (c) => c.conditional_deadline))}
+          </span>
+        );
+      }
+      return null;
+    };
+    const chipStyle = (bg, fg) => ({
+      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase",
+      padding: "2px 8px", borderRadius: "6px", whiteSpace: "nowrap",
+      background: bg, color: fg,
+    });
+    const blockChips = (block) => {
+      const chips = [];
+      if (block.activeCards.length > 0) chips.push({ text: `${block.activeCards.length} due`, bg: "#1B2A3F", fg: "#FAF8F2" });
+      if (block.contingentCards.length > 0) chips.push({ text: `${block.contingentCards.length} contingent`, bg: "#9FAEC2", fg: "#1B2A3F" });
+      if (block.counselReviewCards.length > 0) chips.push({ text: `${block.counselReviewCards.length} counsel review`, bg: "#E8DDC4", fg: "#2C2418" });
+      if (block.suppressedCards.length > 0) chips.push({ text: `${block.suppressedCards.length} suppressed`, bg: "#5A6E4A", fg: "#FAF8F2" });
+      if (chips.length === 0) return null;
+      return (
+        <span style={{ display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {chips.map((c) => (
+            <span key={c.text} style={chipStyle(c.bg, c.fg)}>{c.text}</span>
+          ))}
+        </span>
+      );
     };
 
     return (
@@ -3348,7 +3510,9 @@ export default function BreachClock() {
       )}
 
       <div style={{ display: "grid", gap: "44px", marginTop: "16px" }}>
-        {groups.map((block) => (
+        {groups.map((block) => {
+          const expanded = blockExpanded(block);
+          return (
           <div key={block.jurisdictionId}>
             {/* NY/MA still-computing explainer (dashed advisory idiom):
                 renders ONCE, directly above the first explainer-carrying
@@ -3379,13 +3543,51 @@ export default function BreachClock() {
                 </div>
               </div>
             )}
-            <div style={{ borderBottom: "1px solid rgba(27,42,63,0.12)", paddingBottom: "10px", marginBottom: "4px" }}>
-              <div className="serif" style={{ fontSize: "22px", fontWeight: 400, lineHeight: 1.2, letterSpacing: "-0.01em" }}>{block.name}</div>
-              <div className="mono" style={{ fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>{block.statuteSubtitle}</div>
-            </div>
-            {renderBlock(block)}
+            {collapsibleBlocks ? (
+              /* >3 selected jurisdictions: the block header is a disclosure
+                 button. Collapsed, its right side carries the summary (next
+                 relevant date + count chips); expanded, the full block follows
+                 unchanged. Blocks holding a firm-overdue obligation default
+                 expanded (see blockExpanded). */
+              <button
+                type="button"
+                aria-expanded={expanded}
+                data-block-header={block.name}
+                onClick={() => setBlockExpanded(block.jurisdictionId, !expanded)}
+                style={{
+                  display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "24px",
+                  width: "100%", background: "none", border: "none", borderBottom: "1px solid rgba(27,42,63,0.12)",
+                  padding: "0 0 10px", margin: "0 0 4px", textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit",
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "baseline", gap: "12px", minWidth: 0 }}>
+                  <ArkidelCaret
+                    style={{ width: "13px", height: "12px", flexShrink: 0, color: "#1B2A3F", transform: expanded ? "rotate(90deg)" : "none" }}
+                  />
+                  <span style={{ minWidth: 0 }}>
+                    <span className="serif" style={{ display: "block", fontSize: "22px", fontWeight: 400, lineHeight: 1.2, letterSpacing: "-0.01em" }}>{block.name}</span>
+                    <span className="mono" style={{ display: "block", fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>{block.statuteSubtitle}</span>
+                  </span>
+                </span>
+                {!expanded && (
+                  <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px", flexShrink: 0, paddingTop: "4px" }}>
+                    {blockNextDateLine(block)}
+                    {blockChips(block)}
+                  </span>
+                )}
+              </button>
+            ) : (
+              /* ≤3 selected jurisdictions: exactly the pre-scale header — no
+                 disclosure affordance, nothing collapses. */
+              <div style={{ borderBottom: "1px solid rgba(27,42,63,0.12)", paddingBottom: "10px", marginBottom: "4px" }}>
+                <div className="serif" style={{ fontSize: "22px", fontWeight: 400, lineHeight: 1.2, letterSpacing: "-0.01em" }}>{block.name}</div>
+                <div className="mono" style={{ fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>{block.statuteSubtitle}</div>
+              </div>
+            )}
+            {expanded && renderBlock(block)}
           </div>
-        ))}
+          );
+        })}
       </div>
     </>
     );
@@ -3941,6 +4143,165 @@ export default function BreachClock() {
   // ─────────────────────────────────────────────────────────────────────────
   // Review (read-only) — rendered in the main column after a valid Submit.
   // ─────────────────────────────────────────────────────────────────────────
+  // ── Deadline queue (results view; below Analysis Inputs). One compact row
+  //    per active or contingent obligation across every jurisdiction block:
+  //    dated firm rows by deadline ascending (overdue rows lead, Ember date),
+  //    then dated contingent rows in the results-surface qualifier form
+  //    ("If required, due {date}" — matching the contingent cards; the
+  //    incidents-list "≤ {date} · contingent" compact form is NOT used here),
+  //    then no-fixed-clock rows under their existing labels. Suppressed and
+  //    counsel-review obligations are a summary line beneath the table, never
+  //    rows. Renders only when 3+ jurisdiction blocks have a queue-eligible
+  //    row. A row click expands its block and scrolls to its card. Countdown
+  //    cells read the same shared `now` state as the cards — ONE interval
+  //    drives every countdown on the page.
+  const renderDeadlineQueue = () => {
+    const { rows, suppressedCount, reviewCount, eligibleBlockCount } = deadlineQueue;
+    if (eligibleBlockCount < QUEUE_MIN_BLOCKS || rows.length === 0) return null;
+    const isClosed = status === "closed";
+    const fmtQueueDate = (d) => d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+    const thStyle = { textAlign: "left", padding: "10px 16px", borderBottom: "1px solid rgba(27,42,63,0.18)", fontWeight: 500 };
+    const tdStyle = { padding: "10px 16px", borderTop: "1px solid rgba(27,42,63,0.08)", verticalAlign: "top" };
+    const dateCell = (row) => {
+      if (!row.date) {
+        return <span style={{ color: "#9FAEC2" }}>No fixed notification deadline</span>;
+      }
+      const past = row.date.getTime() < now.getTime();
+      if (row.kind === "contingent") {
+        // Qualified, never firm: Mist while the conditional date is not yet
+        // past, the same Ember flip as the card's qualifier line once it is.
+        return (
+          <span className="mono" style={{ fontSize: "12.5px", color: past && !isClosed ? "#C76E3A" : "#9FAEC2" }}>
+            If required, due {fmtQueueDate(row.date)}
+          </span>
+        );
+      }
+      const rec = notifications[notifKey(row.card)];
+      const overdue = !rec && !isClosed && past;
+      return (
+        <span className="mono" style={{ fontSize: "12.5px", fontWeight: overdue ? 600 : 400, color: overdue ? "#C76E3A" : isClosed || rec ? "#9FAEC2" : "#2C2418" }}>
+          {fmtQueueDate(row.date)}
+        </span>
+      );
+    };
+    const statusCell = (row) => {
+      if (row.kind === "contingent") {
+        return <span style={{ color: "#9FAEC2" }}>Contingent on resident count</span>;
+      }
+      const rec = notifications[notifKey(row.card)];
+      if (rec) {
+        const notifiedDate = parseDateOnly(rec.notified_on);
+        const onTime = !!(row.date && notifiedDate && notifiedDate.getTime() <= row.date.getTime());
+        return <span style={{ color: onTime ? "#5A6E4A" : "#2C2418" }}>Notified {fmtDateOnly(rec.notified_on)}</span>;
+      }
+      if (!row.date || isClosed) return <span style={{ color: "#9FAEC2" }}>—</span>;
+      const remaining = row.date.getTime() - now.getTime();
+      return (
+        <span className="mono" style={{ fontSize: "12.5px", fontWeight: 500, color: remaining < 0 ? "#C76E3A" : "#2C2418" }}>
+          {formatDuration(remaining)}
+        </span>
+      );
+    };
+    return (
+      <div style={{ marginBottom: "36px" }}>
+        <div className="section-mark" style={{ marginBottom: "14px" }}>Deadline queue</div>
+        <div style={{ border: "1px solid rgba(27,42,63,0.18)", background: "#fff", borderRadius: "12px", overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13.5px", lineHeight: 1.5 }}>
+            <thead>
+              <tr>
+                <th className="section-mark" style={thStyle}>Jurisdiction</th>
+                <th className="section-mark" style={thStyle}>Authority</th>
+                <th className="section-mark" style={thStyle}>Date</th>
+                <th className="section-mark" style={thStyle}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                /* The whole row is a pointer target (onClick), but the
+                   ACCESSIBLE control is the real button in the authority
+                   cell — the <tr> keeps its table-row semantics. */
+                <tr
+                  key={`${row.kind}-${row.jurisdictionId}-${row.authority}`}
+                  className="queue-row"
+                  onClick={() => jumpToObligation(row)}
+                >
+                  <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{row.jurisdiction}</td>
+                  <td style={tdStyle}>
+                    <button
+                      type="button"
+                      aria-label={`Go to ${row.jurisdiction} — ${row.authority}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        jumpToObligation(row);
+                      }}
+                      style={{
+                        background: "none", border: "none", padding: 0, margin: 0,
+                        font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left",
+                      }}
+                    >
+                      {row.authority}
+                    </button>
+                  </td>
+                  <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{dateCell(row)}</td>
+                  <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{statusCell(row)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {(suppressedCount > 0 || reviewCount > 0) && (
+          <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            {suppressedCount > 0 && (
+              <button type="button" className="btn-link" onClick={jumpToFirstSuppressed}>
+                {suppressedCount} suppressed
+              </button>
+            )}
+            {suppressedCount > 0 && reviewCount > 0 && <span style={{ opacity: 0.3, color: "#1B2A3F", userSelect: "none" }}>·</span>}
+            {reviewCount > 0 && (
+              <button type="button" className="btn-link" onClick={jumpToFirstReview}>
+                {reviewCount} for counsel review
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── Block-order toggle (A–Z | Urgency; Urgency is the default), rendered
+  //    on the results view: in the right actions rail above Download memo on
+  //    wide layouts, and with the restored top controls on narrow ones.
+  //    Session-local only — see the blockOrder state note: the saved payload
+  //    never carries view state. The memo always prints the shared urgency
+  //    order; selecting A–Z diverges the screen only.
+  const renderOrderToggle = () => (
+    <div>
+      <div className="section-mark" style={{ marginBottom: "8px" }}>Jurisdiction order</div>
+      <div role="radiogroup" aria-label="Jurisdiction block order" style={{ display: "flex", border: "1px solid #1B2A3F", borderRadius: "8px", overflow: "hidden" }}>
+        {[{ value: "alpha", label: "A–Z" }, { value: "urgency", label: "Urgency" }].map((o) => {
+          const selected = blockOrder === o.value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => setBlockOrder(o.value)}
+              style={{
+                flex: 1, padding: "9px 0", border: "none", cursor: "pointer",
+                fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500, letterSpacing: "0.01em",
+                background: selected ? "#1B2A3F" : "transparent", color: selected ? "#FAF8F2" : "#1B2A3F",
+                transition: "all 0.2s ease",
+              }}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   const renderReview = () => {
     const reportSections = quickMode ? [] : buildIncidentReportSections();
     const recapRow = (label, value) => (
@@ -3967,6 +4328,9 @@ export default function BreachClock() {
                 <ArrowLeft size={14} /> Edit answers
               </button>
             </div>
+            {/* No rail below the wide breakpoint, so the block-order toggle
+                joins the restored top controls here. */}
+            <div style={{ marginTop: "16px", maxWidth: "280px" }}>{renderOrderToggle()}</div>
           </div>
         )}
 
@@ -4063,9 +4427,24 @@ export default function BreachClock() {
           </div>
         )}
 
-        {/* Computed obligations */}
-        <div className="section-mark" style={{ marginBottom: "16px" }}>
-          {deadlines.length > 0 ? "Notification deadlines" : "Analysis"}
+        {/* Deadline queue — the cross-jurisdiction overview, directly below
+            the Analysis Inputs recap. Renders only at 3+ eligible blocks. */}
+        {renderDeadlineQueue()}
+
+        {/* Computed obligations. Past 3 selected jurisdictions the blocks
+            collapse, so the header row gains Expand all / Collapse all in the
+            form's section-control idiom. */}
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "16px", marginBottom: "16px", flexWrap: "wrap" }}>
+          <div className="section-mark">
+            {deadlines.length > 0 ? "Notification deadlines" : "Analysis"}
+          </div>
+          {collapsibleBlocks && (
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button type="button" className="btn-link" onClick={expandAllBlocks}>Expand all</button>
+              <span style={{ opacity: 0.3, color: "#1B2A3F", userSelect: "none" }}>·</span>
+              <button type="button" className="btn-link" onClick={collapseAllBlocks}>Collapse all</button>
+            </div>
+          )}
         </div>
         <div className="divider-thick" style={{ marginBottom: "24px" }} />
         {renderObligations()}
@@ -4162,6 +4541,7 @@ export default function BreachClock() {
   const renderReviewActionsRail = () => (
     <div style={{ position: "sticky", top: `${NAV_CLEARANCE}px` }}>
       {renderIncidentHeader()}
+      <div style={{ marginTop: "20px" }}>{renderOrderToggle()}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "20px" }}>
         <button className="btn-primary" onClick={handleDownloadMemo} style={{ width: "100%", justifyContent: "center" }}>
           <Download size={14} /> Download memo
@@ -4217,6 +4597,10 @@ export default function BreachClock() {
           display: inline-flex; align-items: center; gap: 5px; opacity: 0.6; border-radius: 6px;
         }
         .btn-inline-remove:hover { opacity: 1; background: rgba(27,42,63,0.06); }
+        /* Deadline-queue rows: clickable jump targets (hover tint matches the
+           .check-row idiom). */
+        .queue-row { cursor: pointer; transition: background 0.15s ease; }
+        .queue-row:hover, .queue-row:focus-visible { background: rgba(27,42,63,0.05); }
         /* Checkbox-row selection idiom */
         .check-row {
           display: flex; align-items: flex-start; gap: 13px; padding: 12px 14px;

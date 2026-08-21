@@ -117,6 +117,14 @@ The engine is the correctness instrument for the substantive layer. If a
 test fails after a `data.js` edit, the substantive change is wrong, not the
 test.
 
+**Guard convention (JDC, 2026-08-02): enumerate every suite by name.** Any
+pre-push, gate, or "suites green" claim runs EVERY suite the repository has,
+listed by name with each count — today: (1) the engine in-file harness
+(`runTests`), (2) `scripts/adversarial-engine-tests.mjs`, (3) the vitest
+suite (`npm test`), (4) `scripts/render-gate-memo.mjs`. Never "both suites"
+or "the tests" — an unenumerated guard once let the vitest suite sit red for
+nine days. When a new suite is added, add it to this enumeration.
+
 **Risk assessment gates the EU/UK obligations (live as of `cdcd93d`).** Risk is
 an explicit *user* input — `riskLevel`, one of `"unlikely" | "risk" | "high"`,
 default unset (`""`) — **not** inferred from the data categories.
@@ -608,6 +616,67 @@ information, (2) how & when discovered, (3) when the incident occurred,
   date of birth, photos) and custom "Other" entries never trigger. Fingerprint
   makes `biometric` reachable here; `children` has no element and stays a
   Q1-only selection — do not invent one.
+- **Results at scale (2026-08-21): deadline queue, collapsing blocks,
+  block-order toggle.** Three screen-only additions for large incidents;
+  the memo is untouched by all three.
+  - **Deadline queue.** A compact table directly below the Analysis Inputs
+    recap: one row per active or contingent obligation across every
+    jurisdiction block (jurisdiction / authority / date / status). Row order:
+    dated firm rows by deadline ascending (overdue rows are the earliest
+    dates, so they lead, with the Ember date treatment) → dated contingent
+    rows by conditional date, qualified **"If required, due {date}"** (the
+    results-surface form; the incidents-list "≤ {date} · contingent" compact
+    form is deliberately NOT used here) → no-fixed-clock rows (firm before
+    contingent) under their existing labels. Suppressed and counsel-review
+    obligations are never rows — a summary line beneath the table
+    ("{n} suppressed · {n} for counsel review", each a jump to the first such
+    group). A row click expands the row's block and scrolls to its card
+    (per-card anchors, `obligationAnchorId`). The queue renders only when
+    3+ jurisdiction blocks have a queue-eligible row (`QUEUE_MIN_BLOCKS` in
+    `results-grouping.js`) — at 1–2 it adds nothing. Row-building is the pure
+    `buildDeadlineQueue` in `results-grouping.js`.
+  - **Collapsing jurisdiction blocks.** At ≤3 SELECTED jurisdictions the
+    blocks render expanded exactly as before — no disclosure affordance, zero
+    change to the small-incident experience. At >3 they default collapsed to
+    a summary header (name + statute sub-line, next relevant date — firm
+    first, else the qualified contingent form — and count chips in the
+    StatusChip anatomy), EXCEPT that a block holding a firm-overdue
+    obligation (dated, unrecorded, past due) defaults EXPANDED regardless of
+    count: overdue must cost effort to hide, not to find. Expand all /
+    Collapse all sit on the obligations header row in the form's
+    section-control idiom. Collapse state is an overrides map over computed
+    defaults, cleared on every entry into results; collapse operates at block
+    level only — everything inside a block is unchanged.
+  - **Block-order toggle (A–Z | Urgency; Urgency is the DEFAULT on both
+    surfaces — JDC amendment 2026-08-21).** A segmented control in the review
+    actions rail (above Download memo; with the top controls on narrow).
+    Urgency: blocks with active obligations by earliest fixed-clock deadline
+    (all-undated active blocks after the dated ones), then contingent-only
+    blocks by earliest conditional date, then blocks with neither; ties
+    alphabetical throughout. That order is **one shared comparator**,
+    `compareBlocksByUrgency` in `results-grouping.js`: `groupResultsByJurisdiction`
+    sorts its output with it (so the memo prints it — the
+    `CROSS_BLOCK_URGENCY_FIRST` knob now routes through it), and the screen's
+    default view re-applies it via `orderBlocks` — **screen-default/memo
+    parity is structural, not conventional; do not fork the comparator per
+    surface** (pinned by the parity test in `results-grouping.test.js`). The
+    default applies at every load and in the ≤3-jurisdiction expanded regime
+    alike. A–Z (jurisdiction name) is the screen's SECONDARY view and the
+    only way the two surfaces diverge. The comparators read only deadline
+    timestamps and names — NEVER `now` — so the order can change only on
+    toggle or on a fresh compute, never on a countdown tick. The toggle is
+    **session-local view state, never persisted**: the incidents table has no
+    column that can carry explicit view state beside the payload (payload is
+    facts only and must stay byte-identical whether the toggle was ever
+    touched — pinned by test; notifications / incident_log are legally
+    meaningful records), and persisting would need a schema change this pass
+    deliberately did not make. Every load starts at Urgency.
+  - **One-interval rule.** Every countdown on the results page — card
+    countdowns and queue status cells alike — reads the single shared `now`
+    state driven by the component's one `setInterval`. Never add a per-card
+    or per-row timer.
+  - Covered by `results-grouping.test.js` (pure ordering/queue contracts) and
+    `BreachClock.resultsScale.test.jsx` (render-level behavior).
 
 ### `src/breach-clock/facts.js` — shared facts mapping and completeness gate
 
