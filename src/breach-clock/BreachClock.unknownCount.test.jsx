@@ -141,6 +141,9 @@ describe("Contingent Deadlines group (results view)", () => {
   const completePayload = () => ({
     quickMode: true,
     awareness: "2026-08-10T15:00",
+    // Explicit zone (serverless bundle, 2026-08-22): a Colorado incident
+    // stated in Mountain time, independent of the host's zone.
+    awarenessTz: "America/Denver",
     jurisdictions: { co: true },
     residentCounts: { co: "" },
     residentCountUnknown: { co: true },

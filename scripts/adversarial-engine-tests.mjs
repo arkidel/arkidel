@@ -20,7 +20,8 @@
 
 import { readFileSync } from "node:fs";
 import { computeDeadlines } from "../src/breach-clock/engine.js";
-import { JURISDICTIONS } from "../src/breach-clock/data.js";
+import { JURISDICTIONS, RULESET_VERSION } from "../src/breach-clock/data.js";
+import { factsFromPayload } from "../src/breach-clock/facts.js";
 
 // --- Fixtures ----------------------------------------------------------------
 
@@ -439,16 +440,19 @@ T("F. Parity", "Operative-only facts == operative + record noise (identical engi
 // G. DEGENERATE INPUTS
 // =============================================================================
 
-T("G. Degenerate", "No jurisdictions selected -> all buckets empty", (a) => {
+// Structured refusal (JDC 2026-08-22): incomplete facts are REFUSED with
+// { error: "incomplete_facts", missing }, never answered with empty buckets.
+T("G. Degenerate", "No jurisdictions selected -> structured refusal, not empty buckets", (a) => {
   const r = computeDeadlines({ awarenessDate: AW, jurisdictions: {}, sensitivity: ["health"] });
-  a.eq(r.deadlines.length, 0, "no deadlines");
-  a.eq(r.suppressed.length, 0, "no suppressed");
-  a.eq(r.pending.length, 0, "no pending");
+  a.eq(r.error, "incomplete_facts", "refusal shape");
+  a.eq(J(r.missing), J(["jurisdictions"]), "missing names jurisdictions");
+  a.ok(!("deadlines" in r), "no obligation buckets on a refusal");
 });
 
-T("G. Degenerate", "All jurisdiction flags false -> empty", (a) => {
+T("G. Degenerate", "All jurisdiction flags false -> structured refusal", (a) => {
   const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { ca: false, eu: false, ny: false } });
-  a.eq(r.deadlines.length + r.suppressed.length + r.pending.length, 0, "everything empty");
+  a.eq(r.error, "incomplete_facts", "refusal shape");
+  a.eq(J(r.missing), J(["jurisdictions"]), "missing names jurisdictions");
 });
 
 T("G. Degenerate", "Unknown sensitivity tags are inert in the engine", (a) => {
@@ -474,9 +478,10 @@ T("G. Degenerate", "Extra residentCounts keys for unselected jurisdictions are i
   a.eq(r.deadlines.length, 3, "only VA's 3 obligations (ind+AG+CRA)");
 });
 
-T("G. Degenerate", "Missing awarenessDate -> empty buckets (engine short-circuits)", (a) => {
+T("G. Degenerate", "Missing awarenessDate -> structured refusal (never silently empty)", (a) => {
   const r = computeDeadlines({ jurisdictions: { eu: true, ca: true }, residentCounts: { ca: 1000 }, riskLevel: "high" });
-  a.eq(r.deadlines.length + r.suppressed.length + r.pending.length, 0, "no awareness -> nothing");
+  a.eq(r.error, "incomplete_facts", "refusal shape");
+  a.eq(J(r.missing), J(["awarenessDate"]), "missing names awarenessDate only");
 });
 
 // =============================================================================
@@ -927,6 +932,117 @@ T("K. Contingent", "Record noise + residentCountUnknown: engine output identical
   // ignore it.
   const withoutFlag = computeDeadlines({ ...operative, residentCountUnknown: {} });
   a.ok(J(withoutFlag) !== J(computeDeadlines(operative)), "the flag is operative, not inert");
+});
+
+// =============================================================================
+// L. STRUCTURED REFUSAL + DETERMINISM HARDENING (serverless bundle, 2026-08-22)
+// =============================================================================
+//
+// Contract: a malformed or incomplete facts object can NEVER produce an
+// empty-but-valid result. Either the engine refuses ({ error:
+// "incomplete_facts", missing }) or it evaluates real facts — and every
+// evaluated result carries ruleset_version.
+
+const isRefusal = (r) => r && r.error === "incomplete_facts" && Array.isArray(r.missing) && r.missing.length > 0 && !("deadlines" in r);
+const isEmptyValid = (r) => r && !r.error && Array.isArray(r.deadlines) &&
+  r.deadlines.length + r.suppressed.length + r.pending.length + (r.review || []).length + (r.contingent || []).length === 0;
+
+T("L. Refusal", "Every malformed facts object is refused — none yields an empty-but-valid result", (a) => {
+  const malformed = [
+    undefined, null, {}, [], "facts", 42,
+    { jurisdictions: { ca: true } },                                  // no awareness at all
+    { awarenessDate: null, jurisdictions: { ca: true } },
+    { awarenessDate: "2026-05-01T09:00:00Z", jurisdictions: { ca: true } }, // string, not Date
+    { awarenessDate: 1777626000000, jurisdictions: { ca: true } },    // epoch number, not Date
+    { awarenessDate: new Date("garbage"), jurisdictions: { ca: true } }, // Invalid Date
+    { awarenessDate: AW },                                            // no jurisdictions key
+    { awarenessDate: AW, jurisdictions: null },
+    { awarenessDate: AW, jurisdictions: "ca" },
+    { awarenessDate: AW, jurisdictions: [] },
+    { awarenessDate: AW, jurisdictions: {} },
+    { awarenessDate: AW, jurisdictions: { ca: false, tx: 0, ny: "" } },
+    { awarenessDate: AW, jurisdictions: { zz: true, foobar: true } }, // only unmodeled ids
+  ];
+  malformed.forEach((facts, i) => {
+    let r;
+    try { r = computeDeadlines(facts); } catch (e) { a.ok(false, `case ${i} threw: ${e.message}`); return; }
+    a.ok(isRefusal(r), `case ${i} (${J(facts) ?? String(facts)}) must be refused; got ${J(r)}`);
+    a.ok(!isEmptyValid(r), `case ${i} must never be empty-but-valid`);
+  });
+});
+
+T("L. Refusal", "Refusal names exactly what is missing, in a stable order", (a) => {
+  a.eq(J(computeDeadlines({ jurisdictions: { ca: true } }).missing), J(["awarenessDate"]), "awareness only");
+  a.eq(J(computeDeadlines({ awarenessDate: AW, jurisdictions: {} }).missing), J(["jurisdictions"]), "jurisdictions only");
+  a.eq(J(computeDeadlines({}).missing), J(["awarenessDate", "jurisdictions"]), "both, awareness first");
+  a.eq(computeDeadlines({}).ruleset_version, RULESET_VERSION, "refusal still identifies the ruleset");
+});
+
+T("L. Refusal", "The facts boundary never manufactures an instant: a zone-less or malformed payload refuses downstream", (a) => {
+  const payloads = [
+    {},                                                                    // nothing
+    { awareness: "", jurisdictions: { ca: true } },
+    { awareness: "not a date", awarenessTz: "America/Chicago", jurisdictions: { ca: true } },
+    { awareness: "2026-02-30T09:00", awarenessTz: "America/Chicago", jurisdictions: { ca: true } }, // impossible day
+    { awareness: "2026-05-01T09:00", awarenessTz: "America/Chicago", jurisdictions: {} },
+  ];
+  payloads.forEach((p, i) => {
+    const r = computeDeadlines(factsFromPayload(p));
+    a.ok(isRefusal(r), `payload ${i} (${J(p)}) must be refused; got ${J(r)}`);
+  });
+});
+
+T("L. Refusal", "Complete facts are never refused and carry ruleset_version", (a) => {
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { ca: true }, residentCounts: { ca: 1 } });
+  a.ok(!r.error, "no refusal");
+  a.eq(r.ruleset_version, RULESET_VERSION, "ruleset_version present");
+  a.ok(r.deadlines.length > 0, "CA residents obligation computes");
+  // A modeled jurisdiction alongside junk ids is complete (junk is ignored).
+  const mixed = computeDeadlines({ awarenessDate: AW, jurisdictions: { zz: true, ca: true }, residentCounts: { ca: 1 } });
+  a.ok(!mixed.error, "junk ids beside a real one do not trigger refusal");
+});
+
+T("L. Refusal", "Zone-explicit payload resolves at the facts boundary; the engine sees one instant", (a) => {
+  // 09:00 Chicago (CDT, UTC-5) on 2026-05-01 = 14:00Z. Same instant the
+  // legacy harness anchors at 09:00Z would NOT be — so the two differ by 5h.
+  const zoned = computeDeadlines(factsFromPayload({ awareness: "2026-05-01T09:00", awarenessTz: "America/Chicago", jurisdictions: { co: true }, residentCounts: { co: 1 } }));
+  const utc = computeDeadlines(factsFromPayload({ awareness: "2026-05-01T09:00", awarenessTz: "UTC", jurisdictions: { co: true }, residentCounts: { co: 1 } }));
+  const dz = D(zoned, "Colorado", "Colorado Residents").deadline.getTime();
+  const du = D(utc, "Colorado", "Colorado Residents").deadline.getTime();
+  a.eq(dz - du, 5 * 3600 * 1000, "Chicago awareness lands 5h after the UTC reading of the same wall time");
+  a.eq(ISO(D(utc, "Colorado", "Colorado Residents").deadline), "2026-05-31T09:00:00.000Z", "30 days from 09:00Z");
+});
+
+T("L. Hardening", "JURISDICTIONS is deep-frozen — a write throws and the ruleset is unchanged", (a) => {
+  const before = J(JURISDICTIONS);
+  let threw = false;
+  try { JURISDICTIONS[0].obligations[0].deadline_hours = 1; } catch { threw = true; }
+  try { JURISDICTIONS.push({ id: "zz" }); } catch { threw = true; }
+  a.ok(threw, "mutation attempt throws under strict-mode ESM");
+  a.eq(J(JURISDICTIONS), before, "ruleset byte-identical after the attempt");
+});
+
+T("L. Hardening", "No output entry carries an internal association field", (a) => {
+  const r = computeDeadlines({
+    awarenessDate: AW,
+    jurisdictions: Object.fromEntries(JURISDICTIONS.map((j) => [j.id, true])),
+    residentCounts: { ca: 1000 },
+    residentCountUnknown: { co: true, tx: true },
+    sensitivity: ["ssn"],
+  });
+  const all = [...r.deadlines, ...r.suppressed, ...r.pending, ...r.review, ...r.contingent, ...r.services, ...r.advisories];
+  a.ok(all.length > 0, "scenario produced output");
+  for (const e of all) {
+    for (const k of Object.keys(e)) a.ok(!k.startsWith("_"), `internal key ${k} leaked on ${e.jurisdiction}/${e.authority}`);
+  }
+  a.ok(r.pending.every((p) => !("_jurId" in p)), "pending entries carry no _jurId");
+});
+
+T("L. Hardening", "Threshold phrases are locale-pinned (en-US grouping) and zone-free", (a) => {
+  const r = computeDeadlines({ awarenessDate: AW, jurisdictions: { ca: true }, residentCounts: { ca: 1234567 }, sensitivity: ["health"] });
+  const ag = D(r, "California", "Attorney General");
+  a.ok(ag && ag.conditional.includes("1,234,567"), `count grouped en-US: ${ag && ag.conditional}`);
+  a.ok(ag && ag.conditional.includes("more than 500"), "threshold phrase intact");
 });
 
 // =============================================================================

@@ -28,7 +28,8 @@
 
 import { PDFDocument, PDFString, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import { JURISDICTIONS } from "./data.js";
+import { JURISDICTIONS, RULESET_VERSION } from "./data.js";
+import { isValidTimeZone, formatLongDateTimeInZone, AWARENESS_TZ_CAVEAT } from "./timezone.js";
 import {
   groupResultsByJurisdiction,
   CONTINGENT_LABEL,
@@ -290,6 +291,13 @@ function unknownCountJurisdictions(facts) {
   });
 }
 
+// True when the memo's facts carry a usable declared zone that the RECORD
+// holds. The editor passes `awarenessTzRecorded: false` for a legacy
+// incident whose form shows a suggested zone that has not been saved yet.
+function awarenessZoneRecorded(facts) {
+  return isValidTimeZone(facts.awarenessTz) && facts.awarenessTzRecorded !== false;
+}
+
 function drawIncidentSummary(state, facts) {
   const { fonts } = state;
   const labelW = 108; // 1.5"
@@ -311,7 +319,11 @@ function drawIncidentSummary(state, facts) {
 
   const rows = [
     ...(statusLabel ? [["Status", statusLabel]] : []),
-    ["Awareness", facts.awarenessDate ? formatAwareness(facts.awarenessDate) : "Not provided"],
+    ["Awareness", facts.awarenessDate ? formatAwareness(facts.awarenessDate, facts.awarenessTz) : "Not provided"],
+    // Legacy caveat (ruling C, 2026-08-22): a record without a declared
+    // awareness zone is shown in the viewing device's zone, and says so —
+    // on this surface and on screen, verbatim.
+    ...(facts.awarenessDate && !awarenessZoneRecorded(facts) ? [["Timezone", AWARENESS_TZ_CAVEAT]] : []),
     ["Jurisdictions", facts.jurisdictionList || "None selected"],
     ...unknownCountLines.map((line, i) => [i === 0 ? "Resident counts" : "", line]),
     ...(facts.sensitivityLabels && facts.sensitivityLabels.length
@@ -536,9 +548,9 @@ function attachLink(page, url, x, bottomY, height, width) {
 
 // ─── Section: deadlines / suppressed / notes ──────────────────────────────
 
-function deadlineBlocks(d) {
+function deadlineBlocks(d, tz) {
   return [
-    { type: "topRow", left: d.authority, right: formatDeadline(d.deadline, basisPhrase(d.basis)), rightColor: "ember" },
+    { type: "topRow", left: d.authority, right: formatDeadline(d.deadline, basisPhrase(d.basis), tz), rightColor: "ember" },
     { type: "labelBody", label: "Basis", body: d.basis || "—" },
     ...(d.conditional ? [{ type: "labelBody", label: "Conditional", body: d.conditional }] : []),
     ...(d.source_url ? [{ type: "url", label: "Source", url: d.source_url }] : []),
@@ -569,12 +581,10 @@ function serviceBlocks(s) {
 // with no fixed clock states that instead of a date, also in Mist. `nowMs`
 // is the memo's generatedAt — the pastness judgment is made at generation
 // time, like every other date in the memo.
-function contingentBlocks(c, nowMs) {
+function contingentBlocks(c, nowMs, tz) {
   const due = c.conditional_deadline;
-  const dateOpts = { year: "numeric", month: "long", day: "numeric" };
-  const timeOpts = { hour: "2-digit", minute: "2-digit", timeZoneName: "short" };
   const right = due
-    ? `If required, due ${due.toLocaleDateString("en-US", dateOpts)} at ${due.toLocaleTimeString("en-US", timeOpts)}`
+    ? `If required, due ${formatLongDateTimeInZone(due, tz)}`
     : "If required, no fixed deadline";
   const rightColor = due && due.getTime() < nowMs ? "ember" : "mist";
   return [
@@ -700,7 +710,7 @@ function drawContinuedHeader(state, name) {
 // Ordered render plan for one block: { t: "label", text } | { t: "card", blocks, color }.
 // Placement order mirrors the screen: caveat group → obligations (each followed
 // by its parallel notes) → suppressed group → sectoral group → orphaned parallels.
-function buildBlockPlan(block, nowMs) {
+function buildBlockPlan(block, nowMs, tz) {
   const plan = [];
   const label = (text) => plan.push({ t: "label", text });
   const card = (blocks, color) => plan.push({ t: "card", blocks, color });
@@ -722,7 +732,7 @@ function buildBlockPlan(block, nowMs) {
     if (!block.contingentCards || !block.contingentCards.length) return;
     label(CONTINGENT_LABEL);
     plan.push({ t: "explainer", text: CONTINGENT_EXPLAINER });
-    block.contingentCards.forEach((c) => card(contingentBlocks(c, nowMs), MIDNIGHT));
+    block.contingentCards.forEach((c) => card(contingentBlocks(c, nowMs, tz), MIDNIGHT));
   };
 
   let reviewLabelled = false;
@@ -733,7 +743,7 @@ function buildBlockPlan(block, nowMs) {
       reviewLabelled = true;
     }
     card(
-      ob.role === "active" ? deadlineBlocks(ob.card) : reviewBlocks(ob.card),
+      ob.role === "active" ? deadlineBlocks(ob.card, tz) : reviewBlocks(ob.card),
       ob.role === "active" ? MIDNIGHT : MIST
     );
     ob.parallelNotes.forEach((pn) => {
@@ -797,9 +807,9 @@ function planItemHeight(item, fonts) {
   return measureCard(item.blocks, fonts);
 }
 
-function drawJurisdictionBlock(state, block, nowMs) {
+function drawJurisdictionBlock(state, block, nowMs, tz) {
   const { fonts } = state;
-  const plan = buildBlockPlan(block, nowMs);
+  const plan = buildBlockPlan(block, nowMs, tz);
   if (plan.length === 0) return;
 
   // Keep the jurisdiction heading with its first plan item (a label, or the
@@ -1018,7 +1028,7 @@ function drawFooterBlock(state, generatedAt) {
   );
   drawPara(
     "Generated",
-    `${formatGeneratedAt(generatedAt)} · arkidel.com`
+    `${formatGeneratedAt(generatedAt)} · Ruleset ${RULESET_VERSION} · arkidel.com`
   );
 }
 
@@ -1047,10 +1057,11 @@ function formatGeneratedAt(d) {
   return `Generated ${d.toLocaleDateString("en-US", dateOpts)} ${d.toLocaleTimeString("en-US", timeOpts)}`;
 }
 
-function formatAwareness(d) {
-  const dateOpts = { year: "numeric", month: "long", day: "numeric" };
-  const timeOpts = { hour: "2-digit", minute: "2-digit", timeZoneName: "short" };
-  return `${d.toLocaleDateString("en-US", dateOpts)} at ${d.toLocaleTimeString("en-US", timeOpts)}`;
+// Display rule (JDC ruling B, 2026-08-22): every deadline time prints in the
+// INCIDENT's declared zone with a zone label. `tz` absent/invalid → the
+// viewer's zone (legacy records), flagged by the Analysis Inputs caveat.
+function formatAwareness(d, tz) {
+  return formatLongDateTimeInZone(d, tz);
 }
 
 // Single composition point for the deadline right slot: both branches carry
@@ -1073,11 +1084,9 @@ function basisPhrase(basis) {
 // the statute's own wording under the "Due " prefix; formerly a hardcoded
 // "without unreasonable delay", which misstated EU Art. 34). The fallback
 // guards a phrase-less basis only.
-function formatDeadline(d, phrase) {
+function formatDeadline(d, phrase, tz) {
   if (!d) return `Due ${phrase || "without unreasonable delay"}`;
-  const dateOpts = { year: "numeric", month: "long", day: "numeric" };
-  const timeOpts = { hour: "2-digit", minute: "2-digit", timeZoneName: "short" };
-  return `Due ${d.toLocaleDateString("en-US", dateOpts)} at ${d.toLocaleTimeString("en-US", timeOpts)}`;
+  return `Due ${formatLongDateTimeInZone(d, tz)}`;
 }
 
 function buildJurisdictionList(facts) {
@@ -1085,7 +1094,7 @@ function buildJurisdictionList(facts) {
   return selected.map((j) => {
     const c = facts.residentCounts?.[j.id];
     const n = parseInt(c, 10);
-    const suffix = j.residentField && Number.isFinite(n) && n > 0 ? ` (${n.toLocaleString()})` : "";
+    const suffix = j.residentField && Number.isFinite(n) && n > 0 ? ` (${n.toLocaleString("en-US")})` : "";
     return `${j.short}${suffix}`;
   }).join(", ");
 }
@@ -1219,6 +1228,13 @@ function drawIncidentReport(state, sections) {
 // Returns: Uint8Array — the serialized PDF bytes
 //
 export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontBytes, logoBytes, generatedAt }, review = [], notificationRecord = null, services = [], advisories = [], contingent = []) {
+  // Structured-refusal guard (JDC 2026-08-22): a caller that hands the
+  // engine's refusal object through in place of the buckets must never get a
+  // memo that reads as "no obligations". Refuse to render instead.
+  const refusal = [deadlines, suppressed, review, contingent].find((x) => x && !Array.isArray(x) && x.error === "incomplete_facts");
+  if (refusal) {
+    throw new Error(`Memo not generated: incomplete facts (${(refusal.missing || []).join(", ")}).`);
+  }
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
 
@@ -1237,9 +1253,15 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
 
   state.cursorY = drawLetterhead(state.currentPage(), fonts, logoImage, generatedAt);
 
+  // The incident's declared zone drives every deadline time in the memo
+  // (ruling B). Absent/invalid → viewer zone + caveat (legacy, ruling C).
+  const displayTz = isValidTimeZone(facts.awarenessTz) ? facts.awarenessTz : null;
+
   drawIncidentSummary(state, {
     status: facts.status,
     awarenessDate: facts.awarenessDate,
+    awarenessTz: displayTz,
+    awarenessTzRecorded: facts.awarenessTzRecorded,
     jurisdictionList: buildJurisdictionList(facts),
     sensitivityLabels: facts.sensitivityLabels || [],
     encryptionSummary: facts.encryptionSummary,
@@ -1278,7 +1300,7 @@ export async function renderMemoPdfBytes(facts, deadlines, suppressed, { fontByt
       state.cursorY = noteBottom - CARD_GAP;
       harmExplainerDrawn = true;
     }
-    drawJurisdictionBlock(state, block, generatedAt instanceof Date ? generatedAt.getTime() : Date.now());
+    drawJurisdictionBlock(state, block, generatedAt instanceof Date ? generatedAt.getTime() : Date.now(), displayTz);
   }
 
   // Notification Record (the Authority/Due/Notified table) — after the

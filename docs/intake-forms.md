@@ -103,6 +103,14 @@ non-gate rationale, CA/TX structural inertness) and the § 5/6/7/8/9/10
 sign-offs for the per-jurisdiction `harmGate` records. All standards are
 carried verbatim from the 2026-08-01 primary-source review.
 
+**Awareness semantics and the refusal contract** (August 22, 2026 update;
+reviewer: JDC, 2026-08-22). The awareness moment is now recorded with an
+explicit, user-declared timezone and resolved to one instant at the facts
+boundary; the engine refuses incomplete facts with a structured error instead
+of returning an empty obligation set; and the ruleset carries a date-based
+version. No rule, threshold, comparator, clock, harbor, or standard changed;
+see § 0.8 for the semantics as shipped.
+
 **Contingent deadlines for unknown resident counts** (August 15, 2026 update;
 reviewer: JDC, 2026-08-15). A jurisdiction whose affected-resident count is not
 yet established can now be flagged as such, and its threshold-gated obligations
@@ -265,6 +273,58 @@ clock (e.g. the Colorado CRA notice).
 evaluated obligation lands in exactly one (the quint-state invariant). Coverage:
 the "Contingent deadlines" group in the in-file harness, the `K. Contingent`
 group in `scripts/adversarial-engine-tests.mjs`, and fixture 7 in
+`scripts/render-gate-memo.mjs`.
+
+## 0.8 Awareness semantics, structured refusal, ruleset version
+
+*Added August 22, 2026 (serverless bundle). Reviewer: JDC, 2026-08-22.*
+
+**Timezone-explicit awareness.** The awareness moment is stored as two
+payload fields: the datetime-local string the user entered (`awareness`) and
+the IANA zone it is stated in (`awarenessTz`, e.g. `America/Chicago`). The
+user specifies the zone — the form prefills the reading device's zone only as
+a visible, editable suggestion — and awareness is **never** interpreted from
+the reading device. The pair is resolved to a single epoch instant **once, at
+the facts boundary** (`src/breach-clock/facts.js`); the engine receives that
+instant and does no timezone math. The resolution uses the Intl
+`formatToParts` round-trip (no runtime dependency) and is deterministic across
+hosts. DST edges resolve to the **earliest candidate instant** in both
+directions — a fall-back ambiguous wall time takes its first occurrence
+(daylight offset); a spring-forward nonexistent wall time takes the earlier of
+the two offset candidates — because every deadline is awareness + N hours, so
+an earlier awareness instant can only make a computed deadline earlier (the
+same conservative direction as the awareness-anchor and millisecond-arithmetic
+assumptions already recorded for the engine).
+
+**Display (ruling B).** Every rendered deadline time — screen cards, the
+deadline queue, contingent qualifiers, the memo — shows in the incident's
+declared zone with a zone label (e.g. "Due 9/30/2026, 10:00 AM CT"). No
+viewer-zone times appear in incident output.
+
+**Legacy records (ruling C).** A payload without `awarenessTz` remains
+readable and is interpreted in the viewer's zone exactly as before, with this
+caveat rendered verbatim in Analysis Inputs on both surfaces: "Awareness
+timezone not recorded — times shown in the viewing device's timezone." No
+backfill, no guessed zones. Resubmitting such a record requires a zone
+(the Submit gate), which is what heals it.
+
+**Structured refusal.** Given incomplete facts — no usable awareness instant
+or no selected modeled jurisdiction — `computeDeadlines` returns
+`{ error: "incomplete_facts", missing: [...], ruleset_version }` and never an
+empty obligation set. An empty result therefore only ever means "evaluated,
+nothing applies". The form's completeness gate keeps this path out of the UI;
+the results page, the memo, and the incidents list handle the shape
+defensively (render nothing and log — never a "no obligations" state).
+
+**Ruleset version.** `data.js` exports `RULESET_VERSION` (date-based;
+`"2026-08-22"` at introduction). It is bumped on every substance commit, is
+carried on every computed result as `ruleset_version`, and prints in the
+memo's generation footer.
+
+**Coverage.** `src/breach-clock/timezone.test.js` (DST both directions),
+`src/breach-clock/facts.test.js` (gate and boundary), the `L. Refusal` /
+`L. Hardening` groups in `scripts/adversarial-engine-tests.mjs`, the "Edge
+cases" refusal cases in the in-file harness, and fixture 8 in
 `scripts/render-gate-memo.mjs`.
 
 ---

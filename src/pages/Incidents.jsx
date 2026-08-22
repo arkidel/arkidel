@@ -25,6 +25,7 @@ import { Link } from "react-router-dom";
 import { Plus, X } from "lucide-react";
 import { listIncidents, deleteIncident } from "../data/incidents.js";
 import { JURISDICTIONS } from "../breach-clock/data.js";
+import { formatDateInZone, isValidTimeZone } from "../breach-clock/timezone.js";
 import { computeDeadlines } from "../breach-clock/engine.js";
 import { computableGate, factsFromPayload } from "../breach-clock/facts.js";
 import { useOrg } from "../org/OrgProvider.jsx";
@@ -114,6 +115,12 @@ const nextDeadline = (payload, now) => {
   const p = payload || {};
   if (!computableGate(p, now).canCompute) return null;
   const result = computeDeadlines(factsFromPayload(p));
+  // Structured refusal (JDC 2026-08-22): treat exactly like "not computable"
+  // — the em-dash — never as "nothing due".
+  if (!result || result.error) return null;
+  // The date prints in the incident's declared zone (ruling B); a legacy
+  // record without one falls to the viewer's zone, as before.
+  const tz = isValidTimeZone(p.awarenessTz) ? p.awarenessTz : null;
   const soonest = (list, key) => {
     const times = list.filter((x) => x[key]).map((x) => x[key].getTime());
     return times.length ? Math.min(...times) : null;
@@ -122,9 +129,9 @@ const nextDeadline = (payload, now) => {
   const cont = soonest(result.contingent || [], "conditional_deadline");
   if (firm === null && cont === null) return null;
   if (firm === null || (cont !== null && cont < firm)) {
-    return { date: new Date(cont), contingent: true };
+    return { date: new Date(cont), contingent: true, tz };
   }
-  return { date: new Date(firm), contingent: false };
+  return { date: new Date(firm), contingent: false, tz };
 };
 
 // Status chip — the app's chip anatomy (mono caps, 6px radius per the
@@ -166,7 +173,7 @@ const StatusChip = ({ status }) => (
 // that anything is due, let alone late.
 const NextDeadlineCell = ({ next, now, muted }) => {
   if (!next) return <span style={{ color: MIST }}>—</span>;
-  const dateText = next.date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  const dateText = formatDateInZone(next.date, next.tz);
   if (next.contingent) {
     return (
       /* Wraps rather than nowraps — the qualified form is longer than the

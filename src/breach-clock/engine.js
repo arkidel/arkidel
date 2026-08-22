@@ -13,7 +13,25 @@
 //      categorised pass/fail results for the in-app Tests view.
 // =============================================================================
 
-import { JURISDICTIONS } from "./data.js";
+import { JURISDICTIONS, RULESET_VERSION } from "./data.js";
+
+// Structured refusal (serverless bundle, JDC 2026-08-22). Given incomplete
+// facts — no usable awareness instant, or no selected modeled jurisdiction —
+// the engine returns { error: "incomplete_facts", missing: [...] } and NEVER
+// an empty obligation set. An empty result must only ever mean "evaluated,
+// nothing applies"; it must never be reachable from a malformed facts
+// object. The form's completeness gate keeps this path out of the UI; the
+// results page and memo handle the shape defensively regardless.
+const INCOMPLETE_FACTS = "incomplete_facts";
+
+function incompleteFacts(facts) {
+  const missing = [];
+  const aw = facts && facts.awarenessDate;
+  if (!(aw instanceof Date) || isNaN(aw.getTime())) missing.push("awarenessDate");
+  const selected = facts && facts.jurisdictions && typeof facts.jurisdictions === "object" ? facts.jurisdictions : null;
+  if (!selected || !JURISDICTIONS.some((jur) => !!selected[jur.id])) missing.push("jurisdictions");
+  return missing;
+}
 
 const HIGH_RISK_CATEGORIES = ["ssn", "gov_id", "financial", "health", "biometric", "children", "special", "credentials"];
 
@@ -197,7 +215,11 @@ function deriveGates(ob) {
  * @param {string} [facts.encrypted] - US encryption-cluster inputs ("yes"|"no"|unset): encrypted, plus encryptionStrength ("ge_128"|"below_128"|"unknown"), redacted, keyAcquired, reidentificationAcquired.
  * @param {string} [facts.gdprUnintelligibility] - GDPR Art. 34(3)(a) input ("yes"|"no"|unset): measures rendering the data unintelligible.
  * @param {string} [facts.harmAssessment] - Harm-determination attestation ("" | "determined_unlikely" | "harm_likely"). Only the exact value "determined_unlikely" suppresses harm-gated obligations; every other value is inert.
- * @returns {{deadlines: Array, suppressed: Array, pending: Array, review: Array, contingent: Array, services: Array, advisories: Array}}
+ * @returns {{deadlines: Array, suppressed: Array, pending: Array, review: Array, contingent: Array, services: Array, advisories: Array, ruleset_version: string}}
+ *   A structured refusal — { error: "incomplete_facts", missing: string[],
+ *   ruleset_version } — is returned instead when awarenessDate is not a
+ *   valid Date or no modeled jurisdiction is selected (JDC 2026-08-22).
+ *   ruleset_version — the data.js RULESET_VERSION the result was computed under.
  *   deadlines  — obligations that fire under the facts.
  *   suppressed — obligations that would have fired but were affirmatively
  *                excused (encryption/redaction/unintelligibility harbors, the
@@ -238,6 +260,8 @@ function deriveGates(ob) {
  * dependent obligation does not fire either.
  */
 function computeDeadlines(facts) {
+  const missing = incompleteFacts(facts);
+  if (missing.length) return { error: INCOMPLETE_FACTS, missing, ruleset_version: RULESET_VERSION };
   const {
     awarenessDate,
     jurisdictions = {},
@@ -294,7 +318,16 @@ function computeDeadlines(facts) {
   //                gov_id is present.
   const services = [];
   const advisories = [];
-  if (!awarenessDate) return { deadlines, suppressed, pending, review, contingent, services, advisories };
+  // Pass-2 association for dependent clocks — kept OUTSIDE the entries (a
+  // non-mutating side table keyed by entry identity) so no internal field
+  // ever rides an output object. Formerly `_jurId` / `_deadlineRelativeTo` /
+  // `_deadlineHours` were written onto the entries and stripped afterwards;
+  // pending entries leaked `_jurId` uncleaned.
+  const internals = new Map();
+  const link = (entry, jur, ob) => {
+    internals.set(entry, { jurId: jur.id, relativeTo: ob.deadline_relative_to || null, hours: ob.deadline_hours });
+    return entry;
+  };
 
   // Two-pass build:
   //   Pass 1 — collect obligations that fire, computing deadlines that anchor
@@ -351,7 +384,6 @@ function computeDeadlines(facts) {
           citation: ob.citation,
           source_url: ob.source_url,
           statute: jur.statute,
-          _jurId: jur.id,
         });
         return;
       }
@@ -535,13 +567,13 @@ function computeDeadlines(facts) {
       if (contingentGate) {
         const { threshold, comparator } = contingentGate;
         const thresholdPhrase = comparator === "gt"
-          ? `more than ${threshold.toLocaleString()}`
-          : `${threshold.toLocaleString()} or more`;
+          ? `more than ${threshold.toLocaleString("en-US")}`
+          : `${threshold.toLocaleString("en-US")} or more`;
         let conditionalDeadline = null;
         if (!ob.deadline_relative_to && ob.deadline_hours !== null && ob.deadline_hours !== undefined) {
           conditionalDeadline = new Date(awarenessDate.getTime() + ob.deadline_hours * 3600 * 1000);
         }
-        contingent.push({
+        contingent.push(link({
           jurisdiction: jur.short,
           authority: ob.authority,
           threshold,
@@ -551,11 +583,7 @@ function computeDeadlines(facts) {
           citation: ob.citation,
           source_url: ob.source_url,
           statute: jur.statute,
-          // Internal — used in pass 2. Stripped before return.
-          _jurId: jur.id,
-          _deadlineRelativeTo: ob.deadline_relative_to || null,
-          _deadlineHours: ob.deadline_hours,
-        });
+        }, jur, ob));
         return;
       }
 
@@ -580,12 +608,12 @@ function computeDeadlines(facts) {
         const threshold = ob.gating.residentThreshold;
         const comparator = ob.gating.comparator || "gte";
         const thresholdPhrase = comparator === "gt"
-          ? `more than ${threshold.toLocaleString()}`
-          : `${threshold.toLocaleString()} or more`;
-        conditional = `${conditional} Triggered: ${residentCount.toLocaleString()} ${jur.short} residents affected (threshold: ${thresholdPhrase}).`;
+          ? `more than ${threshold.toLocaleString("en-US")}`
+          : `${threshold.toLocaleString("en-US")} or more`;
+        conditional = `${conditional} Triggered: ${residentCount.toLocaleString("en-US")} ${jur.short} residents affected (threshold: ${thresholdPhrase}).`;
       }
 
-      deadlines.push({
+      deadlines.push(link({
         jurisdiction: jur.short,
         authority: ob.authority,
         deadline,
@@ -593,11 +621,7 @@ function computeDeadlines(facts) {
         conditional: conditional.trim(),
         source_url: ob.source_url,
         statute: jur.statute,
-        // Internal — used in pass 2. Stripped before return.
-        _jurId: jur.id,
-        _deadlineRelativeTo: ob.deadline_relative_to || null,
-        _deadlineHours: ob.deadline_hours,
-      });
+      }, jur, ob));
     });
   });
 
@@ -605,12 +629,13 @@ function computeDeadlines(facts) {
   // parent didn't fire (or has no fixed deadline), drop the dependent.
   const resolved = [];
   deadlines.forEach((d) => {
-    if (!d._deadlineRelativeTo) {
+    const meta = internals.get(d);
+    if (!meta.relativeTo) {
       resolved.push(d);
       return;
     }
     const parent = deadlines.find(
-      (p) => p._jurId === d._jurId && p.authority === d._deadlineRelativeTo.parent_authority
+      (p) => internals.get(p).jurId === meta.jurId && p.authority === meta.relativeTo.parent_authority
     );
     if (!parent || !parent.deadline) {
       // Parent didn't fire or has no fixed deadline — dependent has no anchor.
@@ -618,8 +643,8 @@ function computeDeadlines(facts) {
       // happen, the AG follow-up clock never starts).
       return;
     }
-    if (d._deadlineHours !== null && d._deadlineHours !== undefined) {
-      d.deadline = new Date(parent.deadline.getTime() + d._deadlineHours * 3600 * 1000);
+    if (meta.hours !== null && meta.hours !== undefined) {
+      d.deadline = new Date(parent.deadline.getTime() + meta.hours * 3600 * 1000);
     }
     resolved.push(d);
   });
@@ -634,27 +659,23 @@ function computeDeadlines(facts) {
   // potentially applicable obligation.
   const resolvedContingent = [];
   contingent.forEach((c) => {
-    if (!c._deadlineRelativeTo) {
+    const meta = internals.get(c);
+    if (!meta.relativeTo) {
       resolvedContingent.push(c);
       return;
     }
-    const sameJur = (p) => p._jurId === c._jurId && p.authority === c._deadlineRelativeTo.parent_authority;
+    const sameJur = (p) => internals.get(p).jurId === meta.jurId && p.authority === meta.relativeTo.parent_authority;
     const firmParent = resolved.find(sameJur);
     const contingentParent = firmParent ? null : contingent.find((p) => p !== c && sameJur(p));
     if (!firmParent && !contingentParent) return;
     const anchor = firmParent ? firmParent.deadline : contingentParent.conditional_deadline;
-    if (anchor && c._deadlineHours !== null && c._deadlineHours !== undefined) {
-      c.conditional_deadline = new Date(anchor.getTime() + c._deadlineHours * 3600 * 1000);
+    if (anchor && meta.hours !== null && meta.hours !== undefined) {
+      c.conditional_deadline = new Date(anchor.getTime() + meta.hours * 3600 * 1000);
     }
     resolvedContingent.push(c);
   });
 
-  // Strip internal fields before returning.
-  const stripInternal = ({ _jurId, _deadlineRelativeTo, _deadlineHours, ...rest }) => rest;
-  const cleaned = resolved.map(stripInternal);
-  const cleanedContingent = resolvedContingent.map(stripInternal);
-
-  return { deadlines: cleaned, suppressed, pending, review, contingent: cleanedContingent, services, advisories };
+  return { deadlines: resolved, suppressed, pending, review, contingent: resolvedContingent, services, advisories, ruleset_version: RULESET_VERSION };
 }
 
 
@@ -1384,17 +1405,25 @@ const TEST_CASES = [
   },
 
   // === Empty / degenerate cases ===
+  // Structured refusal (JDC 2026-08-22): incomplete facts return
+  // { error: "incomplete_facts", missing } — never an empty obligation set.
   {
-    name: "No jurisdictions selected → no deadlines",
+    name: "No jurisdictions selected → structured refusal (missing: jurisdictions)",
     category: "Edge cases",
     facts: { jurisdictions: {}, sensitivity: ["health"] },
-    expect: expectCount(0),
+    expectRefusal: ["jurisdictions"],
   },
   {
-    name: "Selected jurisdictions but no awareness date → no deadlines",
+    name: "Selected jurisdictions but no awareness date → structured refusal (missing: awarenessDate)",
     category: "Edge cases",
     facts: { jurisdictions: { eu: true }, sensitivity: ["health"], _skipAwareness: true },
-    expect: expectCount(0),
+    expectRefusal: ["awarenessDate"],
+  },
+  {
+    name: "Neither awareness nor jurisdictions → refusal lists both",
+    category: "Edge cases",
+    facts: { jurisdictions: {}, sensitivity: ["health"], _skipAwareness: true },
+    expectRefusal: ["awarenessDate", "jurisdictions"],
   },
 
   // === Massachusetts (count-independent + encryption suppression) ===
@@ -2314,7 +2343,19 @@ function runTests() {
         ...t.facts,
         awarenessDate: t.facts._skipAwareness ? undefined : TEST_AWARENESS,
       };
-      const { deadlines, suppressed, pending, review, services, advisories, contingent } = computeDeadlines(facts);
+      const r = computeDeadlines(facts);
+      if (t.expectRefusal) {
+        const got = r && r.error === "incomplete_facts" ? r.missing : null;
+        const pass = !!got && JSON.stringify(got) === JSON.stringify(t.expectRefusal) && !("deadlines" in r);
+        return {
+          name: t.name,
+          category: t.category,
+          pass,
+          message: pass ? "refused as expected" : `expected refusal ${JSON.stringify(t.expectRefusal)}, got ${JSON.stringify(r)}`,
+        };
+      }
+      if (r.error) throw new Error(`unexpected refusal: ${JSON.stringify(r)}`);
+      const { deadlines, suppressed, pending, review, services, advisories, contingent } = r;
       const result = t.expect(deadlines, suppressed, pending, review, services, advisories, contingent);
       return {
         name: t.name,
@@ -2333,4 +2374,4 @@ function runTests() {
   });
 }
 
-export { isHighRisk, computeDeadlines, runTests, TEST_CASES, TEST_AWARENESS };
+export { isHighRisk, computeDeadlines, runTests, TEST_CASES, TEST_AWARENESS, INCOMPLETE_FACTS };

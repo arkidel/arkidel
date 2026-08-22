@@ -55,7 +55,12 @@ vi.mock("./memo-pdf.js", () => ({ generateMemoPdf: vi.fn() }));
 import BreachClock from "./BreachClock.jsx";
 
 // datetime-local string for "now + offsetMs" in LOCAL time (what the
-// awareness input stores).
+// awareness input stores). The fixture declares the host's zone EXPLICITLY
+// as awarenessTz (serverless bundle, 2026-08-22): the wall-clock string and
+// the zone are produced from the same clock, so the pair resolves to the
+// intended instant on any host rather than riding the legacy viewer-zone
+// parse.
+const HOST_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const awarenessAt = (offsetMs) => {
   const d = new Date(Date.now() + offsetMs);
   const pad = (n) => String(n).padStart(2, "0");
@@ -67,6 +72,7 @@ const DAY = 24 * HOUR;
 const payloadFor = ({ jurs, awareness, counts, unknown = {}, harmAssessment = "" }) => ({
   quickMode: true,
   awareness,
+  awarenessTz: HOST_TZ,
   jurisdictions: Object.fromEntries(jurs.map((j) => [j, true])),
   residentCounts: counts ?? Object.fromEntries(jurs.map((j) => [j, "100000"])),
   residentCountUnknown: unknown,

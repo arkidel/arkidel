@@ -39,6 +39,9 @@ import { fileURLToPath } from "node:url";
 
 import { computeDeadlines } from "../src/breach-clock/engine.js";
 import { renderMemoPdfBytes } from "../src/breach-clock/memo-pdf-core.js";
+import { factsFromPayload } from "../src/breach-clock/facts.js";
+import { RULESET_VERSION } from "../src/breach-clock/data.js";
+import { AWARENESS_TZ_CAVEAT } from "../src/breach-clock/timezone.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -300,6 +303,54 @@ function check(label, ok) {
   check("CA known count still computes firm obligations", text.includes("California Attorney General") && text.includes("Due September 24, 2026"));
   check("CA is not contingent", !text.includes("Notice is required if more than 500 California residents are affected."));
   check("nothing prints under the suppressed label", !text.includes("NOTIFICATION LIKELY NOT REQUIRED"));
+}
+
+{
+  // Fixture 8 (serverless bundle, 2026-08-22): timezone-explicit awareness.
+  // The same wall-clock awareness (2026-08-10 10:00) declared in
+  // America/Chicago — resolved at the facts boundary, displayed in the
+  // declared zone with a label on every deadline slot and the awareness row;
+  // the generation footer carries RULESET_VERSION. Then the LEGACY form of the
+  // same record (no zone): the Analysis Inputs caveat prints verbatim and the
+  // memo still renders (no refusal, no empty state). Finally: a refusal
+  // object handed through in place of the buckets must throw, never render.
+  const payload = {
+    awareness: "2026-08-10T10:00",
+    awarenessTz: "America/Chicago",
+    jurisdictions: { co: true, ca: true },
+    residentCounts: { ca: 1000, co: 100 },
+    sensitivity: ["identifiers"],
+  };
+  const zoned = { ...factsFromPayload(payload), sensitivityLabels: ["Identifiers (name, email, address)"], awarenessTzRecorded: true };
+  const r = computeDeadlines(zoned);
+  check("zoned facts compute (no refusal) and carry ruleset_version", !r.error && r.ruleset_version === RULESET_VERSION);
+  const bytes = await renderMemoPdfBytes(zoned, r.deadlines, r.suppressed, renderOpts, r.review, null, r.services, r.advisories, r.contingent);
+  await fs.writeFile("/tmp/gate-memo-timezone.pdf", bytes);
+  console.log(`\nFixture 8 (timezone-explicit, America/Chicago): wrote /tmp/gate-memo-timezone.pdf (${bytes.length} bytes)`);
+  const text = await extractText(bytes);
+  check("awareness row prints in the declared zone with a label", text.includes("AWARENESS August 10, 2026 at 10:00 AM CT"));
+  check("CO resident deadline prints in the declared zone (+30d, 10:00 AM CT)", text.includes("Due September 9, 2026 at 10:00 AM CT"));
+  check("CA AG dependent deadline prints in the declared zone (+30d +15d)", text.includes("Due September 24, 2026 at 10:00 AM CT"));
+  check("no legacy caveat on a zone-explicit record", !text.includes(AWARENESS_TZ_CAVEAT));
+  check("generation footer carries the ruleset version", text.includes(`Ruleset ${RULESET_VERSION}`));
+
+  const legacyFacts = { ...factsFromPayload({ ...payload, awarenessTz: undefined }), sensitivityLabels: ["Identifiers (name, email, address)"] };
+  const rl = computeDeadlines(legacyFacts);
+  check("legacy zone-less facts still compute (no refusal)", !rl.error && rl.deadlines.length > 0);
+  const legacyBytes = await renderMemoPdfBytes(legacyFacts, rl.deadlines, rl.suppressed, renderOpts, rl.review, null, rl.services, rl.advisories, rl.contingent);
+  const legacyText = await extractText(legacyBytes);
+  check("legacy record prints the Analysis Inputs caveat verbatim", legacyText.includes(`TIMEZONE ${AWARENESS_TZ_CAVEAT}`));
+  check("legacy record still prints its deadline cards", legacyText.includes("Affected Colorado Residents") && legacyText.includes("Due September"));
+
+  const refusal = computeDeadlines(factsFromPayload({ awareness: "", jurisdictions: { co: true } }));
+  check("incomplete payload is refused by the engine", refusal.error === "incomplete_facts");
+  let threw = false;
+  try {
+    await renderMemoPdfBytes(legacyFacts, refusal, [], renderOpts);
+  } catch (e) {
+    threw = /incomplete facts/.test(e.message);
+  }
+  check("memo render refuses a refusal object — never renders an empty memo", threw);
 }
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);

@@ -1229,4 +1229,27 @@ const JURISDICTIONS = [
   },
 ];
 
-export { JURISDICTIONS, SENSITIVITY_OPTIONS };
+// ── Ruleset version (serverless bundle, JDC 2026-08-22) ──────────────────
+// Date-based. Bumped on EVERY substance commit to this file: a data.js
+// substance diff without a RULESET_VERSION bump fails review. Rendered in the
+// memo's generation footer and carried on every computed result object
+// (`ruleset_version`) so any future API response identifies the rules it was
+// computed under.
+const RULESET_VERSION = "2026-08-22";
+
+// ── Hardening: the ruleset is immutable at runtime ────────────────────────
+// Recursive freeze of the JURISDICTIONS export (and the category vocabulary).
+// The engine and both render surfaces read this data; nothing may write to
+// it. A write attempt throws in strict-mode ESM rather than silently
+// altering the rules for the rest of the session.
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const key of Object.getOwnPropertyNames(value)) deepFreeze(value[key]);
+  }
+  return value;
+}
+deepFreeze(JURISDICTIONS);
+deepFreeze(SENSITIVITY_OPTIONS);
+
+export { JURISDICTIONS, SENSITIVITY_OPTIONS, RULESET_VERSION };

@@ -47,6 +47,16 @@ import {
   QUEUE_MIN_BLOCKS,
 } from "./results-grouping.js";
 import { computableGate, factsFromPayload } from "./facts.js";
+import {
+  deviceTimeZone,
+  isValidTimeZone,
+  formatDateTimeInZone,
+  formatDateInZone,
+  toDateTimeLocalInZone,
+  COMMON_US_ZONES,
+  allTimeZones,
+  AWARENESS_TZ_CAVEAT,
+} from "./timezone.js";
 import { generateMemoPdf } from "./memo-pdf.js";
 import { createIncident, updateIncident, updateIncidentStatus, updateIncidentNotifications, updateIncidentLog, updateIncidentViewState, getIncident } from "../data/incidents.js";
 import { useOrg } from "../org/OrgProvider.jsx";
@@ -506,6 +516,7 @@ function InfoTip({ text, size = 13 }) {
 const factsSignatureOf = (p) =>
   JSON.stringify([
     p.awareness,
+    p.awarenessTz,
     p.jurisdictions,
     p.residentCounts,
     p.residentCountUnknown,
@@ -573,6 +584,12 @@ export default function BreachClock() {
 
   // ── Operative state (feeds the engine) — unchanged from the wizard ──
   const [awareness, setAwareness] = useState("");
+  // Declared awareness zone (serverless bundle, JDC 2026-08-22) — an IANA id
+  // stored beside the datetime-local string. The user specifies it; awareness
+  // is never interpreted from the reading device. The device zone is only the
+  // visible, editable SUGGESTION the selector starts on (new form, or a
+  // legacy record that predates the field).
+  const [awarenessTz, setAwarenessTz] = useState(() => deviceTimeZone());
   const [jurisdictions, setJurisdictions] = useState(
     () => Object.fromEntries(JURISDICTIONS.map((j) => [j.id, false]))
   );
@@ -705,6 +722,10 @@ export default function BreachClock() {
   const applyPayload = (p) => {
     setQuickMode(!!p.quickMode);
     setAwareness(typeof p.awareness === "string" ? p.awareness : "");
+    // A usable saved zone is applied verbatim; absent/unrecognized (legacy)
+    // → the device zone as the suggestion. The legacy caveat keys off the
+    // SAVED payload (lastSavedPayloadRef), never this suggestion.
+    setAwarenessTz(isValidTimeZone(p.awarenessTz) ? p.awarenessTz : deviceTimeZone());
     setJurisdictions({
       ...Object.fromEntries(JURISDICTIONS.map((j) => [j.id, false])),
       ...(p.jurisdictions && typeof p.jurisdictions === "object" ? p.jurisdictions : {}),
@@ -818,6 +839,7 @@ export default function BreachClock() {
   const buildPayload = () => ({
     quickMode,
     awareness,
+    awarenessTz,
     jurisdictions,
     residentCounts,
     residentCountUnknown,
@@ -1245,8 +1267,19 @@ export default function BreachClock() {
 
   // Awareness parsing + completeness gate — shared with the incidents list's
   // Next-deadline column via facts.js (one source, no divergent copies).
-  const gate = computableGate({ awareness, jurisdictions, sensitivity }, now);
+  const gate = computableGate({ awareness, awarenessTz, jurisdictions, sensitivity }, now);
   const awarenessDate = gate.awarenessDate;
+  // Display zone (ruling B): every deadline time on this page renders in the
+  // incident's declared zone with a label. For a legacy record the selector's
+  // suggestion IS the viewer's zone, so the times read exactly as before.
+  const displayTz = isValidTimeZone(awarenessTz) ? awarenessTz : null;
+  const fmtDueDateTime = (d) => formatDateTimeInZone(d, displayTz);
+  const fmtDueDate = (d) => formatDateInZone(d, displayTz);
+  // Legacy record (ruling C): the SAVED payload carries an awareness but no
+  // usable zone. Surfaces the caveat in Analysis Inputs (screen + memo) until
+  // a save/resubmit writes the zone the selector shows.
+  const savedPayload = lastSavedPayloadRef.current;
+  const legacyAwarenessZone = !!savedPayload && !!savedPayload.awareness && !isValidTimeZone(savedPayload.awarenessTz);
 
   const formatDuration = (ms) => {
     const neg = ms < 0;
@@ -1280,7 +1313,17 @@ export default function BreachClock() {
   // no deadline) and advisory entries (declared + auto "ssn_unconfirmed").
   // `contingent` (intake phase 2) carries threshold-gated obligations held on
   // an unestablished resident count — live but for the count, never firm.
-  const { deadlines, suppressed, pending, review, contingent, services, advisories } = computeDeadlines(factsFromPayload(buildPayload()));
+  // Structured refusal (JDC 2026-08-22): on incomplete facts the engine
+  // returns { error: "incomplete_facts", missing } instead of buckets. The
+  // submit gate keeps that off the results view; this render runs on every
+  // keystroke of the form too, so the refusal is absorbed here as empty
+  // buckets (nothing renders from them while on the form) and flagged —
+  // the results view renders nothing and logs if it ever sees one.
+  const engineResult = computeDeadlines(factsFromPayload(buildPayload()));
+  const engineRefusal = engineResult && engineResult.error ? engineResult : null;
+  const EMPTY = [];
+  const { deadlines = EMPTY, suppressed = EMPTY, pending = EMPTY, review = EMPTY, contingent = EMPTY, services = EMPTY, advisories = EMPTY } =
+    engineRefusal ? {} : engineResult;
 
   // ── Results-at-scale derivations (presentation only) ──
   // Jurisdiction-first grouping, computed once per render and shared by the
@@ -1338,9 +1381,15 @@ export default function BreachClock() {
   // ── Minimal operative inputs required to submit (mirrors the old
   //    canAdvance) — read from the shared gate above. ──
   const hasAwareness = gate.hasAwareness;
+  const hasAwarenessTz = gate.hasAwarenessTz;
   const hasJurisdiction = gate.hasJurisdiction;
   const hasSensitivity = gate.hasSensitivity;
+  // canCompute: the facts resolve (legacy zone-less records included — this
+  // is what the silent rehydrate auto-compute reads). canSubmit: canCompute
+  // AND a declared zone whenever awareness is set — the Submit gate, which is
+  // what heals legacy incidents on resubmit.
   const canCompute = gate.canCompute;
+  const canSubmit = gate.canSubmit;
 
   // Saved incidents open at results. Runs on the render AFTER a genuine
   // rehydrate (the flag lands in the same batch as applyPayload's setters),
@@ -1377,8 +1426,20 @@ export default function BreachClock() {
         : "Provide the date and time of awareness."
     );
   }
+  if (hasAwareness && !hasAwarenessTz) missingInputs.push("Select the timezone in which the awareness date and time is stated.");
   if (!hasJurisdiction) missingInputs.push("Provide at least one affected jurisdiction.");
   if (!hasSensitivity) missingInputs.push("Provide at least one type of personal data involved.");
+
+  // The full IANA list is host-provided and static for the session.
+  const timeZoneOptions = useMemo(() => allTimeZones(), []);
+
+  // Results view must never present a refusal as a result (no green
+  // "no obligations" state): log it once per occurrence and render nothing.
+  useEffect(() => {
+    if (submitted && engineRefusal) {
+      console.error("Respond: engine refused incomplete facts on the results view", engineRefusal);
+    }
+  }, [submitted, engineRefusal && engineRefusal.missing.join(",")]);
 
   // ── Q1 ⇄ data-element cross-check ──
   const selectedTags = new Set();
@@ -1488,6 +1549,10 @@ export default function BreachClock() {
         computeDeadlines(factsFromPayload(buildPayload()));
       const facts = {
         awarenessDate,
+        // Display zone + whether the RECORD holds it (legacy caveat on the
+        // memo's Analysis Inputs when it does not).
+        awarenessTz: displayTz,
+        awarenessTzRecorded: !legacyAwarenessZone,
         jurisdictions,
         residentCounts,
         // Drives the Analysis Inputs "resident count not established" lines;
@@ -1508,12 +1573,11 @@ export default function BreachClock() {
       // each obligation with a recorded notification, plus the log entries the
       // user included (filtering is silent — no counts, no gaps). Null when
       // there is nothing to show, so the memo omits the section entirely.
-      const memoDateFmt = { month: "short", day: "numeric", year: "numeric" };
       const notifRows = deadlines
         .filter((d) => notifications[notifKey(d)])
         .map((d) => ({
           authority: d.authority,
-          dueText: d.deadline ? d.deadline.toLocaleDateString("en-US", memoDateFmt) : "—",
+          dueText: d.deadline ? fmtDueDate(d.deadline) : "—",
           notifiedText: fmtDateOnly(notifications[notifKey(d)].notified_on),
         }));
       const memoLogEntries = [...incidentLog]
@@ -1531,7 +1595,7 @@ export default function BreachClock() {
       const blob = new Blob([pdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      const dateForFilename = (awarenessDate || new Date()).toISOString().slice(0, 10);
+      const dateForFilename = toDateTimeLocalInZone(awarenessDate || new Date(), displayTz).slice(0, 10);
       a.href = url;
       a.download = quickMode
         ? `breach-notification-analysis-${dateForFilename}.pdf`
@@ -1549,7 +1613,7 @@ export default function BreachClock() {
 
   const handleSubmit = async () => {
     setAttemptedSubmit(true);
-    if (!canCompute) {
+    if (!canSubmit) {
       // A collapsed required field must never be a dead-end error: expand the
       // sections that hold a missing required input and scroll to the first
       // offending one (awareness lives in Discovery; jurisdiction + data type in
@@ -2164,14 +2228,45 @@ export default function BreachClock() {
   const renderAwarenessField = () => (
     <div style={{ marginBottom: "24px" }}>
       {labelRow("Date & time of awareness", "To the best of your knowledge, when did the first person in your organization to realize an incident may have occurred become aware of it?")}
-      <input
-        type="datetime-local"
-        className="form-input"
-        value={awareness}
-        onChange={(e) => setAwareness(e.target.value)}
-        max={new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
-        style={{ maxWidth: "340px" }}
-      />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "12px 16px", alignItems: "flex-start" }}>
+        <input
+          type="datetime-local"
+          className="form-input"
+          aria-label="Date and time of awareness"
+          value={awareness}
+          onChange={(e) => setAwareness(e.target.value)}
+          max={toDateTimeLocalInZone(now, displayTz)}
+          style={{ maxWidth: "340px" }}
+        />
+        {/* Declared zone — the user states the zone the time above is written
+            in (JDC 2026-08-22). Prefilled with the device zone as a visible,
+            editable suggestion; common US zones first, full IANA list below.
+            Required for Submit whenever awareness is set. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <select
+            className="form-select"
+            aria-label="Timezone of awareness"
+            value={awarenessTz}
+            onChange={(e) => setAwarenessTz(e.target.value)}
+            style={{ maxWidth: "340px" }}
+          >
+            {!isValidTimeZone(awarenessTz) && <option value="">Select timezone</option>}
+            <optgroup label="Common US zones">
+              {COMMON_US_ZONES.map((z) => (
+                <option key={z.id} value={z.id}>{z.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="All zones">
+              {timeZoneOptions.map((id) => (
+                <option key={id} value={id}>{id}</option>
+              ))}
+            </optgroup>
+          </select>
+          <span style={{ fontSize: "12px", color: "#9FAEC2" }}>
+            Timezone the date and time above is stated in{awarenessTz === deviceTimeZone() ? " (suggested from this device)" : ""}.
+          </span>
+        </div>
+      </div>
       {isNarrow && <div style={{ marginTop: "14px" }}>{renderNote("awareness")}</div>}
     </div>
   );
@@ -2659,6 +2754,11 @@ export default function BreachClock() {
 
   // ── Deadline obligations (the analysis; shown only on the review) ──
   const renderObligations = () => {
+    // Structured refusal (JDC 2026-08-22): incomplete facts render NOTHING
+    // here — never a zero-state banner (a refusal is not "no obligations").
+    // The refusal is logged by the effect above; the submit gate makes this
+    // unreachable in practice.
+    if (engineRefusal) return null;
     // pending = EU/UK obligations awaiting a risk assessment. While present, the
     // consolidated pending card speaks and BOTH zero-state banners are silenced.
     const hasPending = pending.length > 0;
@@ -2802,7 +2902,7 @@ export default function BreachClock() {
                   </div>
                   {d.deadline && (
                     <div style={{ fontSize: "11.5px", color: "#9FAEC2", marginTop: "5px" }}>
-                      Due {d.deadline.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      Due {fmtDueDate(d.deadline)}
                     </div>
                   )}
                 </>
@@ -2821,7 +2921,7 @@ export default function BreachClock() {
                        placement, regular weight, Mist. The inline color overrides
                        the .deadline-card.missed .mono Bone rule. */
                     <div className="mono" style={{ fontSize: "26px", fontWeight: 400, letterSpacing: "-0.02em", color: "#9FAEC2" }}>
-                      Due {d.deadline.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                      Due {fmtDueDate(d.deadline)}
                     </div>
                   ) : (
                     <>
@@ -2836,7 +2936,7 @@ export default function BreachClock() {
                           overdue card — the inline color overrides the .missed Bone
                           rule, same pattern as the countdown above. */}
                       <div className="mono" style={{ fontSize: "13px", fontWeight: 500, color: "#C76E3A", marginTop: "6px" }}>
-                        Due {d.deadline.toLocaleString()}
+                        Due {fmtDueDateTime(d.deadline)}
                       </div>
                     </>
                   )}
@@ -3023,7 +3123,7 @@ export default function BreachClock() {
                   )}
                   {isClosed ? (
                     <div className="mono" style={{ fontSize: "26px", fontWeight: 400, letterSpacing: "-0.02em", color: "#9FAEC2" }}>
-                      If required, due {due.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                      If required, due {fmtDueDate(due)}
                     </div>
                   ) : (
                     <>
@@ -3031,7 +3131,7 @@ export default function BreachClock() {
                         {formatDuration(timeRemaining)}
                       </div>
                       <div className="mono" style={{ fontSize: "13px", fontWeight: 500, color: qualifierColor, marginTop: "6px" }}>
-                        If required, due {due.toLocaleString()}
+                        If required, due {fmtDueDateTime(due)}
                       </div>
                     </>
                   )}
@@ -3444,7 +3544,7 @@ export default function BreachClock() {
     // header style), the next relevant date (firm first, else the qualified
     // contingent form), and count chips in the app's chip anatomy (mono caps,
     // 6px radius, solid token fills — the incidents-list StatusChip idiom).
-    const fmtDateShort = (d) => d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+    const fmtDateShort = (d) => fmtDueDate(d);
     const minDateOf = (arr, get) => arr.map(get).sort((a, b) => a - b)[0];
     const blockNextDateLine = (block) => {
       const isClosed = status === "closed";
@@ -4194,7 +4294,7 @@ export default function BreachClock() {
     const { rows, suppressedCount, reviewCount, eligibleBlockCount } = deadlineQueue;
     if (eligibleBlockCount < QUEUE_MIN_BLOCKS || rows.length === 0) return null;
     const isClosed = status === "closed";
-    const fmtQueueDate = (d) => d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+    const fmtQueueDate = (d) => fmtDueDate(d);
     const thStyle = { textAlign: "left", padding: "10px 16px", borderBottom: "1px solid rgba(27,42,63,0.18)", fontWeight: 500 };
     const tdStyle = { padding: "10px 16px", borderTop: "1px solid rgba(27,42,63,0.08)", verticalAlign: "top" };
     const dateCell = (row) => {
@@ -4401,7 +4501,9 @@ export default function BreachClock() {
         <div className="section-mark" style={{ marginBottom: "14px" }}>Analysis inputs</div>
         <div style={{ border: "1px solid rgba(27,42,63,0.18)", background: "#fff", padding: "24px 28px", marginBottom: "36px", borderRadius: "12px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "minmax(120px, 180px) 1fr", gap: "16px 28px" }}>
-            {recapRow("Awareness", awarenessDate ? awarenessDate.toLocaleString() : "—")}
+            {recapRow("Awareness", awarenessDate ? fmtDueDateTime(awarenessDate) : "—")}
+            {/* Legacy caveat (ruling C) — verbatim, same string as the memo. */}
+            {awarenessDate && legacyAwarenessZone && recapRow("Timezone", AWARENESS_TZ_CAVEAT)}
             {recapRow(
               "Jurisdictions",
               JURISDICTIONS.filter((j) => jurisdictions[j.id]).map((j) => {

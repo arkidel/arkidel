@@ -32,11 +32,13 @@ respect their expertise.
 
 This project has two distinct layers, and they are not treated the same way.
 
-**Protected files — explicit sign-off required.** Three files may not be edited
+**Protected files — explicit sign-off required.** Four files may not be edited
 without surfacing the change and getting explicit confirmation first:
-`src/breach-clock/data.js`, `src/breach-clock/engine.js`, and
-`docs/intake-forms.md`. Every other file in the repo is ordinary engineering —
-edit it as normal. The per-file notes below give the specific process for each.
+`src/breach-clock/data.js`, `src/breach-clock/engine.js`,
+`src/breach-clock/facts.js` (protected as of 2026-08-22 — it decides the
+instant the engine receives), and `docs/intake-forms.md`. Every other file in
+the repo is ordinary engineering — edit it as normal. The per-file notes below
+give the specific process for each.
 
 ### `src/breach-clock/data.js` — substantive legal layer (PROTECTED)
 
@@ -55,6 +57,16 @@ would a legal document, not application code. Commits to `data.js` should
 have descriptive messages that reference the specific rule changed and the
 primary source (e.g., "Update CA AG threshold to >500 per § 1798.82(f)
 post-SB-446 verification") rather than generic messages.
+
+**`RULESET_VERSION` (serverless bundle, JDC 2026-08-22).** `data.js` exports
+`RULESET_VERSION`, a date-based string (`"2026-08-22"` at introduction). It
+is bumped on **every** substance commit to this file — a `data.js` substance
+diff without a `RULESET_VERSION` bump fails review. The engine carries it on
+every computed result as `ruleset_version` (refusals included) and the memo
+prints it in the generation footer ("Generated … · Ruleset 2026-08-22 ·
+arkidel.com"), so any future API response identifies the rules it was
+computed under. The `JURISDICTIONS` and `SENSITIVITY_OPTIONS` exports are
+**deep-frozen** at module load; a runtime write throws.
 
 ### Citation standards (house rules, locked 2026-08-09)
 
@@ -106,12 +118,35 @@ forbidden.
 ### `src/breach-clock/engine.js` — rules engine
 
 Pure JavaScript, no React. Contains `computeDeadlines(facts)`, `isHighRisk`,
-`runTests`, and 120 test cases as of the unknown-count pass (111 as of the
-harm-gate pass, 96 as of the category-conditioned pass, 60 as of the
-risk-assessment addition; every EU/UK case carries an explicit `riskLevel`).
-After any engine change, the test harness must pass — check the in-app Tests
-view (footer link in the rendered component) or run programmatically, plus
-`node scripts/adversarial-engine-tests.mjs` (83 cases).
+`runTests`, and 121 test cases as of the serverless bundle (120 as of the
+unknown-count pass, 111 as of the harm-gate pass, 96 as of the
+category-conditioned pass, 60 as of the risk-assessment addition; every EU/UK
+case carries an explicit `riskLevel`). After any engine change, the test
+harness must pass — check the in-app Tests view (footer link in the rendered
+component) or run programmatically, plus
+`node scripts/adversarial-engine-tests.mjs` (91 cases).
+
+**The engine is zone-free and refuses incomplete facts (serverless bundle,
+JDC 2026-08-22) — durable decisions.** `computeDeadlines` receives
+`awarenessDate` as one epoch instant, already resolved at the facts boundary
+(`facts.js`, below) from the payload's `awareness` string and its declared
+`awarenessTz`; the engine does **no** timezone math, ever — deadline
+arithmetic stays millisecond offsets from that instant. Given incomplete
+facts — `awarenessDate` not a valid `Date`, or no selected *modeled*
+jurisdiction — it returns the **structured refusal**
+`{ error: "incomplete_facts", missing: ["awarenessDate" | "jurisdictions"],
+ruleset_version }` and **never** an empty obligation set: an empty result only
+ever means "evaluated, nothing applies", and a malformed facts object can
+never produce an empty-but-valid result (pinned by the `L. Refusal`
+adversarial group). The form's completeness gate keeps the refusal off the
+UI; the results page (`renderObligations` returns null and the component
+logs), the memo core (throws rather than render), and the incidents list
+(em-dash) all handle the shape defensively — none may render a green "no
+obligations" state from it. The engine's number formatting (`threshold` /
+`residentCount` phrases) is locale-pinned to `"en-US"`; it formats no dates.
+Pass-2 dependent-clock association uses a side table (`internals` Map keyed
+by entry identity) — output entries carry no `_jurId` / `_deadline*` fields,
+pending entries included.
 
 The engine is the correctness instrument for the substantive layer. If a
 test fails after a `data.js` edit, the substantive change is wrong, not the
@@ -120,8 +155,9 @@ test.
 **Guard convention (JDC, 2026-08-02): enumerate every suite by name.** Any
 pre-push, gate, or "suites green" claim runs EVERY suite the repository has,
 listed by name with each count — today: (1) the engine in-file harness
-(`runTests`), (2) `scripts/adversarial-engine-tests.mjs`, (3) the vitest
-suite (`npm test`), (4) `scripts/render-gate-memo.mjs`. Never "both suites"
+(`runTests`, 121), (2) `scripts/adversarial-engine-tests.mjs` (91), (3) the
+vitest suite (`npm test`, 13 files / 107 tests), (4)
+`scripts/render-gate-memo.mjs` (8 fixtures). Never "both suites"
 or "the tests" — an unenumerated guard once let the vitest suite sit red for
 nine days. When a new suite is added, add it to this enumeration.
 
@@ -704,16 +740,58 @@ information, (2) how & when discovered, (3) when the incident occurred,
 
 ### `src/breach-clock/facts.js` — shared facts mapping and completeness gate
 
-NOT a protected file — but changes to it affect what the engine receives, so
-treat it with corresponding care. It is the single source for (a) parsing the
-awareness datetime-local string (`parseAwareness`), (b) the completeness gate
-(`computableGate` — awareness parsed and non-future, ≥1 jurisdiction, ≥1 Q1
-type → `canCompute`; this IS the editor's submit gate), and (c) the
-payload→engine-facts mapping (`factsFromPayload`, over the exact shape
-`buildPayload` writes). Both the editor (`BreachClock.jsx`) and the Respond
-home list's Next-deadline column consume these — do not reintroduce local
-copies of any of the three; that divergence is what this file exists to
-prevent. Pure functions, no React, no engine imports.
+Protected as of the serverless bundle (JDC 2026-08-22): changes to it decide
+what instant the engine receives, so it takes the same surface-and-confirm
+process as `engine.js`. It is the single source for (a) resolving the
+awareness datetime-local string **and its declared zone** to an instant
+(`resolveAwareness`; `parseAwareness` survives as the legacy viewer-zone
+parse), (b) the completeness gate (`computableGate` — awareness resolved and
+non-future, ≥1 jurisdiction, ≥1 Q1 type → `canCompute`; plus
+`canSubmit` = `canCompute` AND a declared zone whenever awareness is set —
+`canSubmit` IS the editor's Submit gate, `canCompute` drives the silent
+rehydrate auto-compute and the list column), and (c) the payload→engine-facts
+mapping (`factsFromPayload`, over the exact shape `buildPayload` writes). Both
+the editor (`BreachClock.jsx`) and the Respond home list's Next-deadline
+column consume these — do not reintroduce local copies of any of the three;
+that divergence is what this file exists to prevent. Pure functions, no
+React, no engine imports (it imports the zone primitives from `timezone.js`).
+
+**Awareness semantics (serverless bundle, JDC 2026-08-22) — durable
+decisions.** The payload carries `awareness` (the datetime-local string) and
+its sibling `awarenessTz` (an IANA id, e.g. `"America/Chicago"`); both are
+stored, neither is derived at read time. The **user specifies the zone** —
+the form's selector (adjacent to the awareness input; common US zones grouped
+first, full IANA list below) prefills the reading device's zone only as a
+visible, editable suggestion — and awareness is **never interpreted from the
+reading device**. The pair resolves to one epoch instant **once, at this
+boundary**; the engine is zone-free. Resolution lives in
+`src/breach-clock/timezone.js` (`zonedWallClockToInstant`: the Intl
+`formatToParts` round-trip, no runtime dependency, deterministic across
+hosts). **DST rule — earliest instant wins, both directions:** a fall-back
+ambiguous wall time resolves to its first occurrence (daylight offset; e.g.
+01:30 on 2026-11-01 in Chicago → 06:30Z, not 07:30Z); a spring-forward
+nonexistent wall time resolves to the earlier of the two offset candidates
+(02:30 on 2026-03-08 in Chicago → 07:30Z, i.e. 01:30 CST, not 08:30Z). Why:
+every deadline is awareness + N hours, so an earlier awareness can only make a
+computed deadline earlier — the conservative direction, consistent with the
+engine's awareness-anchor assumption. Pinned by `timezone.test.js` and
+`facts.test.js`. **Display rule (ruling B):** every rendered deadline time —
+screen cards, the deadline queue, contingent qualifiers, the collapsed-block
+date line, the Notification Record due text, the memo — shows in the
+**incident's declared zone with a zone label** ("Due 9/30/2026, 10:00 AM CT"
+on screen; "Due September 30, 2026 at 10:00 AM CT" in the memo), through the
+`timezone.js` formatters (`formatDateTimeInZone`, `formatDateInZone`,
+`formatLongDateTimeInZone`; the label is the en-US generic short form where
+compact — CT/ET/PT/MST/HST/AKT — else the offset form, e.g. GMT+1, with UTC
+pinned). No viewer-zone times anywhere in incident output. **Legacy (ruling
+C):** a payload without a usable `awarenessTz` remains readable and is
+interpreted in the viewer's zone exactly as before; both surfaces render the
+caveat `AWARENESS_TZ_CAVEAT` ("Awareness timezone not recorded — times shown
+in the viewing device's timezone.") in Analysis Inputs, keyed off the
+**saved** payload (`lastSavedPayloadRef`) — the selector's device-zone
+suggestion never clears it; a save or resubmit writes the zone and does. No
+backfill, no guessed zones. `awarenessTz` is part of the facts signature that
+drives the staleness banner.
 
 ### Respond routing and information architecture (shipped 2026-07-19)
 
