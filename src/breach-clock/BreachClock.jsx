@@ -48,7 +48,7 @@ import {
 } from "./results-grouping.js";
 import { computableGate, factsFromPayload } from "./facts.js";
 import { generateMemoPdf } from "./memo-pdf.js";
-import { createIncident, updateIncident, updateIncidentStatus, updateIncidentNotifications, updateIncidentLog, getIncident } from "../data/incidents.js";
+import { createIncident, updateIncident, updateIncidentStatus, updateIncidentNotifications, updateIncidentLog, updateIncidentViewState, getIncident } from "../data/incidents.js";
 import { useOrg } from "../org/OrgProvider.jsx";
 import ArkidelCaret from "../components/ArkidelCaret.jsx";
 import usePageTitle from "../usePageTitle.js";
@@ -57,6 +57,15 @@ import { useTopBarHeader } from "../components/TopBarContext.jsx";
 // Engine inputs. Grouped so quick mode (show only these) and the cross-check
 // can reference the operative set without re-listing it inline.
 const OPERATIVE_KEYS = ["awareness", "jurisdictions", "residentCounts", "sensitivity", "encryption"];
+
+// incidents.view_state vocabulary (migration 20260822120000_add_view_state).
+// Persisted blockOrder is "az" | "urgency"; the component's in-memory value
+// is "alpha" | "urgency" (what orderBlocks in results-grouping.js takes). The
+// two maps are the only translation point. Anything absent or unrecognized
+// reads as the Urgency default — an empty view_state IS that default.
+const BLOCK_ORDER_TO_VIEW_STATE = { alpha: "az", urgency: "urgency" };
+const blockOrderFromViewState = (viewState) =>
+  viewState && typeof viewState === "object" && viewState.blockOrder === "az" ? "alpha" : "urgency";
 
 // Collapse the two-column layout below this width (Tailwind `md` = 768px, the
 // project's marketing-page mobile breakpoint).
@@ -531,13 +540,17 @@ export default function BreachClock() {
   // ── Results-at-scale view state (results page; presentation only) ──
   // Block order across jurisdiction blocks: "urgency" (default — the shared
   // compareBlocksByUrgency order both surfaces lead with, JDC amendment
-  // 2026-08-21) | "alpha" (the screen's secondary view). SESSION-LOCAL ONLY
-  // (deliberate): the incidents table has no column that can carry explicit
-  // view state — payload must stay byte-identical to the facts (never view
-  // state), and notifications / incident_log are legally meaningful records
-  // with their own established shapes. Persisting the choice would need a
-  // schema change, which this pass does not make; every load therefore
-  // starts at Urgency. Neither value ever enters buildPayload.
+  // 2026-08-21) | "alpha" (the screen's secondary view). PERSISTED PER
+  // INCIDENT (2026-08-22; the results-at-scale rider, now closed): the choice
+  // lives in the incidents.view_state jsonb column (migration
+  // 20260822120000_add_view_state) as { blockOrder: "az" | "urgency" } —
+  // BESIDE the facts payload, never inside it. payload stays byte-identical
+  // to the facts, and notifications / incident_log keep their legally
+  // meaningful shapes; view_state is the one column that carries presentation
+  // state. An empty view_state ('{}', the column default) means the Urgency
+  // default — so a fresh incident never needs a write, and the toggle writes
+  // on change only (persistBlockOrder), never on load. Neither value ever
+  // enters buildPayload.
   const [blockOrder, setBlockOrder] = useState("urgency");
   // Per-block expand/collapse OVERRIDES ({ [jurId]: bool }) on top of the
   // computed defaults (see blockExpanded below). Cleared on every entry into
@@ -781,7 +794,9 @@ export default function BreachClock() {
         setNotifEditing(null);
         setNotifDraft("");
         setLogDraft(EMPTY_LOG_DRAFT);
-        setBlockOrder("urgency");
+        // view_state.blockOrder applies when present; an empty or unrecognized
+        // value falls to the Urgency default. Read only — never written here.
+        setBlockOrder(blockOrderFromViewState(incident.view_state));
         setExpandedBlocks({});
         setSavedAt(null);
         setAutoComputePending(true);
@@ -901,6 +916,26 @@ export default function BreachClock() {
       console.error("Incident log update failed:", err);
       setIncidentLog(prev);
       setSaveError(err?.message ? `Incident log update failed: ${err.message}` : "Incident log update failed. Try again.");
+    }
+  };
+  // Block-order toggle write-through: the same optimistic / rollback /
+  // saveError pattern as the incident log, writing view_state ALONE
+  // ({ blockOrder: "az" | "urgency" } — the persisted vocabulary; the
+  // in-memory value stays "alpha" | "urgency" for orderBlocks). Called on
+  // change only. Results render only for persisted incidents (compute
+  // persists first), so the no-row branch is a guard, not a live path.
+  const persistBlockOrder = async (next) => {
+    const prev = blockOrder;
+    if (next === prev) return;
+    setBlockOrder(next);
+    if (!routeIncidentId) return;
+    try {
+      await updateIncidentViewState(routeIncidentId, { blockOrder: BLOCK_ORDER_TO_VIEW_STATE[next] });
+      setSaveError("");
+    } catch (err) {
+      console.error("View state update failed:", err);
+      setBlockOrder(prev);
+      setSaveError(err?.message ? `Jurisdiction order failed to save: ${err.message}` : "Jurisdiction order failed to save. Try again.");
     }
   };
 
@@ -4271,9 +4306,10 @@ export default function BreachClock() {
   // ── Block-order toggle (A–Z | Urgency; Urgency is the default), rendered
   //    on the results view: in the right actions rail above Download memo on
   //    wide layouts, and with the restored top controls on narrow ones.
-  //    Session-local only — see the blockOrder state note: the saved payload
-  //    never carries view state. The memo always prints the shared urgency
-  //    order; selecting A–Z diverges the screen only.
+  //    Persisted per incident in incidents.view_state — see the blockOrder
+  //    state note: the saved payload never carries view state. The memo
+  //    always prints the shared urgency order; selecting A–Z diverges the
+  //    screen only.
   const renderOrderToggle = () => (
     <div>
       <div className="section-mark" style={{ marginBottom: "8px" }}>Jurisdiction order</div>
@@ -4286,7 +4322,7 @@ export default function BreachClock() {
               type="button"
               role="radio"
               aria-checked={selected}
-              onClick={() => setBlockOrder(o.value)}
+              onClick={() => persistBlockOrder(o.value)}
               style={{
                 flex: 1, padding: "9px 0", border: "none", cursor: "pointer",
                 fontFamily: "'Inter', sans-serif", fontSize: "13px", fontWeight: 500, letterSpacing: "0.01em",

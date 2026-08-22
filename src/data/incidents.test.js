@@ -13,6 +13,7 @@ import {
   createIncident,
   updateIncident,
   updateIncidentStatus,
+  updateIncidentViewState,
   getIncident,
   listIncidents,
   deleteIncident,
@@ -150,6 +151,30 @@ describe("updateIncidentStatus", () => {
     supabaseMock.from.mockReturnValue(query);
 
     await expect(updateIncidentStatus("inc-1", "active")).rejects.toMatchObject({ message: "boom" });
+  });
+});
+
+describe("updateIncidentViewState", () => {
+  it("updates view_state alone by id and returns the row", async () => {
+    const updated = { id: "inc-1", view_state: { blockOrder: "az" } };
+    const query = makeQuery({ data: updated, error: null });
+    supabaseMock.from.mockReturnValue(query);
+
+    const result = await updateIncidentViewState("inc-1", { blockOrder: "az" });
+
+    expect(supabaseMock.from).toHaveBeenCalledWith("incidents");
+    // view_state-only write — payload, notifications, incident_log, title and
+    // status are never touched here (the column sits beside the payload).
+    expect(query.update).toHaveBeenCalledWith({ view_state: { blockOrder: "az" } });
+    expect(query.eq).toHaveBeenCalledWith("id", "inc-1");
+    expect(result).toEqual(updated);
+  });
+
+  it("throws when the update errors", async () => {
+    const query = makeQuery({ data: null, error: { message: "boom" } });
+    supabaseMock.from.mockReturnValue(query);
+
+    await expect(updateIncidentViewState("inc-1", { blockOrder: "urgency" })).rejects.toMatchObject({ message: "boom" });
   });
 });
 

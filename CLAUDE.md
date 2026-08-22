@@ -665,12 +665,36 @@ information, (2) how & when discovered, (3) when the incident occurred,
     only way the two surfaces diverge. The comparators read only deadline
     timestamps and names — NEVER `now` — so the order can change only on
     toggle or on a fresh compute, never on a countdown tick. The toggle is
-    **session-local view state, never persisted**: the incidents table has no
-    column that can carry explicit view state beside the payload (payload is
-    facts only and must stay byte-identical whether the toggle was ever
-    touched — pinned by test; notifications / incident_log are legally
-    meaningful records), and persisting would need a schema change this pass
-    deliberately did not make. Every load starts at Urgency.
+    **persisted per incident in `incidents.view_state`** (jsonb, migration
+    `supabase/migrations/20260822120000_add_view_state.sql`, applied
+    2026-08-22 — this closes the results-at-scale rider that had left the
+    choice session-local pending a schema change). `view_state` sits
+    **beside the payload, never in it**: payload is facts only and must stay
+    byte-identical whether the toggle was ever touched (pinned by test —
+    the assertion now also checks that `view_state` changed while payload
+    did not); notifications / incident_log are legally meaningful records
+    and keep their own shapes. Shape: `{ blockOrder: "az" | "urgency" }`
+    (the persisted vocabulary; the component's in-memory value stays
+    `"alpha" | "urgency"` for `orderBlocks`, translated only at the
+    `BLOCK_ORDER_TO_VIEW_STATE` / `blockOrderFromViewState` boundary in
+    `BreachClock.jsx`). **An empty object means the default** — the column's
+    `'{}'` default IS the Urgency semantics, so `createIncident` never
+    threads `view_state` through and no backfill was run. Writes go through
+    `updateIncidentViewState` (`src/data/incidents.js`) on the
+    incident-log write-through pattern — optimistic, rolled back on failure,
+    surfaced in the existing `saveError` slot — **on change only, never on
+    load**; load applies a present `blockOrder` and falls to Urgency on an
+    empty or unrecognized value. Per-incident isolation, load-apply,
+    empty-default, and write-on-toggle are pinned in
+    `BreachClock.resultsScale.test.jsx`. **View-only writes do not bump
+    `updated_at`** (JDC ruling 2026-08-22): the same migration replaces the
+    `incidents_set_updated_at` trigger with a `WHEN` clause that compares
+    the row minus `view_state` (and `updated_at`), so a `view_state`-only
+    UPDATE leaves `updated_at` untouched while any other column change —
+    including every future column, substantive by default — still bumps
+    it. Trigger-enforced, not client-enforced; the vitest suites mock the
+    Supabase client, so this is verified by SQL against the linked project
+    (see the commit), not by a client-side test.
   - **One-interval rule.** Every countdown on the results page — card
     countdowns and queue status cells alike — reads the single shared `now`
     state driven by the component's one `setInterval`. Never add a per-card

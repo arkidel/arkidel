@@ -16,10 +16,13 @@
 //      shared urgency comparator — parity is pinned in
 //      results-grouping.test.js); firm blocks by earliest firm date with
 //      ties alphabetical; A–Z is the screen's secondary view. The choice is
-//      view state: the saved facts payload is byte-identical whether or not
-//      the toggle was ever touched (there is nowhere to persist it — see the
-//      blockOrder state note in BreachClock.jsx — so it is session-local by
-//      design).
+//      view state, persisted PER INCIDENT in incidents.view_state
+//      ({ blockOrder: "az" | "urgency" }; migration 20260822120000) — beside
+//      the facts payload, never in it: the payload is byte-identical whether
+//      or not the toggle was ever touched while view_state changes. Toggle
+//      → one view_state write (on change only, never on load); load applies
+//      a present view_state.blockOrder and falls to Urgency on an empty one;
+//      incidents are isolated from one another.
 //
 // Fixtures use saved ACTIVE incidents whose answers pass the completeness
 // gate, so the editor auto-computes to results on rehydrate. Awareness is
@@ -32,7 +35,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 const { incidents, org } = vi.hoisted(() => ({
-  incidents: { getIncident: null, updateIncident: null, createIncident: null },
+  incidents: { getIncident: null, updateIncident: null, createIncident: null, updateIncidentViewState: null },
   org: { activeOrg: { id: "org-1", name: "Arkidel, LLC" } },
 }));
 
@@ -43,6 +46,7 @@ vi.mock("../data/incidents.js", () => ({
   updateIncidentStatus: vi.fn().mockResolvedValue(undefined),
   updateIncidentNotifications: vi.fn().mockResolvedValue(undefined),
   updateIncidentLog: vi.fn().mockResolvedValue(undefined),
+  updateIncidentViewState: (...args) => incidents.updateIncidentViewState(...args),
 }));
 vi.mock("../org/OrgProvider.jsx", () => ({ useOrg: () => org }));
 vi.mock("../components/TopBarContext.jsx", () => ({ useTopBarHeader: () => {} }));
@@ -71,22 +75,23 @@ const payloadFor = ({ jurs, awareness, counts, unknown = {}, harmAssessment = ""
   record: { incidentTitle: "Results-scale fixture" },
 });
 
-const renderEditor = () =>
+const renderEditor = (id = "inc-1") =>
   render(
-    <MemoryRouter initialEntries={["/breach-clock/inc-1"]}>
+    <MemoryRouter initialEntries={[`/breach-clock/${id}`]}>
       <Routes>
         <Route path="/breach-clock/:id" element={<BreachClock />} />
       </Routes>
     </MemoryRouter>
   );
 
-const loadIncident = (payload, status = "active") => {
+const loadIncident = (payload, status = "active", viewState = {}) => {
   incidents.getIncident = vi.fn().mockResolvedValue({
     id: "inc-1",
     status,
     payload,
     notifications: {},
     incident_log: [],
+    view_state: viewState,
   });
 };
 
@@ -109,6 +114,7 @@ beforeEach(() => {
   window.scrollTo = vi.fn();
   incidents.updateIncident = vi.fn().mockResolvedValue({ id: "inc-1" });
   incidents.createIncident = vi.fn().mockResolvedValue({ id: "inc-1" });
+  incidents.updateIncidentViewState = vi.fn().mockResolvedValue({ id: "inc-1" });
 });
 
 afterEach(() => {
@@ -251,7 +257,99 @@ describe("block-order toggle", () => {
     expect(blockHeaderNames()).toEqual(["Colorado", "New York", "Texas", "Connecticut"]);
   });
 
-  it("keeps the saved facts payload byte-identical whether or not the toggle was touched", async () => {
+  it("writes { blockOrder } to view_state on toggle — on change only, never on load", async () => {
+    const user = userEvent.setup();
+    loadIncident(payloadFor({ jurs: ["co", "tx", "ct", "ny"], awareness: awarenessAt(-HOUR) }));
+    renderEditor();
+    await waitFor(() => expect(blockHeaderNames().length).toBe(4));
+    // Load applied the default without a write.
+    expect(incidents.updateIncidentViewState).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("radio", { name: "A–Z" }));
+    await waitFor(() => expect(incidents.updateIncidentViewState).toHaveBeenCalledTimes(1));
+    expect(incidents.updateIncidentViewState).toHaveBeenLastCalledWith("inc-1", { blockOrder: "az" });
+
+    // Re-selecting the already-selected value is not a change: no write.
+    await user.click(screen.getByRole("radio", { name: "A–Z" }));
+    expect(incidents.updateIncidentViewState).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("radio", { name: "Urgency" }));
+    await waitFor(() => expect(incidents.updateIncidentViewState).toHaveBeenCalledTimes(2));
+    expect(incidents.updateIncidentViewState).toHaveBeenLastCalledWith("inc-1", { blockOrder: "urgency" });
+
+    // view_state is written alone — the facts payload path never ran.
+    expect(incidents.updateIncident).not.toHaveBeenCalled();
+  });
+
+  it("rolls the toggle back and surfaces the save error when the view_state write fails", async () => {
+    const user = userEvent.setup();
+    incidents.updateIncidentViewState = vi.fn().mockRejectedValue(new Error("network down"));
+    loadIncident(payloadFor({ jurs: ["co", "tx", "ct", "ny"], awareness: awarenessAt(-HOUR) }));
+    renderEditor();
+    await waitFor(() => expect(blockHeaderNames().length).toBe(4));
+
+    await user.click(screen.getByRole("radio", { name: "A–Z" }));
+    await waitFor(() => expect(screen.getByText(/Jurisdiction order failed to save: network down/)).toBeTruthy());
+    expect(screen.getByRole("radio", { name: "Urgency" }).getAttribute("aria-checked")).toBe("true");
+    expect(blockHeaderNames()).toEqual(["Colorado", "New York", "Texas", "Connecticut"]);
+  });
+
+  it("applies a present view_state.blockOrder on load", async () => {
+    loadIncident(payloadFor({ jurs: ["co", "tx", "ct", "ny"], awareness: awarenessAt(-HOUR) }), "active", { blockOrder: "az" });
+    renderEditor();
+    await waitFor(() => expect(blockHeaderNames().length).toBe(4));
+    expect(blockHeaderNames()).toEqual(["Colorado", "Connecticut", "New York", "Texas"]);
+    expect(screen.getByRole("radio", { name: "A–Z" }).getAttribute("aria-checked")).toBe("true");
+    expect(incidents.updateIncidentViewState).not.toHaveBeenCalled();
+  });
+
+  it("falls to the Urgency default on an empty view_state (the column default)", async () => {
+    loadIncident(payloadFor({ jurs: ["co", "tx", "ct", "ny"], awareness: awarenessAt(-HOUR) }), "active", {});
+    renderEditor();
+    await waitFor(() => expect(blockHeaderNames().length).toBe(4));
+    expect(blockHeaderNames()).toEqual(["Colorado", "New York", "Texas", "Connecticut"]);
+    expect(screen.getByRole("radio", { name: "Urgency" }).getAttribute("aria-checked")).toBe("true");
+    expect(incidents.updateIncidentViewState).not.toHaveBeenCalled();
+  });
+
+  it("isolates view state per incident: toggling one leaves the other on its own saved order", async () => {
+    const user = userEvent.setup();
+    const payload = payloadFor({ jurs: ["co", "tx", "ct", "ny"], awareness: awarenessAt(-HOUR) });
+    const rows = {
+      "inc-1": { id: "inc-1", status: "active", payload, notifications: {}, incident_log: [], view_state: {} },
+      "inc-2": { id: "inc-2", status: "active", payload, notifications: {}, incident_log: [], view_state: {} },
+    };
+    incidents.getIncident = vi.fn(async (id) => rows[id]);
+    // The mock persists like the real column would: view_state alone, by id.
+    incidents.updateIncidentViewState = vi.fn(async (id, viewState) => {
+      rows[id] = { ...rows[id], view_state: viewState };
+      return rows[id];
+    });
+
+    // Toggle inc-1 to A–Z.
+    const first = renderEditor("inc-1");
+    await waitFor(() => expect(blockHeaderNames().length).toBe(4));
+    await user.click(screen.getByRole("radio", { name: "A–Z" }));
+    await waitFor(() => expect(incidents.updateIncidentViewState).toHaveBeenCalledTimes(1));
+    expect(incidents.updateIncidentViewState).toHaveBeenLastCalledWith("inc-1", { blockOrder: "az" });
+    expect(rows["inc-2"].view_state).toEqual({});
+    first.unmount();
+
+    // inc-2 opens on the Urgency default, untouched.
+    const second = renderEditor("inc-2");
+    await waitFor(() => expect(blockHeaderNames().length).toBe(4));
+    expect(blockHeaderNames()).toEqual(["Colorado", "New York", "Texas", "Connecticut"]);
+    expect(screen.getByRole("radio", { name: "Urgency" }).getAttribute("aria-checked")).toBe("true");
+    second.unmount();
+
+    // inc-1 reopens on its persisted A–Z.
+    renderEditor("inc-1");
+    await waitFor(() => expect(blockHeaderNames().length).toBe(4));
+    expect(blockHeaderNames()).toEqual(["Colorado", "Connecticut", "New York", "Texas"]);
+    expect(incidents.updateIncidentViewState).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the saved facts payload byte-identical across a toggle round-trip while view_state changes", async () => {
     const user = userEvent.setup();
     loadIncident(payloadFor({ jurs: ["co", "tx", "ct", "ny"], awareness: awarenessAt(-HOUR) }));
     renderEditor();
@@ -285,5 +383,12 @@ describe("block-order toggle", () => {
       });
     expect(normalize(touched)).toBe(normalize(untouched));
     expect("blockOrder" in touched).toBe(false);
+    expect("view_state" in touched).toBe(false);
+    // …while the view state DID persist — in its own column, not the payload.
+    expect(incidents.updateIncidentViewState).toHaveBeenCalledTimes(1);
+    expect(incidents.updateIncidentViewState).toHaveBeenCalledWith("inc-1", { blockOrder: "az" });
+    for (const call of incidents.updateIncident.mock.calls) {
+      expect("view_state" in call[1]).toBe(false);
+    }
   });
 });

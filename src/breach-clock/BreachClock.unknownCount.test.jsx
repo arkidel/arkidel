@@ -35,6 +35,7 @@ vi.mock("../data/incidents.js", () => ({
   updateIncidentStatus: vi.fn().mockResolvedValue(undefined),
   updateIncidentNotifications: vi.fn().mockResolvedValue(undefined),
   updateIncidentLog: vi.fn().mockResolvedValue(undefined),
+  updateIncidentViewState: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../org/OrgProvider.jsx", () => ({ useOrg: () => org }));
 vi.mock("../components/TopBarContext.jsx", () => ({ useTopBarHeader: () => {} }));

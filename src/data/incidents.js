@@ -16,7 +16,7 @@ import { supabase } from "../lib/supabase.js";
 // the insert-returning, and the update-returning agree. payload is the full
 // saved form state; deadlines are never stored — only inputs.
 const INCIDENT_COLUMNS =
-  "id, org_id, title, status, payload, notifications, incident_log, schema_version, created_at, updated_at";
+  "id, org_id, title, status, payload, notifications, incident_log, view_state, schema_version, created_at, updated_at";
 
 // The list view reads the promoted columns PLUS payload: the Respond home
 // list computes each row's Next-deadline column client-side from the saved
@@ -104,6 +104,31 @@ export async function updateIncidentLog(id, incidentLog) {
   const { data, error } = await supabase
     .from("incidents")
     .update({ incident_log: incidentLog })
+    .eq("id", id)
+    .select(INCIDENT_COLUMNS)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Update an incident's view state alone (the `view_state` jsonb column —
+// migration 20260822120000_add_view_state; currently
+// { blockOrder: "az" | "urgency" }). Presentation state that lives BESIDE the
+// facts payload, never inside it: payload stays byte-identical to the facts,
+// and notifications / incident_log keep their legally meaningful shapes. Same
+// immediate-persist pattern as the three writers above — touches nothing else.
+// The column's '{}' default is the semantics on create (absent choice → the
+// Urgency default), so createIncident never threads it through. Unlike every
+// other writer here, this one does NOT bump updated_at: the
+// incidents_set_updated_at trigger (replaced in the same migration) fires
+// only when a column other than view_state changed — a view-only write is
+// not activity on the incident, so the Respond home list's Last-updated /
+// sort order is unaffected. Trigger-enforced; not testable through the
+// mocked client (verified by SQL against the linked project, 2026-08-22).
+export async function updateIncidentViewState(id, viewState) {
+  const { data, error } = await supabase
+    .from("incidents")
+    .update({ view_state: viewState })
     .eq("id", id)
     .select(INCIDENT_COLUMNS)
     .single();
