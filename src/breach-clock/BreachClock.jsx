@@ -124,6 +124,24 @@ const nowrapCitations = (text) => {
 // project's marketing-page mobile breakpoint).
 const NARROW_QUERY = "(max-width: 768px)";
 
+// Results-page stack breakpoint (JDC gate finding 2026-08-23): the results
+// view's two-column layout (main + actions rail) holds only at lg/1024 and
+// above; below it the rail stacks (queue first, Analysis Inputs after it).
+// Scoped to the RESULTS layout only — the form keeps NARROW_QUERY above, so
+// the entry experience is unchanged. Rationale: at ~780px two columns crush
+// the rail (the order toggle overlaps itself, buttons wrap, labels clip).
+const RESULTS_STACK_QUERY = "(max-width: 1023px)";
+
+// Below this rendered width of the deadline-queue container, the queue drops
+// its STATUS column intentionally (JDC gate finding 2026-08-23) instead of
+// letting the nowrap cells clip under the container's rounded overflow:hidden
+// — which is what happened at 1024px two-column, where the main column is
+// ~650px. Measured on the queue wrapper itself (ResizeObserver), not on the
+// viewport, because the same viewport width yields a wide queue when stacked
+// and a narrow one in two columns. The summary row's colSpan follows the
+// rendered column count.
+const QUEUE_STATUS_MIN_WIDTH = 720;
+
 // The left-gutter section index is a wide-viewport-only affordance: it lives in
 // the page's left margin (outside the 1180px content column), so it only renders
 // once the gutter is wide enough to hold it without crowding the content.
@@ -653,6 +671,38 @@ export default function BreachClock() {
   // (never by the silent rehydrate auto-compute or Back-to-results).
   const [expandedBlocks, setExpandedBlocks] = useState({});
   const [isNarrow, setIsNarrow] = useState(false);
+  // Results-only stack state (RESULTS_STACK_QUERY); see the constant.
+  const [isResultsStacked, setIsResultsStacked] = useState(false);
+  // Deadline-queue container width (ResizeObserver; null until measured).
+  const [queueWidth, setQueueWidth] = useState(null);
+  // The observer lives on whichever wrapper element is CURRENTLY mounted:
+  // a callback ref attaches it on mount and disconnects on unmount, so the
+  // observation follows the element identity (the wrapper remounts when the
+  // results view stacks/unstacks or the queue re-gates). Every callback —
+  // shrink or grow — re-reads the element's live width, so the column state
+  // follows the observed width in BOTH directions (band re-gate fix,
+  // 2026-08-23: an effect-held observer on a stale element made the drop
+  // one-way).
+  const queueObserverRef = useRef(null);
+  const queueWrapRef = useCallback((el) => {
+    if (queueObserverRef.current) {
+      queueObserverRef.current.disconnect();
+      queueObserverRef.current = null;
+    }
+    if (!el) return;
+    // A non-positive width means the element is not laid out (or the host
+    // cannot measure, e.g. jsdom): treat as unmeasured → full column set.
+    const measure = () => {
+      const w = el.getBoundingClientRect().width;
+      setQueueWidth(w > 0 ? w : null);
+    };
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(() => measure());
+      ro.observe(el);
+      queueObserverRef.current = ro;
+    }
+    measure();
+  }, []);
   const [isWide, setIsWide] = useState(false);
   const [activeSection, setActiveSection] = useState(FORM_SECTIONS[0].id);
   // Per-section collapse state. On load only General is expanded; every other
@@ -1115,6 +1165,18 @@ export default function BreachClock() {
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
   }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia(RESULTS_STACK_QUERY);
+    const on = () => setIsResultsStacked(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+
+  // The results view stacks when EITHER the form's narrow query or the
+  // results-specific lg query matches.
+  const reviewStacked = isNarrow || isResultsStacked;
 
   useEffect(() => {
     const mq = window.matchMedia(WIDE_QUERY);
@@ -4428,6 +4490,11 @@ export default function BreachClock() {
     if (eligibleBlockCount < QUEUE_MIN_BLOCKS || rows.length === 0) return null;
     const isClosed = status === "closed";
     const fmtQueueDate = (d) => fmtDueDate(d);
+    // Intentional responsive column drop (not a clip): STATUS renders only
+    // while the queue container is at least QUEUE_STATUS_MIN_WIDTH wide. The
+    // exact date column stays; the countdown lives on the cards regardless.
+    const showStatus = queueWidth === null || queueWidth >= QUEUE_STATUS_MIN_WIDTH;
+    const columnCount = showStatus ? 4 : 3;
     const thStyle = { textAlign: "left", padding: "10px 16px", borderBottom: "1px solid rgba(27,42,63,0.18)", fontWeight: 500 };
     const tdStyle = { padding: "10px 16px", borderTop: "1px solid rgba(27,42,63,0.08)", verticalAlign: "top" };
     const dateCell = (row) => {
@@ -4471,7 +4538,7 @@ export default function BreachClock() {
       );
     };
     return (
-      <div style={{ marginBottom: "36px" }}>
+      <div ref={queueWrapRef} style={{ marginBottom: "36px" }}>
         <div className="section-mark" style={{ marginBottom: "14px" }}>Deadline queue</div>
         <div style={{ border: "1px solid rgba(27,42,63,0.18)", background: "#fff", borderRadius: "12px", overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13.5px", lineHeight: 1.5 }}>
@@ -4480,7 +4547,7 @@ export default function BreachClock() {
                 <th className="section-mark" style={thStyle}>Jurisdiction</th>
                 <th className="section-mark" style={thStyle}>Authority</th>
                 <th className="section-mark" style={thStyle}>Date</th>
-                <th className="section-mark" style={thStyle}>Status</th>
+                {showStatus && <th className="section-mark" style={thStyle}>Status</th>}
               </tr>
             </thead>
             <tbody>
@@ -4511,7 +4578,7 @@ export default function BreachClock() {
                     </button>
                   </td>
                   <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{dateCell(row)}</td>
-                  <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{statusCell(row)}</td>
+                  {showStatus && <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{statusCell(row)}</td>}
                 </tr>
               ))}
               {/* No-fixed-deadline summary (JDC addendum 2026-08-23): the
@@ -4520,7 +4587,7 @@ export default function BreachClock() {
                   jump target, outside the row ordering above. */}
               {noClockCount > 0 && (
                 <tr data-queue-summary>
-                  <td colSpan={4} style={{ ...tdStyle, background: "#E8DDC4", color: "#2C2418" }}>
+                  <td colSpan={columnCount} style={{ ...tdStyle, background: "#E8DDC4", color: "#2C2418" }}>
                     {noClockSummaryLine(noClockCount)}
                   </td>
                 </tr>
@@ -4651,7 +4718,7 @@ export default function BreachClock() {
             below rises to the top of this column. Below the wide breakpoint
             there's no rail, so we restore them here as a row at the top of the
             content, with the same INCIDENT / title header above them. */}
-        {isNarrow && (
+        {reviewStacked && (
           <div style={{ marginBottom: "28px" }}>
             {renderIncidentHeader()}
             <div style={{ display: "flex", gap: "12px", marginTop: "16px", flexWrap: "wrap" }}>
@@ -4725,7 +4792,7 @@ export default function BreachClock() {
         {renderDeadlineQueue()}
         {/* Narrow: the sidebar stacks, and Analysis Inputs follows the queue
             rather than preceding it. */}
-        {isNarrow && <div style={{ marginBottom: "36px" }}>{renderAnalysisInputs()}</div>}
+        {reviewStacked && <div style={{ marginBottom: "36px" }}>{renderAnalysisInputs()}</div>}
 
         {/* Computed obligations. Past 3 selected jurisdictions the blocks
             collapse, so the header row gains Expand all / Collapse all in the
@@ -5077,7 +5144,10 @@ export default function BreachClock() {
             Nothing is pinned: the whole page scrolls as one. On desktop the
             rail carries the mode control then the titled counsel notes, all in
             normal document order. */}
-        {isNarrow ? (
+        {isNarrow || (submitted && isResultsStacked) ? (
+          /* Stacked: the form below md, the results view below lg (the
+             results-specific RESULTS_STACK_QUERY; the rail's controls are
+             restored inside renderReview). */
           <div>
             {!submitted && <div style={{ marginBottom: "32px" }}>{railControls()}</div>}
             {main}

@@ -196,6 +196,75 @@ describe("deadline queue", () => {
     );
   });
 
+  it("drops the STATUS column intentionally below the queue's min width and restores it when the queue grows back; the summary row's colSpan follows the rendered column count", async () => {
+    // Stub ResizeObserver and the wrapper's measured width. The component
+    // re-reads getBoundingClientRect on every callback, so the stub drives
+    // the width through that and fires the observer to simulate a resize.
+    let width = 600; // the ~650px main column at 1024px two-column, below QUEUE_STATUS_MIN_WIDTH
+    const observers = [];
+    class RO {
+      constructor(cb) { this.cb = cb; observers.push(this); }
+      observe(el) { this.el = el; }
+      disconnect() { this.disconnected = true; }
+    }
+    const prior = globalThis.ResizeObserver;
+    const priorRect = Element.prototype.getBoundingClientRect;
+    globalThis.ResizeObserver = RO;
+    Element.prototype.getBoundingClientRect = function () {
+      return { width, height: 0, top: 0, left: 0, right: width, bottom: 0, x: 0, y: 0 };
+    };
+    const fireResize = async () => {
+      const live = observers.filter((o) => !o.disconnected);
+      expect(live.length).toBe(1);
+      const { act } = await import("@testing-library/react");
+      act(() => live[0].cb([{ target: live[0].el }]));
+    };
+    try {
+      loadIncident(
+        payloadFor({
+          jurs: ["ca", "tx", "co"],
+          awareness: awarenessAt(-HOUR),
+          counts: { ca: "100000", tx: "100000", co: "" },
+          unknown: { co: true },
+        })
+      );
+      renderEditor();
+      await waitFor(() => expect(screen.getByText("Deadline queue")).toBeTruthy());
+      const table = screen.getByRole("table");
+      await waitFor(() => expect(within(table).queryByText("Status")).toBeNull());
+      const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent);
+      expect(headers).toEqual(["Jurisdiction", "Authority", "Date"]);
+      const rows = within(table).getAllByRole("row");
+      const summary = rows[rows.length - 1];
+      expect(summary.hasAttribute("data-queue-summary")).toBe(true);
+      expect(summary.cells[0].getAttribute("colspan")).toBe("3");
+      // Obligation rows render three cells too — no orphaned status cell.
+      expect(rows[1].cells.length).toBe(3);
+
+      // Grow back across the threshold: the column state must follow the
+      // observed width in BOTH directions (band re-gate fix, 2026-08-23).
+      width = 1000;
+      await fireResize();
+      await waitFor(() => expect(within(table).getByText("Status")).toBeTruthy());
+      expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+        "Jurisdiction", "Authority", "Date", "Status",
+      ]);
+      const rowsWide = within(table).getAllByRole("row");
+      expect(rowsWide[rowsWide.length - 1].cells[0].getAttribute("colspan")).toBe("4");
+      expect(rowsWide[1].cells.length).toBe(4);
+
+      // And shrink again — still two-way.
+      width = 600;
+      await fireResize();
+      await waitFor(() => expect(within(table).queryByText("Status")).toBeNull());
+      const rowsNarrow = within(table).getAllByRole("row");
+      expect(rowsNarrow[rowsNarrow.length - 1].cells[0].getAttribute("colspan")).toBe("3");
+    } finally {
+      globalThis.ResizeObserver = prior;
+      Element.prototype.getBoundingClientRect = priorRect;
+    }
+  });
+
   it("omits the summary row when every queued obligation is dated", async () => {
     // ca / ct / de on known counts: every computed obligation carries a
     // fixed clock (no CRA no-clock obligation in this set).

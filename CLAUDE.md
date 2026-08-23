@@ -156,7 +156,7 @@ test.
 pre-push, gate, or "suites green" claim runs EVERY suite the repository has,
 listed by name with each count — today: (1) the engine in-file harness
 (`runTests`, 121), (2) `scripts/adversarial-engine-tests.mjs` (91), (3) the
-vitest suite (`npm test`, 14 files / 130 tests), (4)
+vitest suite (`npm test`, 14 files / 131 tests), (4)
 `scripts/render-gate-memo.mjs` (8 fixtures). Never "both suites"
 or "the tests" — an unenumerated guard once let the vitest suite sit red for
 nine days. When a new suite is added, add it to this enumeration.
