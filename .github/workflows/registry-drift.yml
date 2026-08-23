@@ -1,0 +1,23 @@
+# Registry drift check (change monitoring stage 1, JDC rulings 2026-08-23).
+# registry.json is generated from src/breach-clock/data.js; a data.js change
+# committed without regenerating the registry fails here. Same guard
+# philosophy as the pre-push suite enumeration: the check is explicit and
+# named, never implied.
+name: registry-drift
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Regenerate registry.json and compare with the committed file
+        run: node scripts/registry/generate.mjs --check

@@ -156,7 +156,7 @@ test.
 pre-push, gate, or "suites green" claim runs EVERY suite the repository has,
 listed by name with each count — today: (1) the engine in-file harness
 (`runTests`, 121), (2) `scripts/adversarial-engine-tests.mjs` (91), (3) the
-vitest suite (`npm test`, 14 files / 131 tests), (4)
+vitest suite (`npm test`, 17 files / 151 tests), (4)
 `scripts/render-gate-memo.mjs` (8 fixtures). Never "both suites"
 or "the tests" — an unenumerated guard once let the vitest suite sit red for
 nine days. When a new suite is added, add it to this enumeration.
@@ -892,6 +892,34 @@ mirror its first element's renderer — never go back to estimating lines.
 Known edge (low priority): reserving the whole first card assumes the card fits
 on a page after the heading; a single card taller than a page would need
 separate handling. Not an issue at current note lengths.
+
+### Change monitoring (stage 1, shipped 2026-08-23)
+
+Change monitoring (JDC rulings 2026-08-23): registry architecture C —
+registry.json is generated from data.js (static truth: citations, URLs,
+rule-field mapping, verified dates, RULESET_VERSION) with a CI drift
+check; dynamic fetch state lives in Supabase monitor_source_state, synced
+one-way, keyed by registry id. Detection is deterministic
+fetch-normalize-hash-diff with no model calls; the monitor is
+incremental, stalest-first, time-budgeted, and idempotent, triggered by
+Vercel Cron nightly on the production deployment (Pro plan; CRON_SECRET
+verified in the route; Vercel cron invocations pass Deployment
+Protection). Model triage, if adopted, is a later stage and never
+proposes rule values or citation strings. Colorado sources are
+fetch_mode=manual pending a fetchable source.
+
+Files: `scripts/registry/generate.mjs` (generator; `npm run registry`,
+`npm run registry:check`), `registry.json` (committed output — never
+hand-edit; regenerate after any `data.js` change and commit both, or the
+`registry-drift` GitHub Actions workflow fails), `scripts/monitor/`
+(`normalize.mjs`, `store.mjs`, `run.mjs`; `npm run monitor` against
+`MONITOR_DB_URL`, `--dry-run` for an in-memory pass), `api/monitor.mjs`
+(the cron route, `maxDuration: 300`), migration
+`supabase/migrations/20260823120000_monitor_source_state.sql` (table +
+`monitor_bot` role). Attorney verification dates are transcribed into the
+generator's `VERIFIED_DATES` table from the intake-form Sign-offs because
+`data.js` carries no structured field for them — update both in the same
+commit when a jurisdiction is re-verified.
 
 ### `docs/intake-forms.md` — audit trail
 
