@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 import {
   orderBlocks,
   buildDeadlineQueue,
+  noClockSummaryLine,
   groupResultsByJurisdiction,
   QUEUE_MIN_BLOCKS,
 } from "./results-grouping.js";
@@ -150,8 +151,8 @@ describe("screen-default / memo parity", () => {
 });
 
 describe("buildDeadlineQueue", () => {
-  it("orders rows: dated firm ascending, then dated contingent ascending, then no-fixed-clock (firm before contingent)", () => {
-    const { rows } = buildDeadlineQueue([
+  it("carries dated rows only: dated firm ascending, then dated contingent ascending; no-fixed-clock obligations are counted, never rows (JDC 2026-08-23)", () => {
+    const { rows, noClockCount, eligibleBlockCount } = buildDeadlineQueue([
       block("Colorado", {
         active: [D("2026-09-01T00:00:00Z"), null],
         contingent: [D("2026-08-20T00:00:00Z")],
@@ -159,16 +160,37 @@ describe("buildDeadlineQueue", () => {
       block("Texas", { active: [D("2026-08-25T00:00:00Z")] }),
       block("Virginia", { contingent: [null] }),
     ]);
-    expect(rows.map((r) => [r.kind, r.authority, r.date ? r.date.toISOString() : null])).toEqual([
+    expect(rows.map((r) => [r.kind, r.authority, r.date.toISOString()])).toEqual([
       // dated firm, ascending — the Aug 20 CONTINGENT date does NOT interleave
       ["firm", "Texas active 1", "2026-08-25T00:00:00.000Z"],
       ["firm", "Colorado active 1", "2026-09-01T00:00:00.000Z"],
       // dated contingent
       ["contingent", "Colorado contingent 1", "2026-08-20T00:00:00.000Z"],
-      // no fixed clock: firm first, then contingent
-      ["firm", "Colorado active 2", null],
-      ["contingent", "Virginia contingent 1", null],
     ]);
+    // The undated firm (Colorado active 2) and undated contingent (Virginia
+    // contingent 1) obligations compress to the summary-line count.
+    expect(noClockCount).toBe(2);
+    // Virginia still counts as an eligible block: eligibility is about
+    // holding an active/contingent obligation, not about emitting a row.
+    expect(eligibleBlockCount).toBe(3);
+  });
+
+  it("composes the no-fixed-deadline summary line in counsel register, singular and plural", () => {
+    expect(noClockSummaryLine(1)).toBe(
+      "1 obligation carries no fixed notification deadline; see the jurisdiction sections below."
+    );
+    expect(noClockSummaryLine(4)).toBe(
+      "4 obligations carry no fixed notification deadline; see the jurisdiction sections below."
+    );
+  });
+
+  it("reports a zero no-clock count when every obligation is dated", () => {
+    const { rows, noClockCount } = buildDeadlineQueue([
+      block("Texas", { active: [D("2026-08-25T00:00:00Z")] }),
+      block("Delaware", { contingent: [D("2026-10-01T00:00:00Z")] }),
+    ]);
+    expect(rows.length).toBe(2);
+    expect(noClockCount).toBe(0);
   });
 
   it("an overdue firm date is simply the earliest and leads the queue", () => {

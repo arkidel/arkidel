@@ -217,25 +217,37 @@ export function orderBlocks(blocks, mode) {
   return [...blocks].sort(mode === "urgency" ? compareBlocksByUrgency : (a, b) => a.name.localeCompare(b.name));
 }
 
+// Counsel-register summary line for the obligations the queue does not list
+// (JDC ruling 2026-08-23): every active or contingent obligation with no
+// fixed notification deadline compresses to this one line at the queue foot.
+export function noClockSummaryLine(n) {
+  return n === 1
+    ? "1 obligation carries no fixed notification deadline; see the jurisdiction sections below."
+    : `${n} obligations carry no fixed notification deadline; see the jurisdiction sections below.`;
+}
+
 /**
  * Flatten jurisdiction blocks into the deadline-queue rows plus the counts
- * the queue's summary line and visibility gate need.
+ * the queue's summary lines and visibility gate need.
  *
- * Row order: dated active obligations by deadline ascending (overdue rows are
- * the earliest dates, so they lead) → dated contingent obligations by
- * conditional deadline → no-fixed-clock rows (active first, then contingent),
- * alphabetical. Suppressed and counsel-review obligations are counted, never
- * rows. Services and advisories are not deadlines and stay out entirely.
+ * The queue carries DATED rows only (JDC ruling 2026-08-23): firm obligations
+ * with a computed deadline, by deadline ascending (overdue rows are the
+ * earliest dates, so they lead), then contingent obligations with a computed
+ * conditional deadline, by that date. Every obligation with no fixed
+ * notification deadline — firm or contingent — is NOT a row; it is counted
+ * in `noClockCount` for the summary line at the queue foot
+ * (noClockSummaryLine). Suppressed and counsel-review obligations are
+ * counted, never rows. Services and advisories are not deadlines and stay
+ * out entirely.
  *
  * @returns {{ rows: Array<{kind:"firm"|"contingent", jurisdictionId, jurisdiction,
- *   authority, date: Date|null, card}>, suppressedCount, reviewCount,
+ *   authority, date: Date, card}>, noClockCount, suppressedCount, reviewCount,
  *   eligibleBlockCount }}
  */
 export function buildDeadlineQueue(blocks) {
   const firmDated = [];
-  const firmUndated = [];
   const contDated = [];
-  const contUndated = [];
+  let noClockCount = 0;
   let suppressedCount = 0;
   let reviewCount = 0;
   let eligibleBlockCount = 0;
@@ -245,26 +257,30 @@ export function buildDeadlineQueue(blocks) {
     reviewCount += (b.counselReviewCards || []).length;
     (b.activeCards || []).forEach((card) => {
       const date = isDate(card.deadline) ? card.deadline : null;
-      const row = { kind: "firm", jurisdictionId: b.jurisdictionId, jurisdiction: b.name, authority: card.authority, date, card };
-      (date ? firmDated : firmUndated).push(row);
+      if (!date) {
+        noClockCount += 1;
+        return;
+      }
+      firmDated.push({ kind: "firm", jurisdictionId: b.jurisdictionId, jurisdiction: b.name, authority: card.authority, date, card });
     });
     (b.contingentCards || []).forEach((card) => {
       const date = isDate(card.conditional_deadline) ? card.conditional_deadline : null;
-      const row = { kind: "contingent", jurisdictionId: b.jurisdictionId, jurisdiction: b.name, authority: card.authority, date, card };
-      (date ? contDated : contUndated).push(row);
+      if (!date) {
+        noClockCount += 1;
+        return;
+      }
+      contDated.push({ kind: "contingent", jurisdictionId: b.jurisdictionId, jurisdiction: b.name, authority: card.authority, date, card });
     });
   });
   const byDate = (a, b) =>
     a.date.getTime() - b.date.getTime() ||
     a.jurisdiction.localeCompare(b.jurisdiction) ||
     a.authority.localeCompare(b.authority);
-  const byName = (a, b) => a.jurisdiction.localeCompare(b.jurisdiction) || a.authority.localeCompare(b.authority);
   firmDated.sort(byDate);
   contDated.sort(byDate);
-  firmUndated.sort(byName);
-  contUndated.sort(byName);
   return {
-    rows: [...firmDated, ...contDated, ...firmUndated, ...contUndated],
+    rows: [...firmDated, ...contDated],
+    noClockCount,
     suppressedCount,
     reviewCount,
     eligibleBlockCount,

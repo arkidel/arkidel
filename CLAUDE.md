@@ -156,7 +156,7 @@ test.
 pre-push, gate, or "suites green" claim runs EVERY suite the repository has,
 listed by name with each count — today: (1) the engine in-file harness
 (`runTests`, 121), (2) `scripts/adversarial-engine-tests.mjs` (91), (3) the
-vitest suite (`npm test`, 13 files / 107 tests), (4)
+vitest suite (`npm test`, 14 files / 130 tests), (4)
 `scripts/render-gate-memo.mjs` (8 fixtures). Never "both suites"
 or "the tests" — an unenumerated guard once let the vitest suite sit red for
 nine days. When a new suite is added, add it to this enumeration.
@@ -652,37 +652,26 @@ information, (2) how & when discovered, (3) when the incident occurred,
   date of birth, photos) and custom "Other" entries never trigger. Fingerprint
   makes `biometric` reachable here; `children` has no element and stays a
   Q1-only selection — do not invent one.
-- **Results at scale (2026-08-21): deadline queue, collapsing blocks,
-  block-order toggle.** Three screen-only additions for large incidents;
-  the memo is untouched by all three.
-  - **Deadline queue.** A compact table directly below the Analysis Inputs
-    recap: one row per active or contingent obligation across every
-    jurisdiction block (jurisdiction / authority / date / status). Row order:
-    dated firm rows by deadline ascending (overdue rows are the earliest
-    dates, so they lead, with the Ember date treatment) → dated contingent
-    rows by conditional date, qualified **"If required, due {date}"** (the
-    results-surface form; the incidents-list "≤ {date} · contingent" compact
-    form is deliberately NOT used here) → no-fixed-clock rows (firm before
-    contingent) under their existing labels. Suppressed and counsel-review
-    obligations are never rows — a summary line beneath the table
-    ("{n} suppressed · {n} for counsel review", each a jump to the first such
-    group). A row click expands the row's block and scrolls to its card
-    (per-card anchors, `obligationAnchorId`). The queue renders only when
-    3+ jurisdiction blocks have a queue-eligible row (`QUEUE_MIN_BLOCKS` in
-    `results-grouping.js`) — at 1–2 it adds nothing. Row-building is the pure
-    `buildDeadlineQueue` in `results-grouping.js`.
-  - **Collapsing jurisdiction blocks.** At ≤3 SELECTED jurisdictions the
-    blocks render expanded exactly as before — no disclosure affordance, zero
-    change to the small-incident experience. At >3 they default collapsed to
-    a summary header (name + statute sub-line, next relevant date — firm
-    first, else the qualified contingent form — and count chips in the
-    StatusChip anatomy), EXCEPT that a block holding a firm-overdue
-    obligation (dated, unrecorded, past due) defaults EXPANDED regardless of
-    count: overdue must cost effort to hide, not to find. Expand all /
-    Collapse all sit on the obligations header row in the form's
-    section-control idiom. Collapse state is an overrides map over computed
-    defaults, cleared on every entry into results; collapse operates at block
-    level only — everything inside a block is unchanged.
+- **Results page (JDC rulings 2026-08-23): the deadline queue carries dated
+  rows only (firm and contingent-with-date); no-fixed-deadline obligations
+  compress to a counsel-register summary line at the queue foot. Analysis
+  Inputs renders in the sidebar; the queue is the first main-column element.
+  Countdown precision degrades with magnitude (d / d+h / h+m / live m+s under
+  1h) on a shared 60-second interval, per-second only under 1 hour.
+  Contingent counters are Ink always; only the If-required qualifier line and
+  the queue date cell take Ember once the conditional date passes.
+  Auto-expand is capped at the single most urgent block above the
+  3-jurisdiction threshold (replaces the firm-overdue exception); persisted
+  expansion wins, and resubmit clears persisted expansion while keeping the
+  block-order choice.** The memo is untouched by these rules (it has no
+  deadline table). Pure helpers: `buildDeadlineQueue` / `noClockSummaryLine`
+  in `results-grouping.js`; `countdownTier` / `formatCountdown` in
+  `countdown.js` (pinned at the tier boundaries by `countdown.test.js`); the
+  per-element `Countdown` component in `BreachClock.jsx` owns the only
+  per-second interval. Persisted expansion lives in
+  `incidents.view_state.expanded` (a sparse `{ [jurId]: boolean }` overrides
+  map beside `blockOrder` — no schema change, the column is jsonb), written
+  through on every expand/collapse and cleared by Submit & compute only.
   - **Block-order toggle (A–Z | Urgency; Urgency is the DEFAULT on both
     surfaces — JDC amendment 2026-08-21).** A segmented control in the review
     actions rail (above Download memo; with the top controls on narrow).
@@ -709,8 +698,8 @@ information, (2) how & when discovered, (3) when the incident occurred,
     byte-identical whether the toggle was ever touched (pinned by test —
     the assertion now also checks that `view_state` changed while payload
     did not); notifications / incident_log are legally meaningful records
-    and keep their own shapes. Shape: `{ blockOrder: "az" | "urgency" }`
-    (the persisted vocabulary; the component's in-memory value stays
+    and keep their own shapes. Shape: `{ blockOrder: "az" | "urgency",
+    expanded?: { [jurId]: boolean } }` (the persisted vocabulary; the component's in-memory value stays
     `"alpha" | "urgency"` for `orderBlocks`, translated only at the
     `BLOCK_ORDER_TO_VIEW_STATE` / `blockOrderFromViewState` boundary in
     `BreachClock.jsx`). **An empty object means the default** — the column's
@@ -731,10 +720,6 @@ information, (2) how & when discovered, (3) when the incident occurred,
     it. Trigger-enforced, not client-enforced; the vitest suites mock the
     Supabase client, so this is verified by SQL against the linked project
     (see the commit), not by a client-side test.
-  - **One-interval rule.** Every countdown on the results page — card
-    countdowns and queue status cells alike — reads the single shared `now`
-    state driven by the component's one `setInterval`. Never add a per-card
-    or per-row timer.
   - Covered by `results-grouping.test.js` (pure ordering/queue contracts) and
     `BreachClock.resultsScale.test.jsx` (render-level behavior).
 
@@ -1124,9 +1109,11 @@ alike) and the "If required, due …" qualifier line render Mist while the
 conditional date is not yet past. The countdown numerals stay **Ink** — the
 firm-card default — while not yet due (JDC contrast ruling (b), 2026-08-16:
 Mist numerals at countdown size are illegible on the white surface). When the
-conditional date is past, the numerals and qualifier line flip to Ember as on
-firm cards, but the card surface stays white with the Mist bar — the Midnight
-overdue slab (and the cream urgent tint) remain exclusive to firm deadlines.
+conditional date is past, only the qualifier line flips to Ember (JDC ruling
+2026-08-23 — the contingent counter is Ink at all times, past or not; Ember
+never applies to it), and the card surface stays white with the Mist bar — the
+Midnight overdue slab (and the cream urgent tint) remain exclusive to firm
+deadlines.
 The "Contingent on resident count" badge keeps the shared section-mark badge
 idiom (currentColor border, per the ratified spec). Color is reinforcement
 only: the badge and the "If required" wording carry the contingency, never

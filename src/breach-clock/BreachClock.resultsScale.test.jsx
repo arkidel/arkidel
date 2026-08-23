@@ -5,13 +5,19 @@
 //
 //   1. Queue visibility: renders only when 3+ jurisdiction blocks have a
 //      queue-eligible row; hidden below that.
-//   2. Queue rows: dated firm rows precede dated contingent rows regardless
-//      of date; contingent rows carry the "If required, due …" qualifier;
+//   2. Queue rows (JDC 2026-08-23): dated rows only — dated firm rows precede
+//      dated contingent rows regardless of date; contingent rows carry the
+//      "If required, due …" qualifier; no-fixed-deadline obligations are a
+//      counsel-register summary line at the queue foot, never rows;
 //      suppressed obligations are a summary line, never rows.
-//   3. Collapse: at ≤3 selected jurisdictions blocks render expanded exactly
-//      as before; at >3 they default collapsed — EXCEPT a block holding a
-//      firm-overdue obligation, which defaults expanded. Expand all /
-//      Collapse all override either way; a queue-row click expands its block.
+//   3. Collapse (JDC 2026-08-23): at ≤3 selected jurisdictions blocks render
+//      expanded exactly as before; at >3 exactly ONE block loads expanded —
+//      the most urgent under compareBlocksByUrgency — and every other loads
+//      collapsed, overdue or not (the firm-overdue exception is gone).
+//      Persisted view_state.expanded overrides win over that default; every
+//      expand/collapse writes through; Submit & compute clears the persisted
+//      expansion while keeping blockOrder. A queue-row click expands its
+//      block.
 //   4. Order toggle: Urgency is the DEFAULT (both surfaces lead with the
 //      shared urgency comparator — parity is pinned in
 //      results-grouping.test.js); firm blocks by earliest firm date with
@@ -129,7 +135,7 @@ afterEach(() => {
 });
 
 describe("deadline queue", () => {
-  it("renders at 3+ eligible blocks: dated firm rows first, then contingent rows with the 'If required, due' qualifier, no-clock rows last", async () => {
+  it("renders at 3+ eligible blocks: dated firm rows first, then contingent rows with the 'If required, due' qualifier; no-clock obligations compress to the foot summary line", async () => {
     // Colorado's count is not yet known → its AG and CRA obligations are
     // contingent (AG dated at 30d, CRA no fixed clock) while its resident
     // obligation stays firm. California and Texas fire on known counts.
@@ -145,23 +151,58 @@ describe("deadline queue", () => {
     await waitFor(() => expect(screen.getByText("Deadline queue")).toBeTruthy());
 
     const table = screen.getByRole("table");
-    const rowTexts = within(table)
-      .getAllByRole("row")
-      .slice(1) // header row
-      .map((r) => r.textContent);
+    const allRows = within(table).getAllByRole("row").slice(1); // header row
+    // The summary row is the table's FINAL row, one full-width Parchment
+    // cell, and sits outside the obligation-row ordering below.
+    const summaryRow = allRows[allRows.length - 1];
+    expect(summaryRow.hasAttribute("data-queue-summary")).toBe(true);
+    expect(summaryRow.cells.length).toBe(1);
+    expect(summaryRow.cells[0].getAttribute("colspan")).toBe("4");
+    expect(summaryRow.cells[0].style.background).toBe("rgb(232, 221, 196)");
+    expect(summaryRow.textContent).toBe(
+      "2 obligations carry no fixed notification deadline; see the jurisdiction sections below."
+    );
+    const rowTexts = allRows.filter((r) => !r.hasAttribute("data-queue-summary")).map((r) => r.textContent);
 
     const firstContingent = rowTexts.findIndex((t) => t.includes("If required, due"));
     expect(firstContingent).toBeGreaterThan(0);
     // Texas residents (60d) is the LATEST dated firm row; the Colorado AG
     // contingent date (30d) is earlier, yet must not interleave — every firm
     // dated row precedes every contingent row.
-    const lastDatedFirm = rowTexts.findLastIndex(
-      (t) => !t.includes("If required") && !t.includes("No fixed notification deadline")
-    );
+    const lastDatedFirm = rowTexts.findLastIndex((t) => !t.includes("If required"));
     expect(lastDatedFirm).toBeLessThan(firstContingent);
-    // No-fixed-clock rows sit at the bottom with their existing label.
-    const noClock = rowTexts.findIndex((t) => t.includes("No fixed notification deadline"));
-    expect(noClock).toBeGreaterThan(firstContingent);
+    // No-fixed-clock obligations are NOT rows (the Texas CRA firm obligation
+    // and the Colorado CRA contingent obligation in this fixture)…
+    expect(rowTexts.some((t) => t.includes("No fixed notification deadline"))).toBe(false);
+    expect(rowTexts.some((t) => t.includes("Consumer Reporting Agencies"))).toBe(false);
+    // …they compress to the summary row asserted above (the sentence appears
+    // nowhere else on the page).
+    expect(
+      screen.getAllByText("2 obligations carry no fixed notification deadline; see the jurisdiction sections below.").length
+    ).toBe(1);
+  });
+
+  it("renders the summary line in the singular for one no-clock obligation", async () => {
+    // ca / tx / ct on known counts: the only no-clock obligation is Texas CRA.
+    loadIncident(payloadFor({ jurs: ["ca", "tx", "ct"], awareness: awarenessAt(-HOUR) }));
+    renderEditor();
+    await waitFor(() => expect(screen.getByText("Deadline queue")).toBeTruthy());
+    const table = screen.getByRole("table");
+    const rows = within(table).getAllByRole("row");
+    const last = rows[rows.length - 1];
+    expect(last.hasAttribute("data-queue-summary")).toBe(true);
+    expect(last.textContent).toBe(
+      "1 obligation carries no fixed notification deadline; see the jurisdiction sections below."
+    );
+  });
+
+  it("omits the summary row when every queued obligation is dated", async () => {
+    // ca / ct / de on known counts: every computed obligation carries a
+    // fixed clock (no CRA no-clock obligation in this set).
+    loadIncident(payloadFor({ jurs: ["ca", "ct", "de"], awareness: awarenessAt(-HOUR) }));
+    renderEditor();
+    await waitFor(() => expect(screen.getByText("Deadline queue")).toBeTruthy());
+    expect(document.querySelector("tr[data-queue-summary]")).toBeNull();
   });
 
   it("does not render below 3 eligible blocks", async () => {
@@ -202,22 +243,109 @@ describe("collapsing jurisdiction blocks", () => {
     expect(blockHeaderNames().length).toBe(0);
   });
 
-  it("defaults blocks collapsed at 4 selected jurisdictions", async () => {
+  it("at 4 selected jurisdictions, exactly the single most urgent block loads expanded", async () => {
+    // Earliest clocks: CO / NY / TX all 30d (alphabetical tie → Colorado
+    // first under compareBlocksByUrgency), CT 60d. Only Colorado opens.
     loadIncident(payloadFor({ jurs: ["co", "tx", "ct", "ny"], awareness: awarenessAt(-HOUR) }));
     renderEditor();
     await waitFor(() => expect(blockHeaderNames().length).toBe(4));
-    expect(screen.queryByText(/Notify Affected Colorado Residents/)).toBeNull();
+    expect(screen.getByText(/Notify Affected Colorado Residents/)).toBeTruthy();
+    expect(screen.queryByText(/Notify Affected New York Residents/)).toBeNull();
+    expect(screen.queryByText(/Notify Affected Texas Residents/)).toBeNull();
+    expect(screen.queryByText(/Notify Affected Connecticut Residents/)).toBeNull();
     // Collapsed summary rows carry count chips.
     expect(screen.getAllByText(/^\d+ due$/).length).toBeGreaterThan(0);
+    // The default is applied without a view_state write.
+    expect(incidents.updateIncidentViewState).not.toHaveBeenCalled();
   });
 
-  it("defaults a block EXPANDED when it holds a firm-overdue obligation", async () => {
-    // 45 days after awareness: Colorado's 30-day clocks are overdue;
-    // Connecticut's 60-day clocks are not.
+  it("caps auto-expand at one block even when several are firm-overdue (no firm-overdue exception)", async () => {
+    // 45 days after awareness: the Colorado, New York, and Texas 30-day
+    // clocks are ALL overdue. Still only the first under urgency (Colorado)
+    // opens; New York and Texas load collapsed despite being overdue.
     loadIncident(payloadFor({ jurs: ["co", "tx", "ct", "ny"], awareness: awarenessAt(-45 * DAY) }));
     renderEditor();
     await waitFor(() => expect(screen.getByText(/Notify Affected Colorado Residents/)).toBeTruthy());
+    expect(screen.queryByText(/Notify Affected New York Residents/)).toBeNull();
+    expect(screen.queryByText(/Notify Affected Texas Residents/)).toBeNull();
     expect(screen.queryByText(/Notify Affected Connecticut Residents/)).toBeNull();
+  });
+
+  it("the single expanded block follows the urgency order even when the screen shows A–Z", async () => {
+    // Persisted A–Z reorders the headers, but the auto-expanded block is
+    // still the most urgent (Colorado), not the alphabetically first.
+    loadIncident(
+      payloadFor({ jurs: ["tx", "ct", "ny", "de"], awareness: awarenessAt(-HOUR) }),
+      "active",
+      { blockOrder: "az" }
+    );
+    renderEditor();
+    await waitFor(() => expect(blockHeaderNames().length).toBe(4));
+    expect(blockHeaderNames()).toEqual(["Connecticut", "Delaware", "New York", "Texas"]);
+    // NY (30d) and TX (30d) tie on the earliest clock; New York wins
+    // alphabetically under the urgency comparator.
+    expect(screen.getByText(/Notify Affected New York Residents/)).toBeTruthy();
+    expect(screen.queryByText(/Notify Affected Connecticut Residents/)).toBeNull();
+  });
+
+  it("persisted view_state.expanded wins over the default on load", async () => {
+    loadIncident(
+      payloadFor({ jurs: ["co", "tx", "ct", "ny"], awareness: awarenessAt(-HOUR) }),
+      "active",
+      { blockOrder: "urgency", expanded: { co: false, ct: true } }
+    );
+    renderEditor();
+    await waitFor(() => expect(blockHeaderNames().length).toBe(4));
+    expect(screen.queryByText(/Notify Affected Colorado Residents/)).toBeNull();
+    expect(screen.getByText(/Notify Affected Connecticut Residents/)).toBeTruthy();
+    expect(incidents.updateIncidentViewState).not.toHaveBeenCalled();
+  });
+
+  it("writes the expansion overrides to view_state beside blockOrder on every expand/collapse", async () => {
+    const user = userEvent.setup();
+    loadIncident(payloadFor({ jurs: ["co", "tx", "ct", "ny"], awareness: awarenessAt(-HOUR) }), "active", { blockOrder: "az" });
+    renderEditor();
+    await waitFor(() => expect(blockHeaderNames().length).toBe(4));
+
+    await user.click(document.querySelector('button[data-block-header="Connecticut"]'));
+    await waitFor(() => expect(incidents.updateIncidentViewState).toHaveBeenCalledTimes(1));
+    expect(incidents.updateIncidentViewState).toHaveBeenLastCalledWith("inc-1", {
+      blockOrder: "az",
+      expanded: { ct: true },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Collapse all" }));
+    await waitFor(() => expect(incidents.updateIncidentViewState).toHaveBeenCalledTimes(2));
+    expect(incidents.updateIncidentViewState).toHaveBeenLastCalledWith("inc-1", {
+      blockOrder: "az",
+      expanded: { co: false, tx: false, ct: false, ny: false },
+    });
+    // The facts payload path never ran.
+    expect(incidents.updateIncident).not.toHaveBeenCalled();
+  });
+
+  it("Submit & compute clears persisted expansion and keeps the block-order choice", async () => {
+    const user = userEvent.setup();
+    loadIncident(
+      payloadFor({ jurs: ["co", "tx", "ct", "ny"], awareness: awarenessAt(-HOUR) }),
+      "active",
+      { blockOrder: "az", expanded: { co: false, ct: true } }
+    );
+    renderEditor();
+    await waitFor(() => expect(blockHeaderNames().length).toBe(4));
+    expect(screen.getByText(/Notify Affected Connecticut Residents/)).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: /edit answers/i }));
+    await user.click(screen.getByRole("button", { name: /submit & compute deadlines/i }));
+    await waitFor(() => expect(incidents.updateIncident).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(incidents.updateIncidentViewState).toHaveBeenCalledTimes(1));
+    // Expansion cleared; blockOrder kept.
+    expect(incidents.updateIncidentViewState).toHaveBeenLastCalledWith("inc-1", { blockOrder: "az" });
+    // The fresh default applies: the single most urgent block (Colorado)
+    // opens, Connecticut is collapsed again, and the A–Z order persists.
+    await waitFor(() => expect(screen.getByText(/Notify Affected Colorado Residents/)).toBeTruthy());
+    expect(screen.queryByText(/Notify Affected Connecticut Residents/)).toBeNull();
+    expect(blockHeaderNames()).toEqual(["Colorado", "Connecticut", "New York", "Texas"]);
   });
 
   it("Expand all / Collapse all override the defaults", async () => {
@@ -232,6 +360,7 @@ describe("collapsing jurisdiction blocks", () => {
 
     await user.click(screen.getByRole("button", { name: "Collapse all" }));
     expect(screen.queryByText(/Notify Affected Colorado Residents/)).toBeNull();
+    expect(screen.queryByText(/Notify Affected Connecticut Residents/)).toBeNull();
   });
 
   it("a queue-row click expands the row's block", async () => {

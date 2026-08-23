@@ -27,7 +27,7 @@
 // (footer link) after any change near the wiring.
 // =============================================================================
 
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Clock, AlertTriangle, CheckCircle2, ArrowRight, ArrowLeft, Scale, FileWarning, Info, Download, Check, Plus, Save, X, ChevronDown } from "lucide-react";
 import { JURISDICTIONS, SENSITIVITY_OPTIONS } from "./data.js";
@@ -44,8 +44,10 @@ import {
   harmMechanismOf,
   orderBlocks,
   buildDeadlineQueue,
+  noClockSummaryLine,
   QUEUE_MIN_BLOCKS,
 } from "./results-grouping.js";
+import { formatCountdown, countdownIsLive, COUNTDOWN_SHARED_INTERVAL_MS, COUNTDOWN_LIVE_INTERVAL_MS } from "./countdown.js";
 import { computableGate, factsFromPayload } from "./facts.js";
 import {
   deviceTimeZone,
@@ -76,6 +78,47 @@ const OPERATIVE_KEYS = ["awareness", "jurisdictions", "residentCounts", "sensiti
 const BLOCK_ORDER_TO_VIEW_STATE = { alpha: "az", urgency: "urgency" };
 const blockOrderFromViewState = (viewState) =>
   viewState && typeof viewState === "object" && viewState.blockOrder === "az" ? "alpha" : "urgency";
+// Persisted per-block expansion (JDC ruling 2026-08-23): view_state.expanded
+// is a sparse { [jurId]: boolean } overrides map over the computed collapse
+// defaults. Where present it wins over the default; absent or malformed
+// reads as "no overrides". Resubmit clears it (the fresh default applies to
+// the recomputed results) while keeping blockOrder.
+const expandedFromViewState = (viewState) => {
+  const e = viewState && typeof viewState === "object" ? viewState.expanded : null;
+  if (!e || typeof e !== "object" || Array.isArray(e)) return {};
+  return Object.fromEntries(Object.entries(e).filter(([, v]) => typeof v === "boolean"));
+};
+// The full view_state row value. updateIncidentViewState replaces the jsonb
+// wholesale, so every write composes BOTH keys from component state; an
+// empty overrides map is omitted so a never-expanded incident writes exactly
+// { blockOrder } (the pre-2026-08-23 shape).
+const viewStateOf = (blockOrder, expanded) => ({
+  blockOrder: BLOCK_ORDER_TO_VIEW_STATE[blockOrder],
+  ...(Object.keys(expanded || {}).length > 0 ? { expanded } : {}),
+});
+
+// Citation tokens in headings and card citation lines never wrap
+// mid-citation (queued CSS item, JDC 2026-08-23): each "§ …" / "art. …"
+// token is wrapped in an inline-block nowrap span, so it drops to its own
+// line as a unit when it would not fit rather than breaking internally.
+// Matches a section sign (single or double) or "art."/"arts." followed by
+// the pinpoint run up to the next whitespace, with trailing sentence
+// punctuation left outside the span.
+const CITATION_TOKEN = /(§§?\s?\d[^\s,;]*?|\b[Aa]rts?\.\s?\d[^\s,;]*?)(?=[.,;:]*(?:\s|$))/g;
+const nowrapCitations = (text) => {
+  if (typeof text !== "string" || !text.includes("§") && !/\b[Aa]rts?\.\s?\d/.test(text)) return text;
+  const out = [];
+  let last = 0;
+  let m;
+  CITATION_TOKEN.lastIndex = 0;
+  while ((m = CITATION_TOKEN.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(<span key={m.index} className="cite">{m[0]}</span>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+};
 
 // Collapse the two-column layout below this width (Tailwind `md` = 768px, the
 // project's marketing-page mobile breakpoint).
@@ -506,6 +549,45 @@ function InfoTip({ text, size = 13 }) {
   );
 }
 
+// ── Countdown element ─────────────────────────────────────────────────────
+// One card counter (JDC ruling 2026-08-23, magnitude-tiered precision). The
+// string comes from formatCountdown at the tier its magnitude earns and is
+// recomputed on the page's ONE shared 60-second `now`. Only while the
+// element is in the under-1-hour tier does it attach its own 1-second
+// interval — and only this element does: the shared clock never ticks per
+// second. On the tick that crosses zero it asks the page to refresh its
+// shared `now` (onCrossZero) so the card's urgent/overdue treatment, which
+// reads the shared clock, flips with the counter rather than up to a minute
+// later. Nothing animates; the text simply changes.
+function Countdown({ deadline, now, onCrossZero, className, style }) {
+  const sharedRemaining = deadline.getTime() - now.getTime();
+  const live = countdownIsLive(sharedRemaining);
+  const [liveNow, setLiveNow] = useState(null);
+  const crossRef = useRef(sharedRemaining < 0);
+  useEffect(() => {
+    if (!live) {
+      setLiveNow(null);
+      return undefined;
+    }
+    setLiveNow(new Date());
+    const t = setInterval(() => setLiveNow(new Date()), COUNTDOWN_LIVE_INTERVAL_MS);
+    return () => clearInterval(t);
+  }, [live]);
+  const remaining = live && liveNow ? deadline.getTime() - liveNow.getTime() : sharedRemaining;
+  useEffect(() => {
+    const overdue = remaining < 0;
+    if (overdue !== crossRef.current) {
+      crossRef.current = overdue;
+      if (onCrossZero) onCrossZero();
+    }
+  }, [remaining, onCrossZero]);
+  return (
+    <div className={className} style={style}>
+      {formatCountdown(remaining)}
+    </div>
+  );
+}
+
 // Stable signature over the payload fields the engine actually sees (the
 // factsFromPayload inputs — quickMode and the record never affect the
 // analysis). Drives the staleness banner: the signature at the last explicit
@@ -564,9 +646,11 @@ export default function BreachClock() {
   // enters buildPayload.
   const [blockOrder, setBlockOrder] = useState("urgency");
   // Per-block expand/collapse OVERRIDES ({ [jurId]: bool }) on top of the
-  // computed defaults (see blockExpanded below). Cleared on every entry into
-  // results (submit, rehydrate auto-compute, back-to-results) so a fresh
-  // results render always starts from the defaults.
+  // computed default (see blockExpanded below: the single most urgent block
+  // expanded above 3 jurisdictions). PERSISTED PER INCIDENT as
+  // view_state.expanded beside blockOrder (JDC ruling 2026-08-23): applied
+  // at load, written through on every change, cleared by Submit & compute
+  // (never by the silent rehydrate auto-compute or Back-to-results).
   const [expandedBlocks, setExpandedBlocks] = useState({});
   const [isNarrow, setIsNarrow] = useState(false);
   const [isWide, setIsWide] = useState(false);
@@ -818,7 +902,9 @@ export default function BreachClock() {
         // view_state.blockOrder applies when present; an empty or unrecognized
         // value falls to the Urgency default. Read only — never written here.
         setBlockOrder(blockOrderFromViewState(incident.view_state));
-        setExpandedBlocks({});
+        // Persisted expansion overrides win over the collapse default
+        // (2026-08-23); absent → the fresh default.
+        setExpandedBlocks(expandedFromViewState(incident.view_state));
         setSavedAt(null);
         setAutoComputePending(true);
         setLoadState("ready");
@@ -952,7 +1038,7 @@ export default function BreachClock() {
     setBlockOrder(next);
     if (!routeIncidentId) return;
     try {
-      await updateIncidentViewState(routeIncidentId, { blockOrder: BLOCK_ORDER_TO_VIEW_STATE[next] });
+      await updateIncidentViewState(routeIncidentId, viewStateOf(next, expandedBlocks));
       setSaveError("");
     } catch (err) {
       console.error("View state update failed:", err);
@@ -1010,10 +1096,17 @@ export default function BreachClock() {
     title: record.incidentTitle.trim() || "Untitled Incident",
   });
 
+  // The page's ONE shared clock (JDC ruling 2026-08-23): every countdown
+  // string — card counters and queue status cells — recomputes on this
+  // 60-second interval. A per-second interval exists only inside a Countdown
+  // element whose magnitude is under one hour (see Countdown above).
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
+    const t = setInterval(() => setNow(new Date()), COUNTDOWN_SHARED_INTERVAL_MS);
     return () => clearInterval(t);
   }, []);
+  // Countdown elements call this on the tick that crosses zero so the
+  // shared-clock treatments (urgent / overdue) flip with the counter.
+  const refreshNow = useCallback(() => setNow(new Date()), []);
 
   useEffect(() => {
     const mq = window.matchMedia(NARROW_QUERY);
@@ -1281,22 +1374,6 @@ export default function BreachClock() {
   const savedPayload = lastSavedPayloadRef.current;
   const legacyAwarenessZone = !!savedPayload && !!savedPayload.awareness && !isValidTimeZone(savedPayload.awarenessTz);
 
-  const formatDuration = (ms) => {
-    const neg = ms < 0;
-    const abs = Math.abs(ms);
-    const totalSec = Math.floor(abs / 1000);
-    const days = Math.floor(totalSec / 86400);
-    const hours = Math.floor((totalSec % 86400) / 3600);
-    const mins = Math.floor((totalSec % 3600) / 60);
-    const secs = totalSec % 60;
-    const parts = [];
-    if (days > 0) parts.push(`${days}d`);
-    parts.push(`${hours.toString().padStart(2, "0")}h`);
-    parts.push(`${mins.toString().padStart(2, "0")}m`);
-    parts.push(`${secs.toString().padStart(2, "0")}s`);
-    return parts.join(" ") + (neg ? " overdue" : "");
-  };
-
   // ── Deadlines — same pure engine the test harness calls ──
   // riskLevel feeds the EU/UK risk gating; `pending` carries the GDPR
   // obligations awaiting a risk assessment (neither fired nor suppressed). An
@@ -1343,19 +1420,40 @@ export default function BreachClock() {
   // incident experience).
   const selectedJurisdictionCount = JURISDICTIONS.filter((j) => jurisdictions[j.id]).length;
   const collapsibleBlocks = selectedJurisdictionCount > 3;
-  // A block holding a firm-overdue obligation (dated, unrecorded, past due)
-  // defaults EXPANDED regardless of count — overdue must cost effort to hide,
-  // not to find. (A recorded notification stops being a live matter, so it
-  // does not hold the block open.)
-  const blockHasFirmOverdue = (block) =>
-    block.activeCards.some(
-      (c) => c.deadline && typeof c.deadline.getTime === "function" && !notifications[notifKey(c)] && c.deadline.getTime() < now.getTime()
-    );
+  // Auto-expand is capped at the SINGLE most urgent block (JDC ruling
+  // 2026-08-23): above the 3-jurisdiction threshold exactly one block loads
+  // expanded — the first under compareBlocksByUrgency, which is the first
+  // block of the grouping (groupResultsByJurisdiction sorts with that
+  // comparator regardless of the screen's A–Z toggle). Every other block
+  // loads collapsed, overdue or not — the former firm-overdue exception is
+  // gone. Persisted view_state.expanded overrides, where present, win over
+  // this default. Reads no clock, so the default never shifts on a tick.
+  const mostUrgentBlockId = resultGroups.length > 0 ? resultGroups[0].jurisdictionId : null;
   const blockExpanded = (block) =>
-    !collapsibleBlocks || (expandedBlocks[block.jurisdictionId] ?? blockHasFirmOverdue(block));
-  const setBlockExpanded = (jurId, open) => setExpandedBlocks((prev) => ({ ...prev, [jurId]: open }));
-  const expandAllBlocks = () => setExpandedBlocks(Object.fromEntries(resultGroups.map((b) => [b.jurisdictionId, true])));
-  const collapseAllBlocks = () => setExpandedBlocks(Object.fromEntries(resultGroups.map((b) => [b.jurisdictionId, false])));
+    !collapsibleBlocks || (expandedBlocks[block.jurisdictionId] ?? block.jurisdictionId === mostUrgentBlockId);
+  // Expansion write-through (JDC ruling 2026-08-23): every expand/collapse —
+  // a block header, a queue-row jump, Expand all / Collapse all — persists
+  // the overrides map to view_state beside blockOrder, on the same
+  // optimistic / rollback / saveError pattern as the block-order toggle.
+  const persistExpandedBlocks = async (next) => {
+    const prev = expandedBlocks;
+    setExpandedBlocks(next);
+    if (!routeIncidentId) return;
+    try {
+      await updateIncidentViewState(routeIncidentId, viewStateOf(blockOrder, next));
+      setSaveError("");
+    } catch (err) {
+      console.error("View state update failed:", err);
+      setExpandedBlocks(prev);
+      setSaveError(err?.message ? `Block expansion failed to save: ${err.message}` : "Block expansion failed to save. Try again.");
+    }
+  };
+  const setBlockExpanded = (jurId, open) => {
+    if (expandedBlocks[jurId] === open) return;
+    persistExpandedBlocks({ ...expandedBlocks, [jurId]: open });
+  };
+  const expandAllBlocks = () => persistExpandedBlocks(Object.fromEntries(resultGroups.map((b) => [b.jurisdictionId, true])));
+  const collapseAllBlocks = () => persistExpandedBlocks(Object.fromEntries(resultGroups.map((b) => [b.jurisdictionId, false])));
   // Queue row click: expand the row's block, then scroll to the card once the
   // expanded layout has committed (the same pendingScroll effect the form's
   // section jumps ride).
@@ -1405,7 +1503,9 @@ export default function BreachClock() {
     setAutoComputePending(false);
     if (canCompute) {
       setExpandedCaveats(new Set());
-      setExpandedBlocks({});
+      // Persisted block expansion (applied at load) is deliberately kept —
+      // the silent auto-compute is a view of the saved incident, not a
+      // resubmit.
       // The silent equivalent of pressing Submit: record the computed facts
       // signature (no banner over a fresh compute; enables Back-to-results)
       // — but never a save or a status transition.
@@ -1654,6 +1754,19 @@ export default function BreachClock() {
       lastSavedPayloadRef.current = payload;
       setSavedAt(new Date());
       setExpandedCaveats(new Set());
+      // Resubmit clears persisted expansion so the fresh single-block default
+      // applies to the recomputed results, keeping the block-order choice
+      // (JDC ruling 2026-08-23). Written only when there was something to
+      // clear — a never-expanded incident needs no view_state write.
+      if (routeIncidentId && Object.keys(expandedBlocks).length > 0) {
+        try {
+          await updateIncidentViewState(routeIncidentId, viewStateOf(blockOrder, {}));
+        } catch (err) {
+          // The facts are saved and the compute is valid; a failed
+          // view-state clear is cosmetic. Log and continue.
+          console.error("View state clear failed:", err);
+        }
+      }
       setExpandedBlocks({});
       setComputedSignature(factsSignatureOf(payload));
       setSubmitted(true);
@@ -1684,7 +1797,8 @@ export default function BreachClock() {
   const handleBackToResults = () => {
     applyPayload(lastSavedPayloadRef.current || {});
     setExpandedCaveats(new Set());
-    setExpandedBlocks({});
+    // Block expansion is persisted view state (2026-08-23) and survives the
+    // non-mutating Back-to-results exit unchanged.
     setSubmitted(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -2873,7 +2987,7 @@ export default function BreachClock() {
               <div className="serif" style={{ fontSize: "26px", fontWeight: 400, lineHeight: 1.15, marginBottom: "12px", letterSpacing: "-0.01em" }}>
                 Notify {d.authority}
               </div>
-              <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>{d.basis}</div>
+              <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>{nowrapCitations(d.basis)}</div>
               <div className="rule-text">{d.conditional}</div>
               {d.source_url && (
                 <a
@@ -2926,10 +3040,16 @@ export default function BreachClock() {
                   ) : (
                     <>
                       {/* Overdue countdown renders in Ember; the inline color deliberately
-                          overrides the .deadline-card.missed .mono Bone rule. */}
-                      <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em", ...(isMissed ? { color: "#C76E3A" } : {}) }}>
-                        {formatDuration(timeRemaining)}
-                      </div>
+                          overrides the .deadline-card.missed .mono Bone rule.
+                          Magnitude-tiered precision (2026-08-23) — the exact
+                          instant is the Due line beneath. */}
+                      <Countdown
+                        deadline={d.deadline}
+                        now={now}
+                        onCrossZero={refreshNow}
+                        className="mono"
+                        style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em", ...(isMissed ? { color: "#C76E3A" } : {}) }}
+                      />
                       {/* Hidden when closed: it would repeat the static date above.
                           Promoted due line (JDC 2026-07-25): mono 13px/500 Ember at
                           full opacity on both the white live card and the Midnight
@@ -3067,10 +3187,11 @@ export default function BreachClock() {
     // dated cards, and the due line qualified "If required, due …" (matching
     // the memo). The qualifier line renders Mist while the conditional date
     // is not yet past and flips to Ember when it is; the countdown numerals
-    // stay Ink — the firm-card default — while not yet due (JDC contrast
-    // ruling (b), 2026-08-16: Mist numerals at countdown size read too faint
-    // on white) and take the same Ember flip when overdue. The SURFACE stays
-    // white with the Mist bar; the urgent cream tint and the Midnight
+    // are Ink at ALL times (JDC contrast ruling (b), 2026-08-16: Mist
+    // numerals at countdown size read too faint on white; JDC ruling
+    // 2026-08-23: Ember never applies to a contingent counter, past or not —
+    // the qualifier line alone carries the past-date signal). The SURFACE
+    // stays white with the Mist bar; the urgent cream tint and the Midnight
     // overdue slab remain exclusive to firm cards. Color is reinforcement
     // only: the badge and the "If required" wording carry the contingency.
     // Deliberately NO record-notification footer: nothing has been
@@ -3093,7 +3214,7 @@ export default function BreachClock() {
               <div className="serif" style={{ fontSize: "20px", fontWeight: 400, lineHeight: 1.2, marginBottom: "10px", letterSpacing: "-0.01em" }}>
                 {c.authority}
               </div>
-              <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>{c.citation}</div>
+              <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>{nowrapCitations(c.citation)}</div>
               <div className="rule-text">{c.condition}</div>
               {c.source_url && (
                 <a
@@ -3127,9 +3248,18 @@ export default function BreachClock() {
                     </div>
                   ) : (
                     <>
-                      <div className="mono" style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em", ...(isMissed ? { color: "#C76E3A" } : {}) }}>
-                        {formatDuration(timeRemaining)}
-                      </div>
+                      {/* Contingent counters are Ink at all times — Ember never
+                          applies to a contingent counter, past or not (JDC
+                          ruling 2026-08-23, "middle form"); only the qualifier
+                          line beneath takes Ember once the conditional date
+                          has passed. */}
+                      <Countdown
+                        deadline={due}
+                        now={now}
+                        onCrossZero={refreshNow}
+                        className="mono"
+                        style={{ fontSize: "26px", fontWeight: 500, letterSpacing: "-0.02em", color: "#2C2418" }}
+                      />
                       <div className="mono" style={{ fontSize: "13px", fontWeight: 500, color: qualifierColor, marginTop: "6px" }}>
                         If required, due {fmtDueDateTime(due)}
                       </div>
@@ -3163,7 +3293,7 @@ export default function BreachClock() {
             <div className="serif" style={{ fontSize: "18px", fontWeight: 400, lineHeight: 1.25, marginBottom: "10px", letterSpacing: "-0.01em" }}>
               {s.authority}
             </div>
-            <div className="mono" style={{ fontSize: "12.5px", opacity: 0.7, marginBottom: "10px" }}>{s.citation}</div>
+            <div className="mono" style={{ fontSize: "12.5px", opacity: 0.7, marginBottom: "10px" }}>{nowrapCitations(s.citation)}</div>
             <div style={{ fontSize: "13px", lineHeight: 1.55, color: "#2C2418", opacity: 0.8 }}>{s.condition}</div>
           </div>
           <div style={{ textAlign: "right", minWidth: "200px" }}>
@@ -3202,7 +3332,7 @@ export default function BreachClock() {
           <AlertTriangle size={16} style={{ color: "#1B2A3F", opacity: 0.75, flexShrink: 0, marginTop: "3px" }} />
           <div>
             <div className="serif" style={{ fontSize: "16px", fontWeight: 400, lineHeight: 1.3, letterSpacing: "-0.005em" }}>
-              {a.title}
+              {nowrapCitations(a.title)}
             </div>
             <div style={{ fontSize: "13px", lineHeight: 1.6, opacity: 0.8, marginTop: "8px" }}>{a.body}</div>
             {a.kind === "auto" && (
@@ -3320,7 +3450,7 @@ export default function BreachClock() {
         </div>
         {r.review_citation && (
           <div className="mono" style={{ fontSize: "12px", opacity: 0.7, marginBottom: "10px" }}>
-            {r.original_citation ? `${r.original_citation} → ` : ""}{r.review_citation}
+{nowrapCitations(`${r.original_citation ? `${r.original_citation} → ` : ""}${r.review_citation}`)}
           </div>
         )}
         <div className="rule-text">{r.review_reason}</div>
@@ -3379,7 +3509,7 @@ export default function BreachClock() {
           const isExpanded = !collapsible || expandedCaveats.has(note.id);
           const titleText = (
             <span className="serif" style={{ fontSize: "17px", fontWeight: 400, lineHeight: 1.3, letterSpacing: "-0.005em", color: "#2C2418" }}>
-              {note.title}
+              {nowrapCitations(note.title)}
             </span>
           );
           return (
@@ -3701,7 +3831,7 @@ export default function BreachClock() {
                   />
                   <span style={{ minWidth: 0 }}>
                     <span className="serif" style={{ display: "block", fontSize: "22px", fontWeight: 400, lineHeight: 1.2, letterSpacing: "-0.01em" }}>{block.name}</span>
-                    <span className="mono" style={{ display: "block", fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>{block.statuteSubtitle}</span>
+                    <span className="mono" style={{ display: "block", fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>{nowrapCitations(block.statuteSubtitle)}</span>
                   </span>
                 </span>
                 {!expanded && (
@@ -3716,7 +3846,7 @@ export default function BreachClock() {
                  disclosure affordance, nothing collapses. */
               <div style={{ borderBottom: "1px solid rgba(27,42,63,0.12)", paddingBottom: "10px", marginBottom: "4px" }}>
                 <div className="serif" style={{ fontSize: "22px", fontWeight: 400, lineHeight: 1.2, letterSpacing: "-0.01em" }}>{block.name}</div>
-                <div className="mono" style={{ fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>{block.statuteSubtitle}</div>
+                <div className="mono" style={{ fontSize: "12px", opacity: 0.6, marginTop: "4px" }}>{nowrapCitations(block.statuteSubtitle)}</div>
               </div>
             )}
             {expanded && renderBlock(block)}
@@ -4278,33 +4408,34 @@ export default function BreachClock() {
   // ─────────────────────────────────────────────────────────────────────────
   // Review (read-only) — rendered in the main column after a valid Submit.
   // ─────────────────────────────────────────────────────────────────────────
-  // ── Deadline queue (results view; below Analysis Inputs). One compact row
-  //    per active or contingent obligation across every jurisdiction block:
-  //    dated firm rows by deadline ascending (overdue rows lead, Ember date),
-  //    then dated contingent rows in the results-surface qualifier form
-  //    ("If required, due {date}" — matching the contingent cards; the
-  //    incidents-list "≤ {date} · contingent" compact form is NOT used here),
-  //    then no-fixed-clock rows under their existing labels. Suppressed and
-  //    counsel-review obligations are a summary line beneath the table, never
-  //    rows. Renders only when 3+ jurisdiction blocks have a queue-eligible
-  //    row. A row click expands its block and scrolls to its card. Countdown
-  //    cells read the same shared `now` state as the cards — ONE interval
-  //    drives every countdown on the page.
+  // ── Deadline queue (results view; the FIRST main-column element under the
+  //    Review heading, JDC ruling 2026-08-23). Dated rows only: firm
+  //    obligations with a computed deadline by date ascending (overdue rows
+  //    lead, Ember date), then contingent obligations with a computed
+  //    conditional date in the results-surface qualifier form ("If required,
+  //    due {date}" — matching the contingent cards; the incidents-list
+  //    "≤ {date} · contingent" compact form is NOT used here). Every
+  //    obligation with no fixed notification deadline, firm or contingent, is
+  //    NOT an obligation row — it compresses to one counsel-register summary
+  //    line rendered as the table's final full-width Parchment row
+  //    (noClockSummaryLine). Suppressed and counsel-review
+  //    obligations stay a summary line beneath the table, never rows.
+  //    Renders only when 3+ jurisdiction blocks have a queue-eligible row. A
+  //    row click expands its block and scrolls to its card. Status cells read
+  //    the shared 60-second `now` — never a per-second tier.
   const renderDeadlineQueue = () => {
-    const { rows, suppressedCount, reviewCount, eligibleBlockCount } = deadlineQueue;
+    const { rows, noClockCount, suppressedCount, reviewCount, eligibleBlockCount } = deadlineQueue;
     if (eligibleBlockCount < QUEUE_MIN_BLOCKS || rows.length === 0) return null;
     const isClosed = status === "closed";
     const fmtQueueDate = (d) => fmtDueDate(d);
     const thStyle = { textAlign: "left", padding: "10px 16px", borderBottom: "1px solid rgba(27,42,63,0.18)", fontWeight: 500 };
     const tdStyle = { padding: "10px 16px", borderTop: "1px solid rgba(27,42,63,0.08)", verticalAlign: "top" };
     const dateCell = (row) => {
-      if (!row.date) {
-        return <span style={{ color: "#9FAEC2" }}>No fixed notification deadline</span>;
-      }
       const past = row.date.getTime() < now.getTime();
       if (row.kind === "contingent") {
         // Qualified, never firm: Mist while the conditional date is not yet
-        // past, the same Ember flip as the card's qualifier line once it is.
+        // past, the same Ember flip as the card's qualifier line once it is
+        // (the status cell beside it stays muted either way).
         return (
           <span className="mono" style={{ fontSize: "12.5px", color: past && !isClosed ? "#C76E3A" : "#9FAEC2" }}>
             If required, due {fmtQueueDate(row.date)}
@@ -4329,11 +4460,13 @@ export default function BreachClock() {
         const onTime = !!(row.date && notifiedDate && notifiedDate.getTime() <= row.date.getTime());
         return <span style={{ color: onTime ? "#5A6E4A" : "#2C2418" }}>Notified {fmtDateOnly(rec.notified_on)}</span>;
       }
-      if (!row.date || isClosed) return <span style={{ color: "#9FAEC2" }}>—</span>;
+      if (isClosed) return <span style={{ color: "#9FAEC2" }}>—</span>;
+      // Same magnitude tiering as the cards, on the shared 60-second clock
+      // only — queue cells never attach a per-second interval.
       const remaining = row.date.getTime() - now.getTime();
       return (
         <span className="mono" style={{ fontSize: "12.5px", fontWeight: 500, color: remaining < 0 ? "#C76E3A" : "#2C2418" }}>
-          {formatDuration(remaining)}
+          {formatCountdown(remaining)}
         </span>
       );
     };
@@ -4381,6 +4514,17 @@ export default function BreachClock() {
                   <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{statusCell(row)}</td>
                 </tr>
               ))}
+              {/* No-fixed-deadline summary (JDC addendum 2026-08-23): the
+                  table's FINAL row, one full-width Parchment cell — never an
+                  obligation row: no date, no status, no countdown, not a
+                  jump target, outside the row ordering above. */}
+              {noClockCount > 0 && (
+                <tr data-queue-summary>
+                  <td colSpan={4} style={{ ...tdStyle, background: "#E8DDC4", color: "#2C2418" }}>
+                    {noClockSummaryLine(noClockCount)}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -4438,14 +4582,68 @@ export default function BreachClock() {
     </div>
   );
 
+  // ── Analysis Inputs (results view). Lives in the SIDEBAR below Edit
+  //    answers (JDC ruling 2026-08-23) — the same label/value pairs as
+  //    before, at the rail's compact scale (.section-mark labels, 13px
+  //    values), content preserved in full: the timezone line and the legacy-
+  //    payload caveat included. On narrow viewports, where the sidebar
+  //    stacks, it renders after the deadline queue, never before it. The
+  //    memo's Analysis Inputs section is unchanged.
+  const renderAnalysisInputs = () => {
+    const recapRow = (label, value) => (
+      <div key={label}>
+        <div className="section-mark" style={{ marginBottom: "3px" }}>{label}</div>
+        <div style={{ fontSize: "13px", lineHeight: 1.5, color: "#2C2418", overflowWrap: "break-word" }}>{value}</div>
+      </div>
+    );
+    return (
+      <div>
+        <div className="field-mark" style={{ marginBottom: "12px" }}>Analysis inputs</div>
+        <div style={{ display: "grid", gap: "12px" }}>
+          {recapRow("Awareness", awarenessDate ? fmtDueDateTime(awarenessDate) : "—")}
+          {/* Legacy caveat (ruling C) — verbatim, same string as the memo. */}
+          {awarenessDate && legacyAwarenessZone && recapRow("Timezone", AWARENESS_TZ_CAVEAT)}
+          {recapRow(
+            "Jurisdictions",
+            JURISDICTIONS.filter((j) => jurisdictions[j.id]).map((j) => {
+              const c = residentCounts[j.id];
+              // An unestablished count is stated, not left blank — the same
+              // fact the memo's Analysis Inputs records.
+              const suffix = j.residentField && c
+                ? ` (${fmtCount(c)} residents)`
+                : j.residentField && residentCountUnknown[j.id]
+                ? " (count not established)"
+                : "";
+              return `${j.short}${suffix}`;
+            }).join(" · ") || "—"
+          )}
+          {recapRow("Data types (Q1)", sensitivity.map((s) => SENSITIVITY_OPTIONS.find((o) => o.id === s)?.label).filter(Boolean).join(" · ") || "—")}
+          {anyUSJurisdiction && recapRow("Encryption", encryptionRecap)}
+          {(jurisdictions.eu || jurisdictions.uk) &&
+            recapRow(
+              "Risk assessment",
+              riskLevel ? RISK_OPTIONS.find((o) => o.value === riskLevel)?.label : "Not assessed"
+            )}
+          {anyHarmGated && recapRow("Harm assessment", harmAssessmentSummary(harmAssessment, jurisdictions))}
+          {(jurisdictions.eu || jurisdictions.uk) &&
+            recapRow(
+              "Unintelligibility (Art. 34(3)(a))",
+              gdprUnintelligibility === "yes" ? "Measures applied — data rendered unintelligible"
+                : gdprUnintelligibility === "no" ? "Not applied"
+                : "Not reported"
+            )}
+          {review.length > 0 &&
+            recapRow(
+              "Counsel review",
+              review.map((r) => `${r.jurisdiction} — ${r.authority}${r.review_citation ? ` (${r.review_citation})` : ""}`).join(" · ")
+            )}
+        </div>
+      </div>
+    );
+  };
+
   const renderReview = () => {
     const reportSections = quickMode ? [] : buildIncidentReportSections();
-    const recapRow = (label, value) => (
-      <React.Fragment key={label}>
-        <div className="field-mark" style={{ paddingTop: "2px" }}>{label}</div>
-        <div style={{ fontSize: "15px", lineHeight: 1.55 }}>{value}</div>
-      </React.Fragment>
-    );
     return (
       <>
         {/* Artifact controls. On the wide layout these live in the sticky
@@ -4497,50 +4695,6 @@ export default function BreachClock() {
 
         {crossCheckBanner()}
 
-        {/* Analysis inputs recap */}
-        <div className="section-mark" style={{ marginBottom: "14px" }}>Analysis inputs</div>
-        <div style={{ border: "1px solid rgba(27,42,63,0.18)", background: "#fff", padding: "24px 28px", marginBottom: "36px", borderRadius: "12px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(120px, 180px) 1fr", gap: "16px 28px" }}>
-            {recapRow("Awareness", awarenessDate ? fmtDueDateTime(awarenessDate) : "—")}
-            {/* Legacy caveat (ruling C) — verbatim, same string as the memo. */}
-            {awarenessDate && legacyAwarenessZone && recapRow("Timezone", AWARENESS_TZ_CAVEAT)}
-            {recapRow(
-              "Jurisdictions",
-              JURISDICTIONS.filter((j) => jurisdictions[j.id]).map((j) => {
-                const c = residentCounts[j.id];
-                // An unestablished count is stated, not left blank — the same
-                // fact the memo's Analysis Inputs records.
-                const suffix = j.residentField && c
-                  ? ` (${fmtCount(c)} residents)`
-                  : j.residentField && residentCountUnknown[j.id]
-                  ? " (count not established)"
-                  : "";
-                return `${j.short}${suffix}`;
-              }).join(" · ") || "—"
-            )}
-            {recapRow("Data types (Q1)", sensitivity.map((s) => SENSITIVITY_OPTIONS.find((o) => o.id === s)?.label).filter(Boolean).join(" · ") || "—")}
-            {anyUSJurisdiction && recapRow("Encryption", encryptionRecap)}
-            {(jurisdictions.eu || jurisdictions.uk) &&
-              recapRow(
-                "Risk assessment",
-                riskLevel ? RISK_OPTIONS.find((o) => o.value === riskLevel)?.label : "Not assessed"
-              )}
-            {anyHarmGated && recapRow("Harm assessment", harmAssessmentSummary(harmAssessment, jurisdictions))}
-            {(jurisdictions.eu || jurisdictions.uk) &&
-              recapRow(
-                "Unintelligibility (Art. 34(3)(a))",
-                gdprUnintelligibility === "yes" ? "Measures applied — data rendered unintelligible"
-                  : gdprUnintelligibility === "no" ? "Not applied"
-                  : "Not reported"
-              )}
-            {review.length > 0 &&
-              recapRow(
-                "Counsel review",
-                review.map((r) => `${r.jurisdiction} — ${r.authority}${r.review_citation ? ` (${r.review_citation})` : ""}`).join(" · ")
-              )}
-          </div>
-        </div>
-
         {/* Staleness banner (JDC ruling 2026-08-02): facts have changed since
             the last explicit compute (live signature differs from the one
             recorded at submit / auto-compute — a flag alone would false-alarm
@@ -4565,9 +4719,13 @@ export default function BreachClock() {
           </div>
         )}
 
-        {/* Deadline queue — the cross-jurisdiction overview, directly below
-            the Analysis Inputs recap. Renders only at 3+ eligible blocks. */}
+        {/* Deadline queue — the cross-jurisdiction overview and the FIRST
+            main-column element under the Review heading (Analysis Inputs now
+            lives in the sidebar). Renders only at 3+ eligible blocks. */}
         {renderDeadlineQueue()}
+        {/* Narrow: the sidebar stacks, and Analysis Inputs follows the queue
+            rather than preceding it. */}
+        {isNarrow && <div style={{ marginBottom: "36px" }}>{renderAnalysisInputs()}</div>}
 
         {/* Computed obligations. Past 3 selected jurisdictions the blocks
             collapse, so the header row gains Expand all / Collapse all in the
@@ -4688,6 +4846,9 @@ export default function BreachClock() {
           <ArrowLeft size={14} /> Edit answers
         </button>
       </div>
+      <div style={{ marginTop: "28px", paddingTop: "20px", borderTop: "1px solid rgba(27,42,63,0.12)" }}>
+        {renderAnalysisInputs()}
+      </div>
     </div>
   );
 
@@ -4737,6 +4898,9 @@ export default function BreachClock() {
         .btn-inline-remove:hover { opacity: 1; background: rgba(27,42,63,0.06); }
         /* Deadline-queue rows: clickable jump targets (hover tint matches the
            .check-row idiom). */
+        /* Citation tokens in headings never break mid-citation: inline-block
+           + nowrap drops the whole token to its own line when it won't fit. */
+        .cite { display: inline-block; white-space: nowrap; max-width: 100%; }
         .queue-row { cursor: pointer; transition: background 0.15s ease; }
         .queue-row:hover, .queue-row:focus-visible { background: rgba(27,42,63,0.05); }
         /* Checkbox-row selection idiom */
