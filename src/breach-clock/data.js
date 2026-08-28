@@ -66,6 +66,7 @@ const JURISDICTIONS = [
     name: "European Union",
     short: "EU GDPR",
     statute: "Regulation (EU) 2016/679 (GDPR)",
+    verified: "2026-08-01",
     obligations: [
       {
         kind: "authority",
@@ -116,6 +117,7 @@ const JURISDICTIONS = [
     name: "United Kingdom",
     short: "UK GDPR",
     statute: "UK GDPR & Data Protection Act 2018",
+    verified: "2026-08-01",
     obligations: [
       {
         kind: "authority",
@@ -176,6 +178,7 @@ const JURISDICTIONS = [
     name: "California",
     short: "California",
     statute: "Cal. Civ. Code § 1798.82 et seq.",
+    verified: "2026-08-01",
     residentField: { stateLabel: "California residents affected", placeholder: "e.g. 750" },
     obligations: [
       {
@@ -244,6 +247,7 @@ const JURISDICTIONS = [
     name: "Texas",
     short: "Texas",
     statute: "Tex. Bus. & Com. Code § 521.053",
+    verified: "2026-08-01",
     residentField: { stateLabel: "Texas residents affected", placeholder: "e.g. 300" },
     obligations: [
       {
@@ -326,6 +330,7 @@ const JURISDICTIONS = [
     name: "Colorado",
     short: "Colorado",
     statute: "Colo. Rev. Stat. § 6-1-716",
+    verified: "2026-08-09",
     residentField: { stateLabel: "Colorado residents affected", placeholder: "e.g. 600" },
     obligations: [
       {
@@ -473,6 +478,7 @@ const JURISDICTIONS = [
     name: "Massachusetts",
     short: "Massachusetts",
     statute: "M.G.L. c. 93H",
+    verified: "2026-08-01",
     // No residentField — MA notification is required regardless of count.
     // Harm-gate pass (2026-08-02): Massachusetts carries NO harmGate — the
     // second notification trigger has no harm qualifier, so a harm
@@ -600,6 +606,7 @@ const JURISDICTIONS = [
     name: "New York",
     short: "New York",
     statute: "N.Y. Gen. Bus. Law § 899-aa",
+    verified: "2026-08-01",
     residentField: { stateLabel: "New York residents affected", placeholder: "e.g. 800" },
     // Harm-gate pass (2026-08-02): New York carries NO harmGate — the
     // § 899-aa(2)(a) exception is a narrow compound requiring an inadvertent
@@ -760,6 +767,7 @@ const JURISDICTIONS = [
     name: "Virginia",
     short: "Virginia",
     statute: "Va. Code § 18.2-186.6",
+    verified: "2026-08-01",
     residentField: { stateLabel: "Virginia residents affected", placeholder: "e.g. 800" },
     obligations: [
       {
@@ -932,6 +940,7 @@ const JURISDICTIONS = [
     name: "Delaware",
     short: "Delaware",
     statute: "6 Del. C. ch. 12B",
+    verified: "2026-08-01",
     residentField: { stateLabel: "Delaware residents affected", placeholder: "e.g. 600" },
     obligations: [
       {
@@ -1086,6 +1095,7 @@ const JURISDICTIONS = [
     name: "Connecticut",
     short: "Connecticut",
     statute: "Conn. Gen. Stat. § 36a-701b",
+    verified: "2026-08-01",
     // Informational only — no Connecticut gate depends on resident count (the
     // AG notification is required regardless of the number affected).
     residentField: { stateLabel: "Connecticut residents affected", placeholder: "e.g. 800" },

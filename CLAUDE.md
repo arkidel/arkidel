@@ -91,6 +91,9 @@ surface-condition or runtime-rewrite a citation. Reference forms:
 Only Colorado is conformed and verified as of 2026-08-09; the remaining
 forms above are the TARGET for each jurisdiction's own primary-source
 conformance pass and must not be applied in bulk ahead of verification.
+Every conformance pass sets or updates that jurisdiction's `verified`
+date in data.js as part of the protected-file sign-off; registry.json
+regenerates from it and the CI drift check enforces agreement.
 
 **First reference is per rendered surface, carried structurally**: the
 jurisdiction-level `statute` field and per-obligation `citation` slots are
@@ -156,7 +159,7 @@ test.
 pre-push, gate, or "suites green" claim runs EVERY suite the repository has,
 listed by name with each count — today: (1) the engine in-file harness
 (`runTests`, 121), (2) `scripts/adversarial-engine-tests.mjs` (91), (3) the
-vitest suite (`npm test`, 17 files / 151 tests), (4)
+vitest suite (`npm test`, 17 files / 152 tests), (4)
 `scripts/render-gate-memo.mjs` (8 fixtures). Never "both suites"
 or "the tests" — an unenumerated guard once let the vitest suite sit red for
 nine days. When a new suite is added, add it to this enumeration.
@@ -916,10 +919,12 @@ hand-edit; regenerate after any `data.js` change and commit both, or the
 `MONITOR_DB_URL`, `--dry-run` for an in-memory pass), `api/monitor.mjs`
 (the cron route, `maxDuration: 300`), migration
 `supabase/migrations/20260823120000_monitor_source_state.sql` (table +
-`monitor_bot` role). Attorney verification dates are transcribed into the
-generator's `VERIFIED_DATES` table from the intake-form Sign-offs because
-`data.js` carries no structured field for them — update both in the same
-commit when a jurisdiction is re-verified.
+`monitor_bot` role). Attorney verification dates live in each
+jurisdiction's `verified` field in `data.js` (JDC-authorized amendment,
+2026-08-28) — the generator reads them and carries no static truth of its
+own; a jurisdiction lacking the field fails generation loudly. Update the
+`verified` date and the intake form's Sign-off in the same commit when a
+jurisdiction is re-verified.
 
 ### `docs/intake-forms.md` — audit trail
 

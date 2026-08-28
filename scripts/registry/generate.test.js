@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 import { JURISDICTIONS, RULESET_VERSION } from "../../src/breach-clock/data.js";
-import { buildRegistry, renderRegistry, readCommittedRegistry, VERIFIED_DATES } from "./generate.mjs";
+import { buildRegistry, renderRegistry, readCommittedRegistry } from "./generate.mjs";
 
 describe("registry generator", () => {
   it("renders byte-identical output across two runs", () => {
@@ -36,7 +36,7 @@ describe("registry generator", () => {
       expect(r.source_url).toMatch(/^https?:\/\//);
       expect(r.rule_fields.length).toBeGreaterThan(0);
       for (const f of r.rule_fields) expect(f.startsWith(`${r.jurisdiction}.`)).toBe(true);
-      expect(r.verified_date).toBe(VERIFIED_DATES[r.jurisdiction]);
+      expect(r.verified_date).toBe(JURISDICTIONS.find((j) => j.id === r.jurisdiction).verified);
       expect(r.ruleset_version).toBe(RULESET_VERSION);
       expect(["auto", "manual"]).toContain(r.fetch_mode);
     }
@@ -58,8 +58,14 @@ describe("registry generator", () => {
     expect(rows.filter((r) => r.fetch_mode === "manual").length).toBeGreaterThan(0);
   });
 
-  it("refuses a jurisdiction without a recorded verification date", () => {
-    expect(() => buildRegistry([{ id: "zz", name: "Nowhere", obligations: [] }], "x")).toThrow(/verification date/);
+  it("every jurisdiction in data.js carries a verified date the registry reads", () => {
+    for (const j of JURISDICTIONS) {
+      expect(j.verified, `jurisdiction "${j.id}" lacks a verified field`).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+
+  it("fails loudly, naming the jurisdiction, when a verified field is missing", () => {
+    expect(() => buildRegistry([{ id: "zz", name: "Nowhere", obligations: [] }], "x")).toThrow(/verification date.*"zz".*verified/);
   });
 
   it("citation strings are exact data.js strings", () => {

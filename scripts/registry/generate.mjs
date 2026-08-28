@@ -32,27 +32,13 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const REGISTRY_PATH = resolve(HERE, "../../registry.json");
 
 // ── Attorney verification dates ──────────────────────────────────────────
-// data.js carries no structured verification-date field; the dates of record
-// live in each jurisdiction's Sign-off section of docs/intake-forms.md. This
-// table transcribes them. Every modelled jurisdiction went through the
-// 2026-08-01 primary-source review (JDC + Claude); Colorado additionally had
-// the 2026-08-09 primary-source conformance pass against the codified C.R.S.
-// When a jurisdiction's sources are re-verified, update its entry here in the
-// same commit that updates the intake form's Sign-off. A jurisdiction present
-// in data.js but absent here fails generation — a new jurisdiction must
-// arrive with its verification date.
-export const VERIFIED_DATES = Object.freeze({
-  eu: "2026-08-01",
-  uk: "2026-08-01",
-  ca: "2026-08-01",
-  tx: "2026-08-01",
-  co: "2026-08-09",
-  ma: "2026-08-01",
-  ny: "2026-08-01",
-  va: "2026-08-01",
-  de: "2026-08-01",
-  ct: "2026-08-01",
-});
+// Each jurisdiction's `verified` field in data.js (JDC-authorized amendment,
+// 2026-08-28) is the date of record, set as part of the protected-file
+// sign-off when a conformance pass re-verifies that jurisdiction; the
+// intake form's Sign-off section in docs/intake-forms.md carries the
+// narrative. The generator reads the field — it carries no static truth of
+// its own. A jurisdiction without a `verified` field fails generation
+// loudly: a new jurisdiction must arrive with its verification date.
 
 // ── Fetch mode ───────────────────────────────────────────────────────────
 // Colorado's sources sit behind the LexisNexis auth wall (the codified C.R.S.
@@ -98,9 +84,9 @@ function shortHash(text) {
 export function buildRegistry(jurisdictions = JURISDICTIONS, rulesetVersion = RULESET_VERSION) {
   const rows = [];
   for (const jur of jurisdictions) {
-    const verified = VERIFIED_DATES[jur.id];
+    const verified = jur.verified;
     if (!verified) {
-      throw new Error(`registry: no verification date recorded for jurisdiction "${jur.id}"`);
+      throw new Error(`registry: no verification date recorded for jurisdiction "${jur.id}" — data.js must carry a \`verified\` field on every jurisdiction`);
     }
     const byUrl = new Map(); // source_url → { citations: Set, fields: [] }
     const touch = (url, citation, fields) => {
