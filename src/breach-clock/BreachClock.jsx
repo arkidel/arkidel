@@ -354,8 +354,9 @@ const harmStandardsFor = (jur) => {
 };
 
 // Encryption-cluster option sets (S3b). The values match what engine.js gates on:
-// encrypted/redacted/keyAcquired/reidentificationAcquired are "yes"|"no"; strength
-// is "ge_128"|"below_128"|"unknown". Each is tri-state ("" = unset → fires).
+// encrypted/redacted/keyAcquired/reidentificationAcquired/acquiredUnencrypted are
+// "yes"|"no"; strength is "ge_128"|"below_128"|"unknown". Each is tri-state
+// ("" = unset → fires).
 const YES_NO = [
   { value: "yes", label: "Yes" },
   { value: "no", label: "No" },
@@ -626,6 +627,7 @@ const factsSignatureOf = (p) =>
     p.redacted,
     p.keyAcquired,
     p.reidentificationAcquired,
+    p.acquiredUnencrypted,
     p.gdprUnintelligibility,
     p.riskLevel,
     p.harmAssessment,
@@ -737,12 +739,14 @@ export default function BreachClock() {
   // threshold-gated obligation of a flagged jurisdiction as CONTINGENT.
   const [residentCountUnknown, setResidentCountUnknown] = useState({});
   const [sensitivity, setSensitivity] = useState([]);
-  // US encryption cluster (S3b) — five tri-state inputs, each defaulting to unset
-  // (""). They feed the US per-obligation safeHarbor gates in the engine.
+  // US encryption cluster (S3b; +acquiredUnencrypted, Virginia pass 2026-08-29)
+  // — six tri-state inputs, each defaulting to unset (""). They feed the US
+  // per-obligation safeHarbor gates in the engine.
   const [encrypted, setEncrypted] = useState("");
   const [encryptionStrength, setEncryptionStrength] = useState("");
   const [redacted, setRedacted] = useState("");
   const [keyAcquired, setKeyAcquired] = useState("");
+  const [acquiredUnencrypted, setAcquiredUnencrypted] = useState("");
   const [reidentificationAcquired, setReidentificationAcquired] = useState("");
   // GDPR Art. 34(3)(a) unintelligibility (S5) — the dedicated EU/UK input that
   // replaced the derived encryptionApplied boolean. Tri-state, default unset.
@@ -881,6 +885,7 @@ export default function BreachClock() {
     setEncryptionStrength(p.encryptionStrength || "");
     setRedacted(p.redacted || "");
     setKeyAcquired(p.keyAcquired || "");
+    setAcquiredUnencrypted(p.acquiredUnencrypted || "");
     setReidentificationAcquired(p.reidentificationAcquired || "");
     setGdprUnintelligibility(p.gdprUnintelligibility || "");
     // riskLevel passes through as-is — the engine fails safe on anything
@@ -984,6 +989,7 @@ export default function BreachClock() {
     encryptionStrength,
     redacted,
     keyAcquired,
+    acquiredUnencrypted,
     reidentificationAcquired,
     gdprUnintelligibility,
     riskLevel,
@@ -1409,6 +1415,8 @@ export default function BreachClock() {
       else if (encryptionStrength === "unknown") s += " (strength unknown)";
       if (keyAcquired === "yes") s += ", key/credential acquired";
       else if (keyAcquired === "no") s += ", key not acquired";
+      if (acquiredUnencrypted === "yes") s += ", unencrypted form acquired";
+      else if (acquiredUnencrypted === "no") s += ", no unencrypted form acquired";
       parts.push(s);
     } else if (encrypted === "no") parts.push("Not encrypted");
     if (redacted === "yes") {
@@ -2768,9 +2776,9 @@ export default function BreachClock() {
     </div>
   );
 
-  // US encryption cluster (S3b). Five tri-state inputs in the field-mark idiom,
-  // with nested reveals: strength + keyAcquired appear only when encrypted=Yes;
-  // reidentificationAcquired only when redacted=Yes. US-facing — shown only when a
+  // US encryption cluster (S3b). Six tri-state inputs in the field-mark idiom,
+  // with nested reveals: strength + keyAcquired + acquiredUnencrypted appear only
+  // when encrypted=Yes; reidentificationAcquired only when redacted=Yes. US-facing — shown only when a
   // US jurisdiction is selected (S5: EU/UK now have their own gdprUnintelligibility
   // input, so the cluster no longer needs to render for EU-only incidents).
   const renderEncryption = () => {
@@ -2793,6 +2801,11 @@ export default function BreachClock() {
               {labelRow("Was the encryption key, decryption means, or a security credential able to render the encrypted data readable also acquired?")}
               <p style={helperStyle}>If acquired, the encryption safe harbor does not apply — California explicitly includes an acquired security credential.</p>
               {triStateRow(keyAcquired, setKeyAcquired, YES_NO)}
+            </div>
+            <div style={{ marginBottom: "20px" }}>
+              {labelRow("Was encrypted information accessed and acquired in an unencrypted form?")}
+              <p style={helperStyle}>If encrypted data was obtained in readable form — for example, exfiltrated after decryption — encryption safe harbors do not apply. Virginia makes this boundary explicit.</p>
+              {triStateRow(acquiredUnencrypted, setAcquiredUnencrypted, YES_NO)}
             </div>
           </>
         )}

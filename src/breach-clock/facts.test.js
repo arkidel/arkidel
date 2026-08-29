@@ -61,7 +61,7 @@ describe("factsFromPayload → engine", () => {
     const utc = computeDeadlines(factsFromPayload({ awareness: "2026-09-30T10:00", awarenessTz: "UTC", jurisdictions: { co: true }, residentCounts: { co: 1 } }));
     const res = (r) => r.deadlines.find((d) => d.jurisdiction === "Colorado" && /Residents/.test(d.authority)).deadline.getTime();
     expect(res(chicago) - res(utc)).toBe(5 * 3600 * 1000);
-    expect(utc.ruleset_version).toBe("2026-08-22");
+    expect(utc.ruleset_version).toBe("2026-08-29");
   });
   it("a zone-less payload that cannot resolve is refused by the engine, never computed empty", () => {
     const r = computeDeadlines(factsFromPayload({ awareness: "", jurisdictions: { co: true } }));

@@ -2110,9 +2110,12 @@ multi-authority array.
 - **Threshold:** 1,000 (gt — "more than 1,000")
 - **Deadline:** No fixed clock — "without unreasonable delay."
 - **Citation:** Va. Code § 18.2-186.6(E)
-- **Conditional language:** Notify all nationwide consumer reporting agencies
-  of the timing, distribution, and content of the notice, without unreasonable
-  delay.
+- **Conditional language:** Where notification is provided to more than 1,000
+  persons at one time, notify the Office of the Attorney General and all
+  nationwide consumer reporting agencies of the timing, distribution, and
+  content of the notice, without unreasonable delay. *(Conformed 2026-08-29:
+  subsection (E) directs the over-1,000 report to the Attorney General as well
+  as the CRAs; the earlier condition sentence omitted the AG.)*
 
 ## 8.6 Encryption suppression — breach-definition exclusion
 
@@ -2130,6 +2133,23 @@ multi-authority array.
   with access to the encryption key**. The first prong (post-decryption
   acquisition) was previously only implicit in the mechanism description; the
   encoded gate description now addresses (C) explicitly with the cite.
+- **Both (C) prongs modelled (2026-08-29 conformance pass, F1=A):** the
+  encryption harbor on all three VA obligations now carries
+  `defeatedBy: ["keyAcquired", "acquiredUnencrypted"]` — the harbor holds only
+  where **neither** the encryption key **nor** an unencrypted form of the data
+  was acquired. The engine's `defeatedBy` accepts a string (unchanged
+  semantics elsewhere) or an array (every listed input must be affirmatively
+  "no"). The redaction harbors are unchanged.
+- **New intake question — `acquiredUnencrypted` (encryption cluster,
+  2026-08-29):** "Was encrypted information accessed and acquired in an
+  unencrypted form?" Tri-state Yes/No/unset, **revealed only when the
+  encryption question is answered Yes** (nested alongside the strength and
+  key-acquired questions). Statutory basis: Va. Code Ann. § 18.2-186.6(C),
+  first branch (encrypted information "accessed and acquired in an
+  unencrypted form"). Unset leaves the harbor unsatisfied for the array path
+  (conservative — the VA obligations compute rather than being silently
+  excused); jurisdictions with a string `defeatedBy` are unaffected by the
+  answer.
 
 ## 8.7 Other obligations not modelled (handled via counsel notes or out of scope)
 
@@ -2294,7 +2314,32 @@ multi-authority array.
   suppression rendering (commit 2) must present the outcome as a negated
   element of the duty — the duty never arises — never as an exemption from
   an arisen duty; the `character` value is pinned by engine test. See § 0A.
-- **Reviewer:** *(pending)*
+- **Conformance pass 2026-08-29 (JDC rulings 2026-08-29: F1=A, F2–F7 as
+  proposed; prose form C; § 32.1-127.1:05 read in-pass).** Primary source:
+  law.lis.virginia.gov (official portal), § 18.2-186.6 (hist. through 2020
+  c. 264) and § 32.1-127.1:05 (hist. 2010 c. 852). Changes: (F1=A) both
+  § 18.2-186.6(C) prongs modelled — encryption harbors on all three
+  obligations take `defeatedBy: ["keyAcquired", "acquiredUnencrypted"]`, with
+  the new `acquiredUnencrypted` intake question recorded in § 8.6; (F2)
+  medical-information counsel note rewritten to reflect § 32.1-127.1:05's
+  actual scope — Virginia public bodies only, with express carve-outs for
+  HIPAA/HITECH covered entities and business associates and FTC Health Breach
+  Notification Rule entities; (F3) new counsel note
+  `va-deemed-compliance-and-exclusions-186-6` covering the (F)/(G)/(H)
+  deemed-compliance pathways, (J) exclusive financial-institution
+  enforcement, and the (K) Bureau of Insurance exclusion; (F4) CRA condition
+  conformed — the over-1,000 report runs to the Attorney General and the
+  CRAs; (F5) all three `deadline_trigger` values conformed to "discovery or
+  notification of breach" per the statutory text; (F6) employer/payroll note
+  gains the FEIN content requirement and AG-to-Department-of-Taxation relay,
+  and the employee-only scope sentence conformed to subsection (M)'s
+  employer-specific framing; (F7) shared `gov_id` label extended to name
+  military IDs. Citation sweep: every Virginia citation conformed to Bluebook
+  T1 `Va. Code Ann. §` form across statute, obligation, harm-gate, and
+  counsel-note fields. `verified` set to 2026-08-29; `RULESET_VERSION` bumped
+  to 2026-08-29; registry.json regenerated.
+- **Reviewer:** JDC, 2026-08-29 (sign-off carried in the session prompt
+  authorizing this pass).
 
 ---
 

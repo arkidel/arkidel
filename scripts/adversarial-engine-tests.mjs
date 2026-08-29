@@ -134,6 +134,9 @@ T("A. Mixed", "All EIGHT, riskLevel high + encryption (per-obligation safeHarbor
     encrypted: "yes",
     encryptionStrength: "ge_128",
     keyAcquired: "no",
+    // VA's harbor (Virginia pass 2026-08-29) needs BOTH defeaters "no" —
+    // without acquiredUnencrypted the VA obligations would fire, not suppress.
+    acquiredUnencrypted: "no",
   });
   a.eq(r.deadlines.length, 2, "deadlines count (EU SA + UK ICO only)");
   a.eq(r.pending.length, 0, "pending count");
@@ -434,6 +437,38 @@ T("F. Parity", "Operative-only facts == operative + record noise (identical engi
   const rOperative = computeDeadlines(operative);
   const rFull = computeDeadlines(full);
   a.eq(J(rFull), J(rOperative), "engine output identical across quick/full");
+});
+
+T("F. Parity", "acquiredUnencrypted is operative and survives record noise (Virginia pass 2026-08-29)", (a) => {
+  // The group-F parity property, extended to the newest operative key. The VA
+  // encryption harbor's array defeatedBy reads acquiredUnencrypted, so the
+  // key must (1) ride through payload noise unchanged and (2) genuinely
+  // change the output — parity must not pass because both sides ignore it.
+  const operative = {
+    awarenessDate: AW,
+    jurisdictions: { va: true },
+    residentCounts: { va: 5000 },
+    sensitivity: ["financial"],
+    encrypted: "yes",
+    keyAcquired: "no",
+    acquiredUnencrypted: "no",
+  };
+  const full = {
+    ...operative,
+    sensitivityLabels: ["Payment card information"],
+    incidentTitle: "ACME breach 2026-08",
+    incidentReport: [{ type: "group", title: "Incident summary" }, { type: "field", label: "X", value: "Y" }],
+    dataSubjectCategories: [{ name: "Customers", count: 5000, elements: ["Name"] }],
+    randomGarbage: { nested: [1, 2, 3] },
+  };
+  a.eq(J(computeDeadlines(full)), J(computeDeadlines(operative)), "record noise never changes engine output");
+  // The key is operative: flipping it to "yes" defeats the harbor and the VA
+  // obligations fire instead of suppressing.
+  const flipped = computeDeadlines({ ...operative, acquiredUnencrypted: "yes" });
+  a.ok(J(flipped) !== J(computeDeadlines(operative)), "acquiredUnencrypted is operative, not inert");
+  a.eq(computeDeadlines(operative).suppressed.length, 3, "harbor holds when both defeaters are 'no'");
+  a.eq(flipped.suppressed.length, 0, "harbor defeated when an unencrypted form was acquired");
+  a.eq(flipped.deadlines.length, 3, "defeated harbor -> the three VA obligations compute");
 });
 
 // =============================================================================

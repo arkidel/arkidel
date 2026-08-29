@@ -27,7 +27,7 @@
 const SENSITIVITY_OPTIONS = [
   { id: "identifiers", label: "Identifiers (name, email, address)" },
   { id: "ssn", label: "Social Security numbers (or ITIN / other taxpayer IDs)" },
-  { id: "gov_id", label: "Government IDs (passport, driver's license, state ID)" },
+  { id: "gov_id", label: "Government IDs (passport, driver's license, state ID, military ID)" },
   { id: "financial", label: "Financial (account, card, credentials)" },
   { id: "health", label: "Health or medical information" },
   { id: "biometric", label: "Biometric or genetic data" },
@@ -766,17 +766,17 @@ const JURISDICTIONS = [
     id: "va",
     name: "Virginia",
     short: "Virginia",
-    statute: "Va. Code § 18.2-186.6",
-    verified: "2026-08-01",
+    statute: "Va. Code Ann. § 18.2-186.6",
+    verified: "2026-08-29",
     residentField: { stateLabel: "Virginia residents affected", placeholder: "e.g. 800" },
     obligations: [
       {
         kind: "individual",
         authority: "Affected Virginia Residents",
         deadline_hours: null, // "without unreasonable delay" — no fixed clock
-        deadline_trigger: "discovery of breach",
+        deadline_trigger: "discovery or notification of breach",
         deadline_phrase: "without unreasonable delay",
-        citation: "Va. Code § 18.2-186.6(B)",
+        citation: "Va. Code Ann. § 18.2-186.6(B)",
         source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
         condition: "Notice required without unreasonable delay following discovery or notification of the breach. Notice may be reasonably delayed to allow the entity to determine the scope of the breach and restore the reasonable integrity of the system, or if a law-enforcement agency advises that notice will impede a criminal or civil investigation or homeland or national security. The breach must have caused, or the entity must reasonably believe has caused or will cause, identity theft or other fraud to a Virginia resident — see counsel note on the harm threshold.",
         // Harm-gate pass (2026-08-02): Virginia's harm language is a DUTY
@@ -785,7 +785,7 @@ const JURISDICTIONS = [
         // a negated duty element.
         harmGate: {
           standard: "causes, or the individual or entity reasonably believes has caused or will cause, identity theft or another fraud to any resident of the Commonwealth",
-          citation: "Va. Code § 18.2-186.6(B)",
+          citation: "Va. Code Ann. § 18.2-186.6(B)",
           character: "duty_element",
         },
         conditionalGates: [
@@ -793,12 +793,12 @@ const JURISDICTIONS = [
             role: "safeHarbor",
             input: "encrypted",
             equals: "yes",
-            defeatedBy: "keyAcquired",
+            defeatedBy: ["keyAcquired", "acquiredUnencrypted"],
             onSatisfied: "suppress",
             whenUnset: "fires",
             suppressionType: "breach_definition",
-            citation: "Va. Code § 18.2-186.6(A)",
-            description: "The statute applies only to unencrypted or unredacted personal information. If the data was encrypted or redacted and the encryption key was not accessed or acquired, the incident does not meet the statutory definition of a breach. Section 18.2-186.6(C) makes the encryption boundary explicit: notification is required where encrypted information is accessed and acquired in an unencrypted form, or where the breach involves a person with access to the encryption key.",
+            citation: "Va. Code Ann. § 18.2-186.6(A)",
+            description: "The statute applies only to unencrypted or unredacted personal information. If the data was encrypted or redacted and the encryption key was not accessed or acquired, the incident does not meet the statutory definition of a breach. Section 18.2-186.6(C) makes the encryption boundary explicit: notification is required where encrypted information is accessed and acquired in an unencrypted form, or where the breach involves a person with access to the encryption key. Both statutory paths are modelled: the safe harbor holds only where neither the encryption key nor an unencrypted form of the data was acquired.",
           },
           {
             role: "safeHarbor",
@@ -808,7 +808,7 @@ const JURISDICTIONS = [
             onSatisfied: "suppress",
             whenUnset: "fires",
             suppressionType: "breach_definition",
-            citation: "Va. Code § 18.2-186.6(A)",
+            citation: "Va. Code Ann. § 18.2-186.6(A)",
             description: "The statute applies only to unencrypted or unredacted personal information. If the data was encrypted or redacted and the encryption key was not accessed or acquired, the incident does not meet the statutory definition of a breach.",
           },
         ],
@@ -817,14 +817,14 @@ const JURISDICTIONS = [
         kind: "ag",
         authority: "Virginia Attorney General",
         deadline_hours: null,
-        deadline_trigger: "discovery of breach",
+        deadline_trigger: "discovery or notification of breach",
         deadline_phrase: "without unreasonable delay",
-        citation: "Va. Code § 18.2-186.6(B)",
+        citation: "Va. Code Ann. § 18.2-186.6(B)",
         source_url: "https://www.oag.state.va.us/programs-initiatives/computer-crime",
         condition: "Required whenever any Virginia resident is notified. No threshold. Notice without unreasonable delay; the same law-enforcement-delay provisions that apply to resident notification also apply to AG notification. Notification is sent to the Computer Crime Section of the Office of the Attorney General by mail (or follow current AG guidance on submission method).",
         harmGate: {
           standard: "causes, or the individual or entity reasonably believes has caused or will cause, identity theft or another fraud to any resident of the Commonwealth",
-          citation: "Va. Code § 18.2-186.6(B)",
+          citation: "Va. Code Ann. § 18.2-186.6(B)",
           character: "duty_element",
         },
         conditionalGates: [
@@ -832,12 +832,12 @@ const JURISDICTIONS = [
             role: "safeHarbor",
             input: "encrypted",
             equals: "yes",
-            defeatedBy: "keyAcquired",
+            defeatedBy: ["keyAcquired", "acquiredUnencrypted"],
             onSatisfied: "suppress",
             whenUnset: "fires",
             suppressionType: "breach_definition",
-            citation: "Va. Code § 18.2-186.6(A)",
-            description: "AG notification is contingent on resident notification being required. Encrypted or redacted data with uncompromised key falls outside the statutory breach definition.",
+            citation: "Va. Code Ann. § 18.2-186.6(A)",
+            description: "AG notification is contingent on resident notification being required. Encrypted or redacted data with uncompromised key falls outside the statutory breach definition. Defeated where the key or an unencrypted form of the data was acquired.",
           },
           {
             role: "safeHarbor",
@@ -847,7 +847,7 @@ const JURISDICTIONS = [
             onSatisfied: "suppress",
             whenUnset: "fires",
             suppressionType: "breach_definition",
-            citation: "Va. Code § 18.2-186.6(A)",
+            citation: "Va. Code Ann. § 18.2-186.6(A)",
             description: "AG notification is contingent on resident notification being required. Encrypted or redacted data with uncompromised key falls outside the statutory breach definition.",
           },
         ],
@@ -856,18 +856,18 @@ const JURISDICTIONS = [
         kind: "cra",
         authority: "Nationwide Consumer Reporting Agencies",
         deadline_hours: null,
-        deadline_trigger: "discovery of breach",
+        deadline_trigger: "discovery or notification of breach",
         deadline_phrase: "without unreasonable delay",
         gating: { residentThreshold: 1000, comparator: "gt" }, // "more than 1,000 persons at one time"
         thresholdLabel: "CRA notification",
-        citation: "Va. Code § 18.2-186.6(E)",
+        citation: "Va. Code Ann. § 18.2-186.6(E)",
         source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
-        condition: "Where notification is provided to more than 1,000 persons at one time, the entity must also notify all nationwide consumer reporting agencies of the timing, distribution, and content of the notice, without unreasonable delay.",
+        condition: "Where notification is provided to more than 1,000 persons at one time, the entity must also notify the Office of the Attorney General and all nationwide consumer reporting agencies of the timing, distribution, and content of the notice, without unreasonable delay.",
         // The CRA duty (§ 18.2-186.6(E)) is reached via its dependency on
         // individual notice, so it carries the (B) duty element.
         harmGate: {
           standard: "causes, or the individual or entity reasonably believes has caused or will cause, identity theft or another fraud to any resident of the Commonwealth",
-          citation: "Va. Code § 18.2-186.6(B)",
+          citation: "Va. Code Ann. § 18.2-186.6(B)",
           character: "duty_element",
         },
         conditionalGates: [
@@ -875,12 +875,12 @@ const JURISDICTIONS = [
             role: "safeHarbor",
             input: "encrypted",
             equals: "yes",
-            defeatedBy: "keyAcquired",
+            defeatedBy: ["keyAcquired", "acquiredUnencrypted"],
             onSatisfied: "suppress",
             whenUnset: "fires",
             suppressionType: "breach_definition",
-            citation: "Va. Code § 18.2-186.6(A)",
-            description: "CRA notification is contingent on the entity being required to notify residents. Encrypted or redacted data with uncompromised key removes the breach.",
+            citation: "Va. Code Ann. § 18.2-186.6(A)",
+            description: "CRA notification is contingent on the entity being required to notify residents. Encrypted or redacted data with uncompromised key removes the breach. Defeated where the key or an unencrypted form of the data was acquired.",
           },
           {
             role: "safeHarbor",
@@ -890,7 +890,7 @@ const JURISDICTIONS = [
             onSatisfied: "suppress",
             whenUnset: "fires",
             suppressionType: "breach_definition",
-            citation: "Va. Code § 18.2-186.6(A)",
+            citation: "Va. Code Ann. § 18.2-186.6(A)",
             description: "CRA notification is contingent on the entity being required to notify residents. Encrypted or redacted data with uncompromised key removes the breach.",
           },
         ],
@@ -905,15 +905,15 @@ const JURISDICTIONS = [
         // harm-assessment question.
         title: "Substantive harm threshold under § 18.2-186.6 — modelled via the harm-assessment question",
         content: "Virginia's breach definition incorporates a substantive harm element: notification under § 18.2-186.6(B) is required only where the breach has caused, or the entity reasonably believes has caused or will cause, identity theft or other fraud to a Virginia resident. The same harm-threshold language appears in subsection (M) for the employer / payroll-service-provider tax-data regime. This element is modelled via the harm-assessment question: recording a documented determination suppresses the Virginia obligations as a negated duty element. The determination whether identity theft or another fraud has been or will be caused remains counsel's substantive judgment, made and documented outside the tool; absent that determination, Respond's deadlines reflect the default position that notification is required. Document the determination contemporaneously and consult counsel before relying on it.",
-        citation: "Va. Code § 18.2-186.6(A), (B), (M)",
+        citation: "Va. Code Ann. § 18.2-186.6(A), (B), (M)",
         source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
       },
       {
         id: "va-medical-information-32-1-127-1-05",
         placement: "sectoral",
-        title: "Medical information — separate breach notification regime under § 32.1-127.1:05",
-        content: "Virginia has a separate breach notification statute for medical information, Va. Code § 32.1-127.1:05, applicable to certain entities holding medical information. Where the breach involves medical or health information, the requirements of § 32.1-127.1:05 may apply in addition to or instead of § 18.2-186.6, with different scope, timing, and content requirements. HIPAA covered entities and business associates may also have federal notification obligations under HIPAA/HITECH that interact with the Virginia regime. Respond does not model § 32.1-127.1:05 because it is a sectoral regime with applicability that depends on entity type rather than breach facts.",
-        citation: "Va. Code § 32.1-127.1:05",
+        title: "Medical information held by public bodies — separate notification regime under Va. Code Ann. § 32.1-127.1:05",
+        content: "The Code of Virginia contains a separate breach-notification regime for medical information, Va. Code Ann. § 32.1-127.1:05, whose reach is narrower than its subject matter suggests. The statute applies only to Virginia public bodies — agencies of the Commonwealth and its political subdivisions, school boards, boards of visitors of public institutions of higher education, and other organizations supported wholly or principally by public funds — and it expressly does not apply to HIPAA covered entities or business associates subject to the HITECH breach-notification requirements, or to non-HIPAA entities subject to the FTC's Health Breach Notification Rule. Where it does apply, notification of a breach of unencrypted or unredacted medical information runs to the Office of the Attorney General, the Commissioner of Health, the subject of the medical information, and any affected Virginia resident, without unreasonable delay; where more than 1,000 persons are notified at one time, the timing, distribution, and content of the notice must also be reported to the Attorney General and the Commissioner of Health. The notice content requirements parallel those of § 18.2-186.6 but omit the vigilance-advice element. Respond does not model this regime because applicability turns on entity type — public-body status and the federal carve-outs — rather than on breach facts; for public-body clients holding medical information, treat it as a parallel obligation requiring separate analysis.",
+        citation: "Va. Code Ann. § 32.1-127.1:05",
         source_url: "https://law.lis.virginia.gov/vacode/title32.1/chapter5/section32.1-127.1:05/",
       },
       {
@@ -921,8 +921,8 @@ const JURISDICTIONS = [
         placement: "parallel",
         anchor: "ag",
         title: "Employer / payroll-service-provider tax-data breaches — separate AG notification obligation under § 18.2-186.6(M)",
-        content: "If the entity is an employer or payroll service provider, and the breach involves a Virginia employee's taxpayer identification number in combination with the income tax withheld for that employee, a separate notification obligation applies under § 18.2-186.6(M). This obligation runs in parallel to (not in place of) the main § 18.2-186.6 analysis above and requires notification to the Virginia Attorney General without unreasonable delay following discovery, with no resident-notification component and no CRA component. The harm threshold from the main statute applies — notification is required only where the breach has caused, or the entity reasonably believes has caused or will cause, identity theft or other fraud. Respond does not model this as a discrete obligation because applicability depends on entity type (employer or payroll service provider) and data type (TIN combined with income tax withheld) rather than on the breach facts themselves. If the entity is in scope, treat the subsection (M) AG notification as a separate parallel obligation. Note: subsection (M) applies only to information regarding the employer's own employees, not customers or other non-employees.",
-        citation: "Va. Code § 18.2-186.6(M)",
+        content: "If the entity is an employer or payroll service provider, and the breach involves a Virginia employee's taxpayer identification number in combination with the income tax withheld for that employee, a separate notification obligation applies under § 18.2-186.6(M). This obligation runs in parallel to (not in place of) the main § 18.2-186.6 analysis above and requires notification to the Virginia Attorney General without unreasonable delay following discovery, with no resident-notification component and no CRA component. The harm threshold from the main statute applies — notification is required only where the breach has caused, or the entity reasonably believes has caused or will cause, identity theft or other fraud. Respond does not model this as a discrete obligation because applicability depends on entity type (employer or payroll service provider) and data type (TIN combined with income tax withheld) rather than on the breach facts themselves. If the entity is in scope, treat the subsection (M) AG notification as a separate parallel obligation. The notification must include the name and federal employer identification number of the employer that may be affected by the compromise; upon receipt, the Office of the Attorney General notifies the Department of Taxation. Note: with respect to employers, subsection (M) applies only to information regarding the employer's own employees, and does not apply to information regarding the employer's customers or other non-employees.",
+        citation: "Va. Code Ann. § 18.2-186.6(M)",
         source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
       },
       {
@@ -930,7 +930,15 @@ const JURISDICTIONS = [
         placement: "caveat",
         title: "Good-faith acquisition by employees or agents — not a breach under the statute",
         content: "Section 18.2-186.6(A) excludes from the breach definition the good-faith acquisition of personal information by an employee or agent of the entity for purposes of the entity, provided that the personal information is not used for a purpose other than a lawful purpose of the entity and is not subject to further unauthorized disclosure. This is a fact-specific carve-out; if the relevant unauthorized acquisition was by an employee or agent acting in good faith for the entity's purposes, no breach has occurred under the statute and notification is not required. Respond does not gate on this because it requires substantive judgment about employee intent and use of the data.",
-        citation: "Va. Code § 18.2-186.6(A)",
+        citation: "Va. Code Ann. § 18.2-186.6(A)",
+        source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
+      },
+      {
+        id: "va-deemed-compliance-and-exclusions-186-6",
+        placement: "caveat",
+        title: "Deemed-compliance pathways and sectoral exclusions under § 18.2-186.6(F) through (K)",
+        content: "The statute provides several compliance pathways and exclusions. Under subsection (F), an entity that maintains its own notification procedures as part of an information privacy or security policy, consistent with the timing requirements of this section, is deemed compliant if it notifies Virginia residents in accordance with those procedures. Under subsection (G), an entity subject to Title V of the Gramm-Leach-Bliley Act that maintains notification procedures under that Act is deemed compliant. Under subsection (H), an entity that complies with the notification requirements or procedures of its primary or functional state or federal regulator is in compliance. Enforcement against state-chartered or licensed financial institutions lies exclusively with the institution's primary state regulator under subsection (J). Most significantly for scoping: under subsection (K), the section does not apply at all to an individual or entity regulated by the State Corporation Commission's Bureau of Insurance — insurance-sector clients fall outside this statute entirely and should be analyzed under their sectoral regime. Respond does not gate on these provisions because each turns on entity type or the content of the entity's own procedures rather than on breach facts; where a pathway or exclusion applies, counsel should document the basis.",
+        citation: "Va. Code Ann. § 18.2-186.6(F), (G), (H), (J), (K)",
         source_url: "https://law.lis.virginia.gov/vacode/title18.2/chapter6/section18.2-186.6/",
       },
     ],
@@ -1245,7 +1253,7 @@ const JURISDICTIONS = [
 // memo's generation footer and carried on every computed result object
 // (`ruleset_version`) so any future API response identifies the rules it was
 // computed under.
-const RULESET_VERSION = "2026-08-22";
+const RULESET_VERSION = "2026-08-29";
 
 // ── Hardening: the ruleset is immutable at runtime ────────────────────────
 // Recursive freeze of the JURISDICTIONS export (and the category vocabulary).

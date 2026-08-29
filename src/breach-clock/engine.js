@@ -59,8 +59,11 @@ function isHighRisk(sensitivity) {
 //     is established but does not qualify the outcome is `suppressed`.
 //   safeHarbor    — an affirmative excuse. Satisfied only when its qualifying
 //     value is affirmatively established, AND any required encryption strength is
-//     met, AND any `defeatedBy` input is affirmatively "no". A satisfied harbor
-//     routes the obligation to `suppress` or `review` per its `onSatisfied`.
+//     met, AND every `defeatedBy` input is affirmatively "no" (`defeatedBy` may
+//     be a single input name or an array of them — with an array, ALL listed
+//     inputs must be "no"; any one unset or "yes" defeats the harbor). A
+//     satisfied harbor routes the obligation to `suppress` or `review` per its
+//     `onSatisfied`.
 //
 // Resolution (ADDENDUM section C): all fireConditions first — any indeterminate
 // input → pending; any established-but-not-met condition → suppressed. Then the
@@ -97,7 +100,11 @@ function safeHarborSatisfied(gate, inputs) {
       : value === "yes";
   if (!qualifies) return false;
   if (gate.requiresStrength && inputs.encryptionStrength !== gate.requiresStrength) return false;
-  if (gate.defeatedBy && inputs[gate.defeatedBy] !== "no") return false;
+  if (Array.isArray(gate.defeatedBy)) {
+    if (!gate.defeatedBy.every((d) => inputs[d] === "no")) return false;
+  } else if (gate.defeatedBy && inputs[gate.defeatedBy] !== "no") {
+    return false;
+  }
   return true;
 }
 
@@ -212,7 +219,7 @@ function deriveGates(ob) {
  *                                             not yet established. A numeric count always wins over
  *                                             the flag (defensive; the UI prevents the combination).
  * @param {string[]} [facts.sensitivity]     - Array of sensitivity category ids.
- * @param {string} [facts.encrypted] - US encryption-cluster inputs ("yes"|"no"|unset): encrypted, plus encryptionStrength ("ge_128"|"below_128"|"unknown"), redacted, keyAcquired, reidentificationAcquired.
+ * @param {string} [facts.encrypted] - US encryption-cluster inputs ("yes"|"no"|unset): encrypted, plus encryptionStrength ("ge_128"|"below_128"|"unknown"), redacted, keyAcquired, reidentificationAcquired, acquiredUnencrypted.
  * @param {string} [facts.gdprUnintelligibility] - GDPR Art. 34(3)(a) input ("yes"|"no"|unset): measures rendering the data unintelligible.
  * @param {string} [facts.harmAssessment] - Harm-determination attestation ("" | "determined_unlikely" | "harm_likely"). Only the exact value "determined_unlikely" suppresses harm-gated obligations; every other value is inert.
  * @returns {{deadlines: Array, suppressed: Array, pending: Array, review: Array, contingent: Array, services: Array, advisories: Array, ruleset_version: string}}
@@ -274,6 +281,7 @@ function computeDeadlines(facts) {
     redacted,
     keyAcquired,
     reidentificationAcquired,
+    acquiredUnencrypted,
     gdprUnintelligibility,
     harmAssessment,
   } = facts;
@@ -283,7 +291,7 @@ function computeDeadlines(facts) {
   // cluster (encrypted/strength/key, redacted/reidentification); GDPR Art. 34
   // reads gdprUnintelligibility (Art. 34(3)(a)). The former global
   // encryptionApplied boolean is fully retired as of Stage 5.
-  const gateInputs = { riskLevel, encrypted, encryptionStrength, redacted, keyAcquired, reidentificationAcquired, gdprUnintelligibility };
+  const gateInputs = { riskLevel, encrypted, encryptionStrength, redacted, keyAcquired, reidentificationAcquired, acquiredUnencrypted, gdprUnintelligibility };
   const deadlines = [];
   const suppressed = [];
   const pending = [];
@@ -1339,7 +1347,51 @@ const TEST_CASES = [
     ),
   },
   {
-    name: "Virginia + encryption: all three obligations suppressed (definitional)",
+    // Virginia pass (2026-08-29, F1=A): the VA encryption harbor carries an
+    // array defeatedBy — BOTH keyAcquired and acquiredUnencrypted must be
+    // affirmatively "no" for the harbor to hold (§ 18.2-186.6(C), both
+    // branches).
+    name: "Virginia + encryption (key not acquired, no unencrypted form acquired): all three obligations suppressed (definitional)",
+    category: "Encryption suppression",
+    facts: {
+      jurisdictions: { va: true },
+      residentCounts: { va: 5000 },
+      sensitivity: ["financial"],
+      encrypted: "yes",
+      keyAcquired: "no",
+      acquiredUnencrypted: "no",
+    },
+    expect: expectAll(
+      expectCount(0),
+      expectSuppressed("Virginia", "Virginia Residents"),
+      expectSuppressed("Virginia", "Attorney General"),
+      expectSuppressed("Virginia", "Consumer Reporting"),
+      expectSuppressedCount(3)
+    ),
+  },
+  {
+    name: "Virginia + encryption, data acquired in unencrypted form: obligations fire (§ 18.2-186.6(C) first branch defeats the harbor)",
+    category: "Encryption suppression",
+    facts: {
+      jurisdictions: { va: true },
+      residentCounts: { va: 5000 },
+      sensitivity: ["financial"],
+      encrypted: "yes",
+      keyAcquired: "no",
+      acquiredUnencrypted: "yes",
+    },
+    expect: expectAll(
+      expectFires("Virginia", "Virginia Residents"),
+      expectFires("Virginia", "Attorney General"),
+      expectFires("Virginia", "Consumer Reporting"),
+      expectSuppressedCount(0)
+    ),
+  },
+  {
+    // whenUnset conservatism: an unset acquiredUnencrypted leaves the array
+    // harbor unsatisfied — the obligations compute rather than being silently
+    // excused. Old payloads (no acquiredUnencrypted key) land here.
+    name: "Virginia + encryption, acquiredUnencrypted unset: obligations fire (array harbor needs every defeater affirmatively 'no')",
     category: "Encryption suppression",
     facts: {
       jurisdictions: { va: true },
@@ -1349,10 +1401,32 @@ const TEST_CASES = [
       keyAcquired: "no",
     },
     expect: expectAll(
+      expectFires("Virginia", "Virginia Residents"),
+      expectFires("Virginia", "Attorney General"),
+      expectFires("Virginia", "Consumer Reporting"),
+      expectSuppressedCount(0)
+    ),
+  },
+  {
+    // String-path regression: a jurisdiction with a string defeatedBy
+    // (Colorado) ignores acquiredUnencrypted entirely — its harbor is still
+    // satisfied by keyAcquired "no" even when an unencrypted form was
+    // acquired.
+    name: "Colorado string-defeatedBy harbor unaffected by acquiredUnencrypted (regression on the string path)",
+    category: "Encryption suppression",
+    facts: {
+      jurisdictions: { co: true },
+      residentCounts: { co: 5000 },
+      sensitivity: ["financial"],
+      encrypted: "yes",
+      keyAcquired: "no",
+      acquiredUnencrypted: "yes",
+    },
+    expect: expectAll(
       expectCount(0),
-      expectSuppressed("Virginia", "Virginia Residents"),
-      expectSuppressed("Virginia", "Attorney General"),
-      expectSuppressed("Virginia", "Consumer Reporting"),
+      expectSuppressed("Colorado", "Colorado Residents"),
+      expectSuppressed("Colorado", "Attorney General"),
+      expectSuppressed("Colorado", "Consumer Reporting"),
       expectSuppressedCount(3)
     ),
   },
@@ -1985,7 +2059,7 @@ const TEST_CASES = [
     name: "Phrase: VA individual basis renders 'without unreasonable delay' (not the GDPR wording)",
     category: "Statutory phrases",
     facts: { jurisdictions: { va: true }, residentCounts: { va: 100 }, sensitivity: ["identifiers"] },
-    expect: expectBasis("Virginia", "Virginia Residents", "Va. Code § 18.2-186.6(B) — without unreasonable delay"),
+    expect: expectBasis("Virginia", "Virginia Residents", "Va. Code Ann. § 18.2-186.6(B) — without unreasonable delay"),
   },
   {
     name: "Phrase: EU Art. 34 basis renders 'without undue delay'",
@@ -2095,7 +2169,7 @@ const TEST_CASES = [
     expect: expectAll(
       expectCount(0),
       expectSuppressedCount(3),
-      expectHarmSuppressed("Virginia", "Virginia Residents", { citation: "Va. Code § 18.2-186.6(B)", character: "duty_element", standard: "causes, or the individual or entity reasonably believes has caused or will cause, identity theft or another fraud to any resident of the Commonwealth" }),
+      expectHarmSuppressed("Virginia", "Virginia Residents", { citation: "Va. Code Ann. § 18.2-186.6(B)", character: "duty_element", standard: "causes, or the individual or entity reasonably believes has caused or will cause, identity theft or another fraud to any resident of the Commonwealth" }),
       expectHarmSuppressed("Virginia", "Attorney General", { character: "duty_element" }),
       expectHarmSuppressed("Virginia", "Consumer Reporting", { character: "duty_element" })
     ),
