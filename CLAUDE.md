@@ -1333,8 +1333,39 @@ typeface is intentional.
   Vercel deployment; arkidel.com DNS; email mailbox provisioning; waitlist
   email collection wired to a real backend; analytics (Plausible or Fathom).
 - **Phase 5 (post-launch):** Soft launch; user feedback; expand Breach Clock
-  jurisdictional coverage (Connecticut next, then Oregon, then more states);
-  begin scoping the DPIA/PIA module.
+  jurisdictional coverage to the later-tranche US jurisdictions (the earlier
+  "Connecticut next, then Oregon, then more states" ordering is SUPERSEDED by
+  the Launch coverage model below, JDC ruling 2026-08-29 — Connecticut is in
+  fact already modeled; the queue is now Virginia, then the eleven-state
+  launch tranche, then the later tranche); begin scoping the DPIA/PIA module.
+
+### Launch coverage model (JDC ruling 2026-08-29) — durable decision
+
+Recorded as enumerated durable decision **153** in the master decision record
+(numbering per the ruling — 152, the verified-date duty of 2026-08-28, was
+the tip at ruling time; the enumerated master record itself lives in the
+originating Claude conversation, not in this repo). Supersedes the former
+"all 54 chart jurisdictions before launch" prerequisite.
+
+Comprehensive US coverage is **no longer a launch prerequisite**. Launch
+gates on a prioritized eleven-state tranche — Florida, Illinois,
+Pennsylvania, Ohio, Georgia, North Carolina, Michigan, New Jersey,
+Washington, Maryland, Vermont — selected on incident footprint, clock-error
+severity, and engine-shape coverage, each conformance-passed to the house
+standard (primary-source verification, Bluebook T1, verified date set in
+`data.js` per the verified-date duty of enum-152). Jurisdictions already
+modeled and verified remain in scope unchanged. All remaining US
+jurisdictions move to a later tranche, post-launch. Canada and Australia
+stay flagged for curated international expansion; EU/UK already modeled.
+
+Reconciliation note (append-honest, recorded 2026-08-29): the superseded
+all-54 prerequisite was never transcribed into this file or `docs/todo.md` —
+it lives in the originating conversation's master decision record — so there
+was no in-repo entry to mark SUPERSEDED; this entry is the in-repo
+supersession record. The only in-repo language conformed was the Phase 5
+expansion ordering above and its counterpart in `docs/todo.md` (which
+assumed the opposite — a minimal-at-launch, state-by-state queue — and was
+stale besides, since Connecticut was already modeled).
 
 ---
 

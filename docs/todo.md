@@ -47,6 +47,16 @@ Pre-launch readiness.
   2026-05-23 (read-only, code-level); resulting findings are recorded in
   the five subsections below. None of the audit findings touch `data.js`
   or `engine.js`, so none are flagged `[substance]`.
+- Jurisdictional conformance queue — a launch gate per the Launch coverage
+  model (JDC ruling 2026-08-29; see the entry of that name in CLAUDE.md,
+  which supersedes the former all-54-before-launch prerequisite):
+  **Virginia (in progress, next)**, then the **eleven-state launch
+  tranche** — Florida, Illinois, Pennsylvania, Ohio, Georgia, North
+  Carolina, Michigan, New Jersey, Washington, Maryland, Vermont — each
+  conformance-passed to the house standard (primary-source verification,
+  Bluebook T1, verified date set in `data.js`), then later-tranche
+  jurisdictions post-launch. Jurisdictions already modeled and verified
+  remain in scope unchanged. `[substance]`
 
 ### Phase 4 audit — clear inconsistencies (mechanical fixes)
 
@@ -212,8 +222,14 @@ No item here is `[substance]`.
 
 - Soft launch.
 - Collect user feedback.
-- Expand Breach Clock jurisdictional coverage: Connecticut next, then
-  Oregon, then additional states. `[substance]`
+- Expand Breach Clock jurisdictional coverage to later-tranche US
+  jurisdictions (all remaining US jurisdictions beyond the eleven-state
+  launch tranche); Canada and Australia stay flagged for curated
+  international expansion. The former "Connecticut next, then Oregon"
+  ordering is SUPERSEDED by the Launch coverage model (JDC ruling
+  2026-08-29, recorded in CLAUDE.md) — Connecticut is already modeled;
+  the live queue is the Phase 4 conformance-queue item above.
+  `[substance]`
 - Begin scoping the DPIA/PIA module.
 
 ---
